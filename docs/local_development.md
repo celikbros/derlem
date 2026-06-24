@@ -58,7 +58,15 @@ Arayuz `http://localhost:3000`, API `http://localhost:8080` adresindedir.
 Worker bir dosyayi ice aldiktan sonra otomatik olarak `scan_pii` ve
 `check_exact_duplicate` islerini acar. TCKN, IBAN, e-posta, telefon ve odeme
 karti kontrolleri ile exact SHA256 tekrar kontrolu tamamlanmadan kaynak insan
-onayina gecemez.
+onayina gecemez. Kanonik unique kaynak icin `sample_documents` isi bounded
+inceleme ornekleri olusturur; orneklerin tam icerigi object store'da kalir.
+
+Belge ornekleme ayarlari:
+
+```text
+DOCUMENT_SAMPLE_SIZE=200
+MAX_DOCUMENT_BYTES=262144
+```
 
 ## Testler
 

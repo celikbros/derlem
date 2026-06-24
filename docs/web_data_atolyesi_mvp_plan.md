@@ -440,7 +440,9 @@ Tamamlanan calisan dilim:
 - Worker: immutable ingest, SHA256, UTF-8, satir sayimi ve otomatik PII job zinciri
 - PII minimumu: TCKN checksum, IBAN mod-97, kart Luhn, telefon ve e-posta
 - Exact duplicate kapisi: SHA256 ile kanonik ilk kaynagi belirleme, tekrar kaynagi karantinaya alma
-- Review kapisi: dosya + cleared rights + lisans kaniti + clear PII + unique exact duplicate sonucu zorunlu
+- Bounded belge ornekleme: SHA256 seed'li deterministik reservoir sample, immutable document surumleri
+- Document editor: tam icerigi object store'dan okuma, optimistic locking ile yeni surum kaydetme
+- Review kapisi: dosya + cleared rights + lisans kaniti + clear PII + unique exact duplicate + hazir belge ornekleri zorunlu
 - Next.js: kaynak katalogu, metadata duzenleme, inceleme ve job gorunumu
 
 PII taramasi eslesen ham degerleri saklamaz; yalnizca tur bazinda sayim tutar.

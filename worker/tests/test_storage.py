@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from derlem_worker.storage import ContentAddressedStore
 
 
@@ -25,3 +27,23 @@ def test_ingest_counts_final_line_without_newline(tmp_path: Path) -> None:
     stored = ContentAddressedStore(tmp_path / "store").ingest_file(source)
 
     assert stored.line_count == 2
+
+
+def test_ingest_bytes_is_utf8_validated_and_idempotent(tmp_path: Path) -> None:
+    store = ContentAddressedStore(tmp_path / "store")
+    content = "örnek belge".encode()
+
+    first = store.ingest_bytes(content)
+    second = store.ingest_bytes(content)
+
+    assert first == second
+    assert first.byte_size == len(content)
+    assert first.line_count == 1
+    assert (store.root / first.storage_key).read_bytes() == content
+
+
+def test_ingest_bytes_rejects_invalid_utf8(tmp_path: Path) -> None:
+    store = ContentAddressedStore(tmp_path / "store")
+
+    with pytest.raises(UnicodeDecodeError):
+        store.ingest_bytes(b"\xff")

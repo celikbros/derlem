@@ -1,0 +1,142 @@
+package httpapi
+
+import (
+	"errors"
+	"io"
+	"net/http"
+	"strings"
+	"unicode/utf8"
+
+	"github.com/celikbros/derlem/internal/auth"
+	"github.com/celikbros/derlem/internal/domain"
+	"github.com/celikbros/derlem/internal/repository"
+)
+
+const maxEditableDocumentBytes = 1024 * 1024
+
+func (s *Server) listSourceDocuments(w http.ResponseWriter, r *http.Request) {
+	limit, err := auth.ParsePositiveInt(r.URL.Query().Get("limit"), 50, 200)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_limit", "Limit pozitif bir sayı olmalıdır.")
+		return
+	}
+	sourceID := r.PathValue("id")
+	if _, err := s.sources.Get(r.Context(), sourceID); errors.Is(err, repository.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "source_not_found", "Kaynak bulunamadı.")
+		return
+	} else if err != nil {
+		s.logger.Error("get source before document list failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "Kaynak doğrulanamadı.")
+		return
+	}
+
+	documents, err := s.documents.ListBySource(r.Context(), sourceID, limit)
+	if err != nil {
+		s.logger.Error("list source documents failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "Belge örnekleri getirilemedi.")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": documents})
+}
+
+func (s *Server) getDocument(w http.ResponseWriter, r *http.Request) {
+	document, err := s.documents.Get(r.Context(), r.PathValue("id"))
+	if errors.Is(err, repository.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "document_not_found", "Belge bulunamadı.")
+		return
+	}
+	if err != nil {
+		s.logger.Error("get document failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "Belge getirilemedi.")
+		return
+	}
+
+	content, err := s.readDocumentObject(r, document.CurrentObjectSHA256)
+	if err != nil {
+		s.logger.Error("read document object failed", "document_id", document.ID, "error", err)
+		writeError(w, http.StatusInternalServerError, "document_object_unavailable", "Belge içeriği okunamadı.")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"document": document, "content": content})
+}
+
+func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request) {
+	var input domain.UpdateDocumentInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if input.Version <= 0 || strings.TrimSpace(input.Content) == "" {
+		writeError(w, http.StatusUnprocessableEntity, "validation_failed", "Belge içeriği ve geçerli sürüm zorunludur.")
+		return
+	}
+	if len([]byte(input.Content)) > maxEditableDocumentBytes {
+		writeError(w, http.StatusRequestEntityTooLarge, "document_too_large", "Belge içeriği 1 MiB sınırını aşamaz.")
+		return
+	}
+	if !utf8.ValidString(input.Content) {
+		writeError(w, http.StatusUnprocessableEntity, "invalid_utf8", "Belge içeriği UTF-8 olmalıdır.")
+		return
+	}
+	existing, err := s.documents.Get(r.Context(), r.PathValue("id"))
+	if errors.Is(err, repository.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "document_not_found", "Belge bulunamadı.")
+		return
+	}
+	if err != nil {
+		s.logger.Error("get document before update failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "Belge doğrulanamadı.")
+		return
+	}
+	if existing.CurrentVersion != input.Version {
+		writeError(w, http.StatusConflict, "version_conflict", "Belge başka bir kullanıcı tarafından güncellendi. Yeniden açın.")
+		return
+	}
+
+	object, err := s.objectStore.Put(r.Context(), strings.NewReader(input.Content))
+	if err != nil {
+		s.logger.Error("store document edit failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "storage_error", "Belge sürümü saklanamadı.")
+		return
+	}
+	principal, _ := principalFrom(r.Context())
+	document, err := s.documents.UpdateContent(
+		r.Context(),
+		r.PathValue("id"),
+		input.Version,
+		object,
+		repository.DocumentPreview(input.Content),
+		int64(utf8.RuneCountInString(input.Content)),
+		input.Reason,
+		principal.Subject,
+	)
+	if errors.Is(err, repository.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "document_not_found", "Belge bulunamadı.")
+		return
+	}
+	if errors.Is(err, repository.ErrConflict) {
+		writeError(w, http.StatusConflict, "version_conflict", "Belge başka bir kullanıcı tarafından güncellendi. Yeniden açın.")
+		return
+	}
+	if err != nil {
+		s.logger.Error("update document failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "Belge güncellenemedi.")
+		return
+	}
+	writeJSON(w, http.StatusOK, document)
+}
+
+func (s *Server) readDocumentObject(r *http.Request, digest string) (string, error) {
+	reader, err := s.objectStore.Open(r.Context(), digest)
+	if err != nil {
+		return "", err
+	}
+	defer reader.Close()
+	content, err := io.ReadAll(io.LimitReader(reader, maxEditableDocumentBytes+1))
+	if err != nil {
+		return "", err
+	}
+	if len(content) > maxEditableDocumentBytes || !utf8.Valid(content) {
+		return "", errors.New("document object is too large or invalid UTF-8")
+	}
+	return string(content), nil
+}

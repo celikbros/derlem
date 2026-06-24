@@ -4,10 +4,12 @@ import {
   Check,
   CheckCircle2,
   Edit3,
+  FileText,
   History,
   LoaderCircle,
   RefreshCw,
   ScanLine,
+  Save,
   ShieldAlert,
   Upload,
   X,
@@ -17,7 +19,7 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import { JobStatus } from "@/components/jobs-panel";
 import { messageFrom, requestJSON } from "@/lib/client-api";
-import type { BackgroundJob, PIIScan, Review, Source, User } from "@/lib/types";
+import type { BackgroundJob, Document, PIIScan, Review, Source, User } from "@/lib/types";
 
 const purposeLabels: Record<string, string> = {
   pretrain: "Pretrain",
@@ -54,28 +56,36 @@ export function SourceInspector({
   const [reviews, setReviews] = useState<Review[]>([]);
   const [scans, setScans] = useState<PIIScan[]>([]);
   const [jobs, setJobs] = useState<BackgroundJob[]>([]);
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [activeDocument, setActiveDocument] = useState<Document | null>(null);
+  const [documentContent, setDocumentContent] = useState("");
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const editDialog = useRef<HTMLDialogElement>(null);
+  const documentDialog = useRef<HTMLDialogElement>(null);
 
   const loadActivity = useCallback(async () => {
     setLoading(true);
     try {
-      const [reviewPayload, scanPayload, jobPayload] = await Promise.all([
+      const [reviewPayload, scanPayload, jobPayload, documentPayload] = await Promise.all([
         requestJSON<{ items: Review[] }>(`/api/sources/${source.id}/reviews`),
         requestJSON<{ items: PIIScan[] }>(`/api/sources/${source.id}/pii-scans`),
         requestJSON<{ items: BackgroundJob[] }>(`/api/jobs?source_id=${source.id}&limit=20`),
+        requestJSON<{ items: Document[] }>(`/api/sources/${source.id}/documents?limit=200`),
       ]);
       setReviews(reviewPayload.items);
       setScans(scanPayload.items);
       setJobs(jobPayload.items);
+      setDocuments(documentPayload.items);
       const ingestFinished = jobPayload.items.some((job) => ["ingest_local_file", "ingest_staged_file"].includes(job.job_type) && job.status === "succeeded");
       const scanFinished = jobPayload.items.some((job) => job.job_type === "scan_pii" && job.status === "succeeded");
       const duplicateCheckFinished = jobPayload.items.some((job) => job.job_type === "check_exact_duplicate" && job.status === "succeeded");
+      const samplingFinished = jobPayload.items.some((job) => job.job_type === "sample_documents" && job.status === "succeeded");
       if (
         (!source.object_sha256 && ingestFinished)
         || (source.pii_status === "not_scanned" && scanFinished)
         || (source.duplicate_status === "not_checked" && duplicateCheckFinished)
+        || (source.document_sampling_status === "not_sampled" && samplingFinished)
       ) {
         await onRefresh();
       }
@@ -84,7 +94,7 @@ export function SourceInspector({
     } finally {
       setLoading(false);
     }
-  }, [onNotice, onRefresh, source.duplicate_status, source.id, source.object_sha256, source.pii_status]);
+  }, [onNotice, onRefresh, source.document_sampling_status, source.duplicate_status, source.id, source.object_sha256, source.pii_status]);
 
   useEffect(() => { void loadActivity(); }, [loadActivity, source.version]);
   useEffect(() => {
@@ -94,12 +104,14 @@ export function SourceInspector({
   }, [jobs, loadActivity]);
 
   const canReview = user.roles.some((role) => ["admin", "moderator", "expert_reviewer"].includes(role));
+  const canEditDocument = user.roles.some((role) => ["admin", "editor"].includes(role));
   const gateChecks = [
     { label: "Dosya alındı", passed: Boolean(source.object_sha256) },
     { label: "Haklar temiz", passed: source.rights_status === "cleared" },
     { label: "Lisans kanıtı", passed: Boolean(source.license_evidence_ref) },
     { label: "PII temiz", passed: source.pii_status === "clear" },
     { label: "Exact tekrar yok", passed: source.duplicate_status === "unique" },
+    { label: "Belge örnekleri hazır", passed: source.document_sampling_status === "sampled" },
   ];
   const approvalReady = gateChecks.every((gate) => gate.passed) && source.approval_status !== "approved_source";
   const latestScan = scans[0];
@@ -146,6 +158,43 @@ export function SourceInspector({
       onNotice(messageFrom(error));
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function openDocument(document: Document) {
+    setLoading(true);
+    try {
+      const payload = await requestJSON<{ document: Document; content: string }>(`/api/documents/${document.id}`);
+      setActiveDocument(payload.document);
+      setDocumentContent(payload.content);
+      documentDialog.current?.showModal();
+    } catch (error) {
+      onNotice(messageFrom(error));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function updateDocument(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!activeDocument) return;
+    const reason = String(new FormData(event.currentTarget).get("reason") ?? "").trim();
+    try {
+      const updated = await requestJSON<Document>(`/api/documents/${activeDocument.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: documentContent,
+          version: activeDocument.current_version,
+          reason: reason || null,
+        }),
+      });
+      setDocuments((current) => current.map((document) => document.id === updated.id ? updated : document));
+      setActiveDocument(updated);
+      documentDialog.current?.close();
+      onNotice(`Belge sürüm ${updated.current_version} olarak kaydedildi.`);
+    } catch (error) {
+      onNotice(messageFrom(error));
     }
   }
 
@@ -196,6 +245,7 @@ export function SourceInspector({
         <Detail label="PII / risk" value={`${source.pii_status} / ${source.risk_level}`} />
         <Detail label="Exact tekrar" value={source.duplicate_status} />
         {source.duplicate_of_source_id && <Detail label="Kanonik kaynak" value={source.duplicate_of_source_id} mono />}
+        <Detail label="Belge örnekleme" value={`${source.document_sampling_status} / ${source.sampled_document_count}`} />
         {source.declared_sha256 && <Detail label="Beyan SHA256" value={source.declared_sha256} mono />}
         {source.declared_byte_size !== undefined && <Detail label="Beyan boyutu" value={formatBytes(source.declared_byte_size)} />}
         {source.declared_line_count !== undefined && <Detail label="Beyan satırı" value={source.declared_line_count.toLocaleString("tr-TR")} />}
@@ -233,6 +283,24 @@ export function SourceInspector({
             <small>{findingSummary(latestScan)}</small>
           </div>
         )}
+      </section>
+
+      <section className="inspector-section">
+        <h3><FileText size={16} /> Belge örnekleri</h3>
+        <div className="document-list">
+          {documents.map((document) => (
+            <button key={document.id} type="button" onClick={() => void openDocument(document)}>
+              <span>#{document.source_ordinal}</span>
+              <strong>{document.text_preview}</strong>
+              <small>v{document.current_version} · {document.char_count.toLocaleString("tr-TR")} karakter</small>
+            </button>
+          ))}
+          {!loading && documents.length === 0 && (
+            <p className="muted-copy">
+              {source.document_sampling_status === "failed" ? "Belge örnekleme işi başarısız." : "Henüz belge örneği oluşturulmadı."}
+            </p>
+          )}
+        </div>
       </section>
 
       {canReview && (
@@ -278,6 +346,31 @@ export function SourceInspector({
           </div>
           <div className="dialog-actions"><button className="text-button" type="button" onClick={() => editDialog.current?.close()}>İptal</button><button className="primary-button" type="submit">Değişiklikleri kaydet</button></div>
         </form>
+      </dialog>
+
+      <dialog ref={documentDialog} className="source-dialog document-dialog">
+        {activeDocument && (
+          <form onSubmit={updateDocument}>
+            <div className="dialog-header">
+              <div><span>Satır {activeDocument.source_ordinal} · sürüm {activeDocument.current_version}</span><h2>Belge örneği</h2></div>
+              <button className="icon-button" type="button" title="Pencereyi kapat" onClick={() => documentDialog.current?.close()}><X size={19} /></button>
+            </div>
+            <label className="document-content-label">
+              İçerik
+              <textarea
+                value={documentContent}
+                onChange={(event) => setDocumentContent(event.target.value)}
+                rows={16}
+                readOnly={!canEditDocument}
+              />
+            </label>
+            {canEditDocument && <label>Düzenleme gerekçesi<input name="reason" placeholder="Kısa değişiklik notu" /></label>}
+            <div className="dialog-actions">
+              <button className="text-button" type="button" onClick={() => documentDialog.current?.close()}>Kapat</button>
+              {canEditDocument && <button className="primary-button" type="submit"><Save size={16} />Yeni sürümü kaydet</button>}
+            </div>
+          </form>
+        )}
       </dialog>
     </aside>
   );

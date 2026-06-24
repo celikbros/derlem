@@ -41,7 +41,8 @@ func main() {
 		logger.Error("bootstrap admin failed", "error", err)
 		os.Exit(1)
 	}
-	if _, err := storage.NewLocal(cfg.StorageRoot); err != nil {
+	objectStore, err := storage.NewLocal(cfg.StorageRoot)
+	if err != nil {
 		logger.Error("storage initialization failed", "error", err)
 		os.Exit(1)
 	}
@@ -51,7 +52,7 @@ func main() {
 	}
 
 	tokens := auth.NewTokenManager(cfg.JWTSecret, cfg.JWTIssuer, cfg.JWTTTL)
-	api := httpapi.NewServer(pool, tokens, logger, cfg.WebOrigin, cfg.StagingRoot, cfg.MaxUploadBytes)
+	api := httpapi.NewServer(pool, objectStore, tokens, logger, cfg.WebOrigin, cfg.StagingRoot, cfg.MaxUploadBytes)
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           api.Handler(),

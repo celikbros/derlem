@@ -2,19 +2,12 @@ import { expect, test } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
-const email = process.env.E2E_EMAIL;
-const password = process.env.E2E_PASSWORD;
+import { hasE2ESession, openAuthenticatedApp } from "./session";
 
-test.skip(!email || !password, "E2E_EMAIL and E2E_PASSWORD are required");
+test.skip(!hasE2ESession, "E2E_TOKEN or email/password credentials are required");
 
 test("login and inspect the source catalog", async ({ page }, testInfo) => {
-  await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Veri atölyesine giriş" })).toBeVisible();
-  await page.getByLabel("E-posta").fill(email!);
-  await page.getByLabel("Parola").fill(password!);
-  await page.getByRole("button", { name: "Giriş yap" }).click();
-
-  await expect(page.getByRole("heading", { name: "Veri kaynakları" })).toBeVisible();
+  await openAuthenticatedApp(page);
   await page.getByRole("button", { name: "Yeni kaynak" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByRole("heading", { name: "Yeni kaynak" })).toBeVisible();

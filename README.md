@@ -17,8 +17,9 @@ kullanır.
 
 > **Durum:** Aktif MVP geliştirmesi. Kaynak kataloğu, JWT tabanlı yetkilendirme,
 > tarayıcıdan akışlı dosya yükleme, içerik adresli saklama, PostgreSQL iş
-> kuyruğu, temel PII taraması, SHA256 exact-duplicate kapısı, moderasyon ve
-> append-only audit çalışmaktadır. Release Builder henüz tamamlanmamıştır.
+> kuyruğu, temel PII taraması, SHA256 exact-duplicate kapısı, bounded belge
+> örnekleme, immutable belge sürümleri, moderasyon ve append-only audit
+> çalışmaktadır. Release Builder henüz tamamlanmamıştır.
 
 ## İçindekiler
 
@@ -144,9 +145,10 @@ Aynı interface ileride S3 veya MinIO implementasyonuna geçirilebilir.
 
 ### Ağır veri işleme
 
-Python worker; immutable ingest, encoding kontrolü, satır sayımı, PII taraması
-ve exact-duplicate işlerini yürütür. İlerleyen fazlarda DuckDB/Polars tabanlı
-normalizasyon, shard üretimi ve export işleri bu katmana eklenecektir.
+Python worker; immutable ingest, encoding kontrolü, satır sayımı, PII taraması,
+exact-duplicate ve deterministik reservoir belge örnekleme işlerini yürütür.
+İlerleyen fazlarda DuckDB/Polars tabanlı normalizasyon, shard üretimi ve export
+işleri bu katmana eklenecektir.
 
 ## Veri Yaşam Döngüsü
 
@@ -156,6 +158,7 @@ source_registered
   -> immutable SHA256 object
   -> raw_ingested
   -> scan_pii + check_exact_duplicate
+  -> sample_documents
   -> auto_checked | quarantined
   -> human review
   -> approved_source | rejected | sensitive_review
@@ -168,8 +171,10 @@ source_registered
 3. Worker SHA256, byte size, line count ve UTF-8 durumunu hesaplar.
 4. İçerik, SHA256 anahtarıyla immutable store'a atomik olarak alınır.
 5. PII ve exact-duplicate işleri bağımsız job olarak çalışır.
-6. Tüm kapılar temizse yetkili reviewer karar verebilir.
-7. İleride Release Builder aynı `content_purpose` içindeki onaylı kaynakları
+6. Kanonik kaynak için bounded ve deterministik belge örnekleri çıkarılır.
+7. Örnek içerikleri immutable object, sürüm metadata'sı PostgreSQL kaydıdır.
+8. Tüm kapılar temizse yetkili reviewer karar verebilir.
+9. İleride Release Builder aynı `content_purpose` içindeki onaylı kaynakları
    seçerek manifest, checksum ve export üretecektir.
 
 ## Kalite ve Güvenlik Kapıları
@@ -286,6 +291,8 @@ Başlıca ayarlar:
 | `STAGING_ROOT` | Stream upload geçici alanı |
 | `MAX_UPLOAD_BYTES` | Tek upload üst sınırı; varsayılan 50 GiB |
 | `WORKER_POLL_INTERVAL` | Worker queue polling aralığı |
+| `DOCUMENT_SAMPLE_SIZE` | Kaynak başına bounded review örneği; varsayılan 200 |
+| `MAX_DOCUMENT_BYTES` | Örneklenebilir tek satır üst sınırı; varsayılan 256 KiB |
 
 ### 2. Bağımlılıklar ve migration
 
@@ -337,6 +344,8 @@ Ayrıntılı yönergeler: [docs/local_development.md](docs/local_development.md)
 | `POST` | `/api/v1/sources/{id}/ingest` | Güvenilir yerel path ingest'i |
 | `GET/POST` | `/api/v1/sources/{id}/reviews` | İnceleme geçmişi ve karar |
 | `GET` | `/api/v1/sources/{id}/pii-scans` | PII tarama sonuçları |
+| `GET` | `/api/v1/sources/{id}/documents` | Bounded belge örnekleri |
+| `GET/PATCH` | `/api/v1/documents/{id}` | Immutable içerik okuma veya yeni sürüm |
 | `GET` | `/api/v1/jobs` | Background job görünümü |
 
 Listeleme cursor pagination kullanır. Metadata güncellemesi mevcut `version`
@@ -364,6 +373,8 @@ $env:E2E_EMAIL='admin@derlem.local'
 $env:E2E_PASSWORD='your-local-password'
 npm run test:e2e
 ```
+
+Parola yerine kısa ömürlü yerel bir JWT, `E2E_TOKEN` ile verilebilir.
 
 Mutating upload senaryosu ayrıca `E2E_MUTATING=1` ile açıkça etkinleştirilir.
 
@@ -396,13 +407,15 @@ sonra kanıtlanan darboğaza göre ayrıştırma yapılır.
 - [x] PostgreSQL background job queue
 - [x] TCKN/IBAN/kart/telefon/e-posta PII taraması
 - [x] Source artifact SHA256 exact-duplicate kapısı
+- [x] Deterministik ve bounded belge örnekleme
+- [x] Object store tabanlı immutable belge sürümleri ve editor diyaloğu
 - [x] Moderasyon, ret gerekçesi ve self-review engeli
 - [x] Next.js yönetim arayüzü
 - [x] GitHub Actions CI
 
 ### Sıradaki işler
 
-- [ ] Document çıkarma, sürümleme ve editor ekranı
+- [ ] Tam document indeksleme ve gelişmiş editor/review iş akışı
 - [ ] Normalize edilmiş document exact-dedup
 - [ ] Kalite skorları ve risk bazlı örneklem
 - [ ] Dataset havuzları ve Release Builder

@@ -24,6 +24,8 @@ export type Source = {
   byte_size?: number;
   line_count?: number;
   document_count?: number;
+  document_sampling_status: "not_sampled" | "sampled" | "failed";
+  sampled_document_count: number;
   detected_encoding?: string;
   pii_status: string;
   duplicate_status: "not_checked" | "unique" | "duplicate";
@@ -32,6 +34,22 @@ export type Source = {
   approval_status: string;
   version: number;
   created_by: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Document = {
+  id: string;
+  source_id: string;
+  source_ordinal: number;
+  external_id?: string;
+  current_object_sha256: string;
+  text_preview: string;
+  byte_size: number;
+  char_count: number;
+  status: "sampled" | "edited" | "approved" | "rejected" | "sensitive_review";
+  current_version: number;
+  sampling_method: string;
   created_at: string;
   updated_at: string;
 };

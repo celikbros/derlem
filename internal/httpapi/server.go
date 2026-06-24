@@ -8,12 +8,15 @@ import (
 
 	"github.com/celikbros/derlem/internal/auth"
 	"github.com/celikbros/derlem/internal/repository"
+	"github.com/celikbros/derlem/internal/storage"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Server struct {
 	pool           *pgxpool.Pool
 	sources        *repository.Sources
+	documents      *repository.Documents
+	objectStore    storage.Store
 	tokens         *auth.TokenManager
 	logger         *slog.Logger
 	webOrigin      string
@@ -21,10 +24,12 @@ type Server struct {
 	maxUploadBytes int64
 }
 
-func NewServer(pool *pgxpool.Pool, tokens *auth.TokenManager, logger *slog.Logger, webOrigin, stagingRoot string, maxUploadBytes int64) *Server {
+func NewServer(pool *pgxpool.Pool, objectStore storage.Store, tokens *auth.TokenManager, logger *slog.Logger, webOrigin, stagingRoot string, maxUploadBytes int64) *Server {
 	return &Server{
 		pool:           pool,
 		sources:        repository.NewSources(pool),
+		documents:      repository.NewDocuments(pool),
+		objectStore:    objectStore,
 		tokens:         tokens,
 		logger:         logger,
 		webOrigin:      webOrigin,
@@ -49,6 +54,9 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/sources/{id}/reviews", s.authenticate(http.HandlerFunc(s.listSourceReviews)))
 	mux.Handle("POST /api/v1/sources/{id}/reviews", s.authenticate(requireRoles("admin", "moderator", "expert_reviewer")(http.HandlerFunc(s.reviewSource))))
 	mux.Handle("GET /api/v1/sources/{id}/pii-scans", s.authenticate(http.HandlerFunc(s.listSourcePIIScans)))
+	mux.Handle("GET /api/v1/sources/{id}/documents", s.authenticate(http.HandlerFunc(s.listSourceDocuments)))
+	mux.Handle("GET /api/v1/documents/{id}", s.authenticate(http.HandlerFunc(s.getDocument)))
+	mux.Handle("PATCH /api/v1/documents/{id}", s.authenticate(requireRoles("admin", "editor")(http.HandlerFunc(s.updateDocument))))
 	mux.Handle("GET /api/v1/jobs", s.authenticate(http.HandlerFunc(s.listJobs)))
 	return s.middleware(mux)
 }

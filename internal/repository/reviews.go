@@ -63,13 +63,15 @@ func (r *Sources) Review(
 	}
 
 	contextJSON, _ := json.Marshal(map[string]any{
-		"rights_status":          source.RightsStatus,
-		"pii_status":             source.PIIStatus,
-		"duplicate_status":       source.DuplicateStatus,
-		"duplicate_of_source_id": source.DuplicateOfSourceID,
-		"risk_level":             source.RiskLevel,
-		"object_sha256":          source.ObjectSHA256,
-		"approval_before":        source.ApprovalStatus,
+		"rights_status":            source.RightsStatus,
+		"pii_status":               source.PIIStatus,
+		"duplicate_status":         source.DuplicateStatus,
+		"duplicate_of_source_id":   source.DuplicateOfSourceID,
+		"document_sampling_status": source.DocumentSamplingStatus,
+		"sampled_document_count":   source.SampledDocumentCount,
+		"risk_level":               source.RiskLevel,
+		"object_sha256":            source.ObjectSHA256,
+		"approval_before":          source.ApprovalStatus,
 	})
 	var review domain.Review
 	if err := tx.QueryRow(ctx, `
@@ -171,6 +173,9 @@ func approvalGateReasons(source domain.Source) []string {
 	}
 	if source.DuplicateStatus != "unique" {
 		reasons = append(reasons, "exact_duplicate_not_clear")
+	}
+	if source.DocumentSamplingStatus != "sampled" {
+		reasons = append(reasons, "documents_not_sampled")
 	}
 	if source.ApprovalStatus == "approved_source" || source.ApprovalStatus == "release_candidate" {
 		reasons = append(reasons, "already_approved")

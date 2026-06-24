@@ -11,6 +11,8 @@ class Config:
     storage_root: Path
     staging_root: Path
     poll_interval_seconds: float
+    document_sample_size: int
+    max_document_bytes: int
 
 
 def load_config() -> Config:
@@ -26,6 +28,8 @@ def load_config() -> Config:
         storage_root=storage_root,
         staging_root=staging_root,
         poll_interval_seconds=_parse_duration_seconds(poll_value),
+        document_sample_size=_positive_int_env("DOCUMENT_SAMPLE_SIZE", 200),
+        max_document_bytes=_positive_int_env("MAX_DOCUMENT_BYTES", 256 * 1024),
     )
 
 
@@ -53,3 +57,16 @@ def _parse_duration_seconds(value: str) -> float:
                 break
             return amount * multiplier
     raise RuntimeError(f"Unsupported WORKER_POLL_INTERVAL: {value!r}")
+
+
+def _positive_int_env(key: str, fallback: int) -> int:
+    value = os.environ.get(key, "").strip()
+    if not value:
+        return fallback
+    try:
+        parsed = int(value)
+    except ValueError as error:
+        raise RuntimeError(f"{key} must be a positive integer") from error
+    if parsed <= 0:
+        raise RuntimeError(f"{key} must be a positive integer")
+    return parsed

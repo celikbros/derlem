@@ -69,6 +69,35 @@ class ContentAddressedStore:
         finally:
             temp_path.unlink(missing_ok=True)
 
+    def ingest_bytes(self, content: bytes) -> StoredObject:
+        decoder = codecs.getincrementaldecoder("utf-8")("strict")
+        decoder.decode(content, final=True)
+        digest = hashlib.sha256(content).hexdigest()
+        storage_key = f"objects/sha256/{digest[:2]}/{digest[2:4]}/{digest}"
+        target = self.root / Path(storage_key)
+        target.parent.mkdir(parents=True, exist_ok=True)
+
+        file_descriptor, temp_name = tempfile.mkstemp(prefix="ingest-", dir=self.temp_root)
+        temp_path = Path(temp_name)
+        try:
+            with os.fdopen(file_descriptor, "wb") as destination:
+                destination.write(content)
+                destination.flush()
+                os.fsync(destination.fileno())
+            self._publish_create_only(temp_path, target)
+        finally:
+            temp_path.unlink(missing_ok=True)
+
+        newline_count = content.count(b"\n")
+        line_count = newline_count + (1 if content and not content.endswith(b"\n") else 0)
+        return StoredObject(
+            sha256=digest,
+            storage_key=storage_key,
+            byte_size=len(content),
+            line_count=line_count,
+            detected_encoding="UTF-8",
+        )
+
     @staticmethod
     def _publish_create_only(temp_path: Path, target: Path) -> None:
         try:

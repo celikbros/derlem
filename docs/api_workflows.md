@@ -14,6 +14,9 @@ PATCH /sources/{id}
 POST  /sources/{id}/ingest
 POST  /sources/{id}/upload
 GET   /sources/{id}/pii-scans
+GET   /sources/{id}/documents
+GET   /documents/{id}
+PATCH /documents/{id}
 GET   /sources/{id}/reviews
 POST  /sources/{id}/reviews
 GET   /jobs?source_id={id}
@@ -32,6 +35,7 @@ source_registered
   -> immutable SHA256 object
   -> raw_ingested
   -> scan_pii + check_exact_duplicate queued
+  -> sample_documents queued (yalnizca kanonik unique kaynak)
   -> auto_checked | quarantined
 ```
 
@@ -42,6 +46,12 @@ kaynaklar icin eksik kontrol job'larini idempotent olarak kuyruga ekler.
 MVP kontrolu kaynak artifact'inin byte-level SHA256 tekrarini yakalar;
 normalize edilmis dokuman ve near-dedup kontrolleri sonraki fazdadir.
 
+`sample_documents`, kaynak dosyasini bounded satir okuyucuyla tarar ve SHA256
+seed'li deterministik reservoir sample uretir. Varsayilan olarak en fazla 200
+ornek secilir; tam ornek icerigi immutable object store'a, ordinal/preview/surum
+metadata'si PostgreSQL'e yazilir. Bu tablo tum corpus'un document indeksi degil,
+insan incelemesi icin bounded sample katmanidir.
+
 ## Onay Kapisi
 
 `approved` karari icin tamamlanmasi zorunlu kapilar:
@@ -51,7 +61,12 @@ normalize edilmis dokuman ve near-dedup kontrolleri sonraki fazdadir.
 - `license_evidence_ref` bulunmali.
 - `pii_status=clear` olmali.
 - `duplicate_status=unique` olmali.
+- `document_sampling_status=sampled` olmali.
 - Kaynak daha once onaylanmamis olmali.
+
+Belge duzenlemesi `PATCH /documents/{id}` ile yeni immutable object ve yeni
+`document_versions` satiri uretir. Mevcut `version` zorunludur; eszamanli
+degisiklikte `409 version_conflict` doner. Eski surum yerinde degistirilmez.
 
 Ret ve hassas inceleme kararlarinda gerekce zorunludur. Karar, kaynak surumu,
 reviewer, kapilarin snapshot'i ve zaman bilgisiyle saklanir. Admin disindaki

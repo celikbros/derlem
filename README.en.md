@@ -15,8 +15,9 @@ consume approved, versioned Derlem exports through their own model adapters.
 
 > **Status:** Active MVP development. The source catalog, JWT authorization,
 > streaming browser uploads, content-addressed storage, PostgreSQL job queue,
-> baseline PII scanning, SHA256 exact-duplicate gate, moderation, and
-> append-only audit are operational. The Release Builder is not complete yet.
+> baseline PII scanning, SHA256 exact-duplicate gate, bounded document
+> sampling, immutable document versions, moderation, and append-only audit are
+> operational. The Release Builder is not complete yet.
 
 ## Contents
 
@@ -143,8 +144,9 @@ The same interface can later be implemented for S3 or MinIO.
 ### Data processing
 
 The Python worker performs immutable ingest, encoding validation, line counts,
-PII scans, and exact-duplicate checks. Future DuckDB/Polars jobs will add
-normalization, sharding, document extraction, and export generation.
+PII scans, exact-duplicate checks, and deterministic reservoir document
+sampling. Future DuckDB/Polars jobs will add normalization, sharding, full
+document indexing, and export generation.
 
 ## Data Lifecycle
 
@@ -154,6 +156,7 @@ source_registered
   -> immutable SHA256 object
   -> raw_ingested
   -> scan_pii + check_exact_duplicate
+  -> sample_documents
   -> auto_checked | quarantined
   -> human review
   -> approved_source | rejected | sensitive_review
@@ -166,8 +169,10 @@ source_registered
 3. The worker calculates SHA256, byte size, line count, and UTF-8 status.
 4. The object is atomically placed under its SHA256 storage key.
 5. PII and exact-duplicate checks run as independent background jobs.
-6. An authorized reviewer can decide only after all mandatory gates pass.
-7. The future Release Builder will select approved sources of one purpose and
+6. Bounded deterministic document samples are extracted for a canonical source.
+7. Sample content is immutable object data; version metadata stays in PostgreSQL.
+8. An authorized reviewer can decide only after all mandatory gates pass.
+9. The future Release Builder will select approved sources of one purpose and
    produce manifests, checksums, and exports.
 
 ## Quality and Safety Gates
@@ -281,6 +286,8 @@ credentials. Never commit real secrets.
 | `STAGING_ROOT` | Temporary streamed-upload area |
 | `MAX_UPLOAD_BYTES` | Per-upload limit; defaults to 50 GiB |
 | `WORKER_POLL_INTERVAL` | Worker queue polling interval |
+| `DOCUMENT_SAMPLE_SIZE` | Bounded review samples per source; defaults to 200 |
+| `MAX_DOCUMENT_BYTES` | Maximum sampleable line size; defaults to 256 KiB |
 
 ### 2. Dependencies and migrations
 
@@ -332,6 +339,8 @@ See [docs/local_development.md](docs/local_development.md) for details.
 | `POST` | `/api/v1/sources/{id}/ingest` | Trusted local-path ingest |
 | `GET/POST` | `/api/v1/sources/{id}/reviews` | Review history and decision |
 | `GET` | `/api/v1/sources/{id}/pii-scans` | PII scan results |
+| `GET` | `/api/v1/sources/{id}/documents` | Bounded document samples |
+| `GET/PATCH` | `/api/v1/documents/{id}` | Read immutable content or create a version |
 | `GET` | `/api/v1/jobs` | Background job status |
 
 Lists use cursor pagination. Metadata updates require the current `version` and
@@ -359,6 +368,8 @@ $env:E2E_EMAIL='admin@derlem.local'
 $env:E2E_PASSWORD='your-local-password'
 npm run test:e2e
 ```
+
+A short-lived local JWT may be supplied through `E2E_TOKEN` instead of a password.
 
 The mutating upload scenario also requires explicit `E2E_MUTATING=1`.
 
@@ -391,13 +402,15 @@ on one machine first and split only around demonstrated bottlenecks.
 - [x] PostgreSQL background job queue
 - [x] TCKN/IBAN/card/phone/email PII scanning
 - [x] Source-artifact SHA256 exact-duplicate gate
+- [x] Deterministic bounded document sampling
+- [x] Object-store-backed immutable document versions and editor dialog
 - [x] Moderation, rejection reasons, and self-review prevention
 - [x] Next.js operations UI
 - [x] GitHub Actions CI
 
 ### Next
 
-- [ ] Document extraction, versioning, and editor UI
+- [ ] Full document indexing and advanced editor/review workflow
 - [ ] Normalized document exact-dedup
 - [ ] Quality scores and risk-based sampling
 - [ ] Dataset pools and Release Builder

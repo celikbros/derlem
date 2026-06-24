@@ -293,6 +293,11 @@ Başlıca ayarlar:
 | `WORKER_POLL_INTERVAL` | Worker queue polling aralığı |
 | `DOCUMENT_SAMPLE_SIZE` | Kaynak başına bounded review örneği; varsayılan 200 |
 | `MAX_DOCUMENT_BYTES` | Örneklenebilir tek satır üst sınırı; varsayılan 256 KiB |
+| `NEXT_PUBLIC_LOCAL_LOGIN_EMAIL` | Yalnızca local login kartında gösterilecek hesap |
+| `NEXT_PUBLIC_LOCAL_LOGIN_PASSWORD` | Yalnızca local login kartında gösterilecek parola |
+
+`NEXT_PUBLIC_LOCAL_LOGIN_*` değerleri browser bundle'ında görünür. Yalnızca
+ignore edilen `web/.env.local` dosyasında ve local geliştirme ortamında kullanın.
 
 ### 2. Bağımlılıklar ve migration
 

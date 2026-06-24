@@ -968,6 +968,48 @@ textarea:focus {
   font-size: 22px;
 }
 
+.local-credentials {
+  margin-top: 18px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: #f7faf8;
+}
+
+.local-credentials > span {
+  display: block;
+  padding: 0 10px 8px;
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.local-credentials dl {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0 10px;
+}
+
+.local-credentials dl > div {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.local-credentials dt {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.local-credentials dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font: 12px/1.45 var(--mono);
+}
+
 .login-panel form {
   display: grid;
   gap: 15px;

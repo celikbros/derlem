@@ -288,6 +288,11 @@ credentials. Never commit real secrets.
 | `WORKER_POLL_INTERVAL` | Worker queue polling interval |
 | `DOCUMENT_SAMPLE_SIZE` | Bounded review samples per source; defaults to 200 |
 | `MAX_DOCUMENT_BYTES` | Maximum sampleable line size; defaults to 256 KiB |
+| `NEXT_PUBLIC_LOCAL_LOGIN_EMAIL` | Account displayed only on the local login card |
+| `NEXT_PUBLIC_LOCAL_LOGIN_PASSWORD` | Password displayed only on the local login card |
+
+`NEXT_PUBLIC_LOCAL_LOGIN_*` values are visible in the browser bundle. Use them
+only in the ignored `web/.env.local` file and in local development.
 
 ### 2. Dependencies and migrations
 

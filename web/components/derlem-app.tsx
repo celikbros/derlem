@@ -315,6 +315,8 @@ export function DerlemApp() {
 function Login({ onLogin }: { onLogin: (user: User) => void }) {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const localEmail = process.env.NEXT_PUBLIC_LOCAL_LOGIN_EMAIL?.trim();
+  const localPassword = process.env.NEXT_PUBLIC_LOCAL_LOGIN_PASSWORD;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -340,9 +342,18 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
       <section className="login-panel">
         <div className="login-brand"><Database size={28} aria-hidden="true" /><span>Derlem</span></div>
         <h1>Veri atölyesine giriş</h1>
+        {localEmail && localPassword && (
+          <div className="local-credentials" aria-label="Yerel giriş bilgileri">
+            <span>Yerel hesap</span>
+            <dl>
+              <div><dt>E-posta</dt><dd>{localEmail}</dd></div>
+              <div><dt>Parola</dt><dd>{localPassword}</dd></div>
+            </dl>
+          </div>
+        )}
         <form onSubmit={submit}>
-          <label>E-posta<input name="email" type="email" autoComplete="username" required autoFocus /></label>
-          <label>Parola<input name="password" type="password" autoComplete="current-password" required /></label>
+          <label>E-posta<input name="email" type="email" autoComplete="username" defaultValue={localEmail} required autoFocus /></label>
+          <label>Parola<input name="password" type="password" autoComplete="current-password" defaultValue={localPassword} required /></label>
           {error && <p className="form-error" role="alert">{error}</p>}
           <button className="primary-button login-button" type="submit" disabled={submitting}>
             {submitting ? <LoaderCircle className="spin" size={18} /> : <LogIn size={18} />}

@@ -2,6 +2,18 @@
 
 Derlem ilk asamada Docker, Redis veya MinIO gerektirmez.
 
+Login ekraninda yerel gelistirme hesabini gostermek ve alanlari otomatik
+doldurmak icin ignore edilen `web/.env.local` dosyasinda su opsiyonel
+degiskenler kullanilir:
+
+```text
+NEXT_PUBLIC_LOCAL_LOGIN_EMAIL=admin@derlem.local
+NEXT_PUBLIC_LOCAL_LOGIN_PASSWORD=local-only-password
+```
+
+Bu degerler `NEXT_PUBLIC` oldugu icin web bundle'inda gorunur; yalnizca yerel
+gelistirmede kullanilmali, production ortaminda tanimlanmamalidir.
+
 ## Gereksinimler
 
 - Go 1.25+

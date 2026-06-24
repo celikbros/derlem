@@ -55,9 +55,10 @@ npm run dev
 
 Arayuz `http://localhost:3000`, API `http://localhost:8080` adresindedir.
 
-Worker bir dosyayi ice aldiktan sonra otomatik olarak `scan_pii` isi acar.
-TCKN, IBAN, e-posta, telefon ve odeme karti kontrolleri tamamlanmadan kaynak
-insan onayina gecemez.
+Worker bir dosyayi ice aldiktan sonra otomatik olarak `scan_pii` ve
+`check_exact_duplicate` islerini acar. TCKN, IBAN, e-posta, telefon ve odeme
+karti kontrolleri ile exact SHA256 tekrar kontrolu tamamlanmadan kaynak insan
+onayina gecemez.
 
 ## Testler
 

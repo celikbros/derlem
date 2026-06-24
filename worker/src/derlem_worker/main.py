@@ -19,6 +19,7 @@ def main() -> None:
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
     worker = Worker(load_config(), worker_id=args.worker_id)
+    worker.enqueue_maintenance_jobs()
     if args.once:
         worker.run_once()
         return

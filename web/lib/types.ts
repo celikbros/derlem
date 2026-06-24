@@ -26,6 +26,8 @@ export type Source = {
   document_count?: number;
   detected_encoding?: string;
   pii_status: string;
+  duplicate_status: "not_checked" | "unique" | "duplicate";
+  duplicate_of_source_id?: string;
   risk_level: string;
   approval_status: string;
   version: number;

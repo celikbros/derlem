@@ -20,22 +20,30 @@ func TestApprovalGateReasons(t *testing.T) {
 			name: "all gates pass",
 			source: domain.Source{
 				ObjectSHA256: &digest, RightsStatus: "cleared", LicenseEvidenceRef: &evidence,
-				PIIStatus: "clear", ApprovalStatus: "auto_checked",
+				PIIStatus: "clear", DuplicateStatus: "unique", ApprovalStatus: "auto_checked",
 			},
 			want: []string{},
 		},
 		{
 			name:   "all mandatory gates fail",
 			source: domain.Source{RightsStatus: "unknown", PIIStatus: "not_scanned", ApprovalStatus: "source_registered"},
-			want:   []string{"file_not_ingested", "rights_not_cleared", "license_evidence_missing", "pii_not_clear"},
+			want:   []string{"file_not_ingested", "rights_not_cleared", "license_evidence_missing", "pii_not_clear", "exact_duplicate_not_clear"},
 		},
 		{
 			name: "already approved",
 			source: domain.Source{
 				ObjectSHA256: &digest, RightsStatus: "cleared", LicenseEvidenceRef: &evidence,
-				PIIStatus: "clear", ApprovalStatus: "approved_source",
+				PIIStatus: "clear", DuplicateStatus: "unique", ApprovalStatus: "approved_source",
 			},
 			want: []string{"already_approved"},
+		},
+		{
+			name: "exact duplicate blocks approval",
+			source: domain.Source{
+				ObjectSHA256: &digest, RightsStatus: "cleared", LicenseEvidenceRef: &evidence,
+				PIIStatus: "clear", DuplicateStatus: "duplicate", ApprovalStatus: "quarantined",
+			},
+			want: []string{"exact_duplicate_not_clear"},
 		},
 	}
 

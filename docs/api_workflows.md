@@ -12,6 +12,7 @@ POST  /sources
 GET   /sources/{id}
 PATCH /sources/{id}
 POST  /sources/{id}/ingest
+POST  /sources/{id}/upload
 GET   /sources/{id}/pii-scans
 GET   /sources/{id}/reviews
 POST  /sources/{id}/reviews
@@ -30,12 +31,16 @@ source_registered
   -> ingest_local_file queued
   -> immutable SHA256 object
   -> raw_ingested
-  -> scan_pii queued
+  -> scan_pii + check_exact_duplicate queued
   -> auto_checked | quarantined
 ```
 
 PII taramasi TCKN checksum, IBAN mod-97, Luhn-dogrulamali odeme karti, telefon
 ve e-posta sayimlari uretir. Ham eslesme degerleri DB'ye yazilmaz.
+Worker baslangicta daha once ingest edilmis ama exact duplicate sonucu olmayan
+kaynaklar icin eksik kontrol job'larini idempotent olarak kuyruga ekler.
+MVP kontrolu kaynak artifact'inin byte-level SHA256 tekrarini yakalar;
+normalize edilmis dokuman ve near-dedup kontrolleri sonraki fazdadir.
 
 ## Onay Kapisi
 
@@ -45,6 +50,7 @@ ve e-posta sayimlari uretir. Ham eslesme degerleri DB'ye yazilmaz.
 - `rights_status=cleared` olmali.
 - `license_evidence_ref` bulunmali.
 - `pii_status=clear` olmali.
+- `duplicate_status=unique` olmali.
 - Kaynak daha once onaylanmamis olmali.
 
 Ret ve hassas inceleme kararlarinda gerekce zorunludur. Karar, kaynak surumu,
@@ -53,6 +59,6 @@ kullanicilar kendi kaynagini inceleyemez.
 
 ## Denetim
 
-Her create, metadata update, ingest queue, ingest completion, PII scan, login ve
-review islemi `audit_events` tablosuna eklenir. Tablo update, delete ve truncate
-islemlerini trigger ile reddeder.
+Her create, metadata update, ingest queue, ingest completion, PII scan, exact
+duplicate kontrolu, login ve review islemi `audit_events` tablosuna eklenir.
+Tablo update, delete ve truncate islemlerini trigger ile reddeder.

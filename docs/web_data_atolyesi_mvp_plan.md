@@ -439,7 +439,8 @@ Tamamlanan calisan dilim:
 - PostgreSQL: append-only audit, immutable `content_purpose`, job queue ve review snapshot
 - Worker: immutable ingest, SHA256, UTF-8, satir sayimi ve otomatik PII job zinciri
 - PII minimumu: TCKN checksum, IBAN mod-97, kart Luhn, telefon ve e-posta
-- Review kapisi: dosya + cleared rights + lisans kaniti + clear PII zorunlu
+- Exact duplicate kapisi: SHA256 ile kanonik ilk kaynagi belirleme, tekrar kaynagi karantinaya alma
+- Review kapisi: dosya + cleared rights + lisans kaniti + clear PII + unique exact duplicate sonucu zorunlu
 - Next.js: kaynak katalogu, metadata duzenleme, inceleme ve job gorunumu
 
 PII taramasi eslesen ham degerleri saklamaz; yalnizca tur bazinda sayim tutar.

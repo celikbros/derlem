@@ -29,12 +29,50 @@ class Job:
     max_attempts: int
 
 
+def classify_exact_duplicate(source_id: str, canonical_source_id: str) -> tuple[str, str | None]:
+    if not source_id or not canonical_source_id:
+        raise ValueError("Source identifiers are required")
+    if source_id == canonical_source_id:
+        return "unique", None
+    return "duplicate", canonical_source_id
+
+
 class Worker:
     def __init__(self, config: Config, worker_id: str | None = None) -> None:
         self.config = config
         self.worker_id = worker_id or f"{socket.gethostname()}-{os.getpid()}"
         self.store = ContentAddressedStore(config.storage_root)
         self.pii_scanner = PIIScanner()
+
+    def enqueue_maintenance_jobs(self) -> int:
+        with psycopg.connect(self.config.database_url) as connection:
+            queued = connection.execute(
+                """
+                INSERT INTO background_jobs(job_type, payload, created_by)
+                SELECT
+                    'check_exact_duplicate',
+                    jsonb_build_object(
+                        'source_id', source.id::text,
+                        'object_sha256', source.object_sha256::text
+                    ),
+                    source.created_by
+                FROM sources AS source
+                WHERE source.object_sha256 IS NOT NULL
+                  AND source.duplicate_status = 'not_checked'
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM background_jobs AS job
+                      WHERE job.job_type = 'check_exact_duplicate'
+                        AND job.payload->>'source_id' = source.id::text
+                        AND job.status IN ('queued', 'running')
+                  )
+                ON CONFLICT DO NOTHING
+                """
+            )
+            connection.commit()
+        if queued.rowcount > 0:
+            LOGGER.info("maintenance_jobs_queued exact_duplicate=%s", queued.rowcount)
+        return queued.rowcount
 
     def run_once(self) -> bool:
         with psycopg.connect(self.config.database_url, row_factory=dict_row) as connection:
@@ -56,6 +94,15 @@ class Worker:
                 with psycopg.connect(self.config.database_url) as connection:
                     self._complete_pii_scan(connection, job, object_sha256, report)
                 LOGGER.info("job_succeeded job_id=%s pii_status=%s", job.id, report.status)
+            elif job.job_type == "check_exact_duplicate":
+                with psycopg.connect(self.config.database_url) as connection:
+                    status, duplicate_of = self._complete_exact_duplicate_check(connection, job)
+                LOGGER.info(
+                    "job_succeeded job_id=%s duplicate_status=%s duplicate_of=%s",
+                    job.id,
+                    status,
+                    duplicate_of,
+                )
             else:
                 raise ValueError(f"Unsupported job type: {job.job_type}")
         except Exception as error:  # Worker boundary: failure must be persisted.
@@ -233,6 +280,19 @@ class Worker:
             )
             connection.execute(
                 """
+                INSERT INTO background_jobs(job_type, payload, created_by)
+                SELECT
+                    'check_exact_duplicate',
+                    jsonb_build_object('source_id', %s::text, 'object_sha256', %s::text),
+                    created_by
+                FROM sources
+                WHERE id = %s
+                ON CONFLICT DO NOTHING
+                """,
+                (source_id, stored.sha256, source_id),
+            )
+            connection.execute(
+                """
                 UPDATE background_jobs
                 SET status = 'succeeded', result = %s::jsonb, completed_at = now(), updated_at = now()
                 WHERE id = %s AND status = 'running'
@@ -287,6 +347,7 @@ class Worker:
                     END,
                     approval_status = CASE
                         WHEN %s = 'flagged' THEN 'quarantined'
+                        WHEN duplicate_status = 'duplicate' THEN 'quarantined'
                         ELSE 'auto_checked'
                     END
                 WHERE id = %s AND object_sha256 = %s
@@ -325,6 +386,104 @@ class Worker:
                 """,
                 (report.scanner_version, report.status, findings_json, job.id),
             )
+
+    def _complete_exact_duplicate_check(
+        self,
+        connection: psycopg.Connection,
+        job: Job,
+    ) -> tuple[str, str | None]:
+        source_id = str(job.payload.get("source_id", "")).strip()
+        expected_sha256 = str(job.payload.get("object_sha256", "")).strip()
+        if not source_id:
+            raise ValueError("check_exact_duplicate requires source_id")
+
+        with connection.transaction():
+            source = connection.execute(
+                """
+                SELECT object_sha256
+                FROM sources
+                WHERE id = %s
+                FOR UPDATE
+                """,
+                (source_id,),
+            ).fetchone()
+            if source is None or source[0] is None:
+                raise RuntimeError("Source or stored object was not found")
+            object_sha256 = str(source[0])
+            if expected_sha256 and expected_sha256 != object_sha256:
+                raise RuntimeError("Source object changed before exact duplicate check")
+
+            canonical = connection.execute(
+                """
+                SELECT id::text
+                FROM sources
+                WHERE object_sha256 = %s
+                ORDER BY created_at ASC, id ASC
+                LIMIT 1
+                """,
+                (object_sha256,),
+            ).fetchone()
+            if canonical is None:
+                raise RuntimeError("Canonical source was not found")
+            canonical_id = str(canonical[0])
+            status, duplicate_of = classify_exact_duplicate(source_id, canonical_id)
+
+            updated = connection.execute(
+                """
+                UPDATE sources
+                SET duplicate_status = %s,
+                    duplicate_of_source_id = %s,
+                    risk_level = CASE
+                        WHEN %s = 'duplicate' AND risk_level NOT IN ('high', 'critical') THEN 'medium'
+                        ELSE risk_level
+                    END,
+                    approval_status = CASE
+                        WHEN %s = 'duplicate' THEN 'quarantined'
+                        WHEN pii_status = 'clear'
+                             AND approval_status NOT IN ('approved_source', 'release_candidate', 'rejected')
+                            THEN 'auto_checked'
+                        ELSE approval_status
+                    END
+                WHERE id = %s AND object_sha256 = %s
+                """,
+                (status, duplicate_of, status, status, source_id, object_sha256),
+            )
+            if updated.rowcount != 1:
+                raise RuntimeError("Source object changed while completing exact duplicate check")
+
+            connection.execute(
+                """
+                INSERT INTO audit_events(actor_type, action, entity_type, entity_id, details)
+                VALUES (
+                    'system', 'source.exact_duplicate_checked', 'source', %s,
+                    jsonb_strip_nulls(jsonb_build_object(
+                        'job_id', %s::text,
+                        'scanner_version', 'sha256-file-v1',
+                        'status', %s::text,
+                        'object_sha256', %s::text,
+                        'duplicate_of_source_id', %s::text
+                    ))
+                )
+                """,
+                (source_id, str(job.id), status, object_sha256, duplicate_of),
+            )
+            connection.execute(
+                """
+                UPDATE background_jobs
+                SET status = 'succeeded',
+                    result = jsonb_strip_nulls(jsonb_build_object(
+                        'scanner_version', 'sha256-file-v1',
+                        'status', %s::text,
+                        'object_sha256', %s::text,
+                        'duplicate_of_source_id', %s::text
+                    )),
+                    completed_at = now(),
+                    updated_at = now()
+                WHERE id = %s AND status = 'running'
+                """,
+                (status, object_sha256, duplicate_of, job.id),
+            )
+        return status, duplicate_of
 
     def _fail_or_retry(self, connection: psycopg.Connection, job: Job, error: Exception) -> None:
         next_status = "failed" if job.attempts >= job.max_attempts else "queued"

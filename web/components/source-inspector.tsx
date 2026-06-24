@@ -71,7 +71,12 @@ export function SourceInspector({
       setJobs(jobPayload.items);
       const ingestFinished = jobPayload.items.some((job) => ["ingest_local_file", "ingest_staged_file"].includes(job.job_type) && job.status === "succeeded");
       const scanFinished = jobPayload.items.some((job) => job.job_type === "scan_pii" && job.status === "succeeded");
-      if ((!source.object_sha256 && ingestFinished) || (source.pii_status === "not_scanned" && scanFinished)) {
+      const duplicateCheckFinished = jobPayload.items.some((job) => job.job_type === "check_exact_duplicate" && job.status === "succeeded");
+      if (
+        (!source.object_sha256 && ingestFinished)
+        || (source.pii_status === "not_scanned" && scanFinished)
+        || (source.duplicate_status === "not_checked" && duplicateCheckFinished)
+      ) {
         await onRefresh();
       }
     } catch (error) {
@@ -79,7 +84,7 @@ export function SourceInspector({
     } finally {
       setLoading(false);
     }
-  }, [onNotice, onRefresh, source.id, source.object_sha256, source.pii_status]);
+  }, [onNotice, onRefresh, source.duplicate_status, source.id, source.object_sha256, source.pii_status]);
 
   useEffect(() => { void loadActivity(); }, [loadActivity, source.version]);
   useEffect(() => {
@@ -94,6 +99,7 @@ export function SourceInspector({
     { label: "Haklar temiz", passed: source.rights_status === "cleared" },
     { label: "Lisans kanıtı", passed: Boolean(source.license_evidence_ref) },
     { label: "PII temiz", passed: source.pii_status === "clear" },
+    { label: "Exact tekrar yok", passed: source.duplicate_status === "unique" },
   ];
   const approvalReady = gateChecks.every((gate) => gate.passed) && source.approval_status !== "approved_source";
   const latestScan = scans[0];
@@ -188,6 +194,8 @@ export function SourceInspector({
         <Detail label="Köken" value={source.lineage_ref} mono />
         <Detail label="Durum" value={source.approval_status} />
         <Detail label="PII / risk" value={`${source.pii_status} / ${source.risk_level}`} />
+        <Detail label="Exact tekrar" value={source.duplicate_status} />
+        {source.duplicate_of_source_id && <Detail label="Kanonik kaynak" value={source.duplicate_of_source_id} mono />}
         {source.declared_sha256 && <Detail label="Beyan SHA256" value={source.declared_sha256} mono />}
         {source.declared_byte_size !== undefined && <Detail label="Beyan boyutu" value={formatBytes(source.declared_byte_size)} />}
         {source.declared_line_count !== undefined && <Detail label="Beyan satırı" value={source.declared_line_count.toLocaleString("tr-TR")} />}

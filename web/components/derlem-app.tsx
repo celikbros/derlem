@@ -1,0 +1,364 @@
+"use client";
+
+import {
+  CheckCircle2,
+  ClipboardCheck,
+  Database,
+  FilePlus2,
+  FileText,
+  Library,
+  ListTodo,
+  LoaderCircle,
+  LogIn,
+  LogOut,
+  Plus,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  X,
+} from "lucide-react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import { JobsPanel } from "@/components/jobs-panel";
+import { SourceInspector } from "@/components/source-inspector";
+import { messageFrom, requestJSON } from "@/lib/client-api";
+import type { Source, User } from "@/lib/types";
+
+type SourceList = {
+  items: Source[];
+  next_cursor?: string;
+};
+
+const purposeLabels: Record<string, string> = {
+  pretrain: "Pretrain",
+  instruction: "Instruction",
+  preference: "Preference",
+  eval: "Eval",
+  holdout: "Holdout",
+  post_training: "Post-training",
+};
+
+const statusLabels: Record<string, string> = {
+  source_registered: "Kaydedildi",
+  license_review: "Hak incelemesi",
+  raw_ingested: "Dosya alındı",
+  normalized: "Normalize edildi",
+  auto_checked: "Otomatik kontrol",
+  sampled_for_review: "Örneklem incelemesi",
+  approved_source: "Onaylandı",
+  release_candidate: "Release adayı",
+  rejected: "Reddedildi",
+  quarantined: "Karantina",
+};
+
+export function DerlemApp() {
+  const [user, setUser] = useState<User | null>(null);
+  const [booting, setBooting] = useState(true);
+  const [sources, setSources] = useState<Source[]>([]);
+  const [loadingSources, setLoadingSources] = useState(false);
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState<Source | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [activeView, setActiveView] = useState<"sources" | "review" | "jobs">("sources");
+  const createDialog = useRef<HTMLDialogElement>(null);
+
+  const loadSources = useCallback(async () => {
+    setLoadingSources(true);
+    try {
+      const payload = await requestJSON<SourceList>("/api/sources?limit=200");
+      setSources(payload.items);
+      setSelected((current) =>
+        current ? payload.items.find((source) => source.id === current.id) ?? null : null,
+      );
+    } catch (error) {
+      setNotice(messageFrom(error));
+    } finally {
+      setLoadingSources(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const currentUser = await requestJSON<User>("/api/session/me");
+        setUser(currentUser);
+        await loadSources();
+      } catch {
+        setUser(null);
+      } finally {
+        setBooting(false);
+      }
+    })();
+  }, [loadSources]);
+
+  const filteredSources = useMemo(() => {
+    const viewSources = activeView === "review"
+      ? sources.filter((source) => ["license_review", "auto_checked", "quarantined"].includes(source.approval_status))
+      : sources;
+    const normalized = query.trim().toLocaleLowerCase("tr-TR");
+    if (!normalized) return viewSources;
+    return viewSources.filter((source) =>
+      [source.name, source.domain, source.language, source.license, source.source_type]
+        .join(" ")
+        .toLocaleLowerCase("tr-TR")
+        .includes(normalized),
+    );
+  }, [activeView, query, sources]);
+
+  if (booting) {
+    return (
+      <main className="centered-state">
+        <LoaderCircle className="spin" aria-hidden="true" />
+        <span>Derlem açılıyor</span>
+      </main>
+    );
+  }
+
+  if (!user) {
+    return <Login onLogin={(loggedInUser) => { setUser(loggedInUser); void loadSources(); }} />;
+  }
+
+  const clearedCount = sources.filter((source) => source.rights_status === "cleared").length;
+  const ingestedCount = sources.filter((source) => source.object_sha256).length;
+
+  async function logout() {
+    await fetch("/api/session/logout", { method: "POST" });
+    setUser(null);
+    setSources([]);
+  }
+
+  async function createSource(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setNotice(null);
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const payload = Object.fromEntries(data.entries());
+    try {
+      const source = await requestJSON<Source>("/api/sources", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      form.reset();
+      createDialog.current?.close();
+      setSources((current) => [source, ...current]);
+      setSelected(source);
+      setNotice("Kaynak kaydedildi.");
+    } catch (error) {
+      setNotice(messageFrom(error));
+    }
+  }
+
+  return (
+    <div className="app-shell">
+      <aside className="sidebar">
+        <div className="brand">
+          <Database size={22} strokeWidth={1.8} aria-hidden="true" />
+          <span>Derlem</span>
+        </div>
+        <nav aria-label="Ana menü">
+          <button aria-label="Kaynaklar" aria-pressed={activeView === "sources"} className={`nav-item${activeView === "sources" ? " active" : ""}`} type="button" onClick={() => { setActiveView("sources"); setSelected(null); }}>
+            <Library size={18} aria-hidden="true" />
+            Kaynaklar
+            <span>{sources.length}</span>
+          </button>
+          <button aria-label="İnceleme" aria-pressed={activeView === "review"} className={`nav-item${activeView === "review" ? " active" : ""}`} type="button" onClick={() => { setActiveView("review"); setSelected(null); }}>
+            <ClipboardCheck size={18} aria-hidden="true" />
+            İnceleme
+            <span>{sources.filter((source) => ["license_review", "auto_checked", "quarantined"].includes(source.approval_status)).length}</span>
+          </button>
+          <button aria-label="İşler" aria-pressed={activeView === "jobs"} className={`nav-item${activeView === "jobs" ? " active" : ""}`} type="button" onClick={() => { setActiveView("jobs"); setSelected(null); }}>
+            <ListTodo size={18} aria-hidden="true" />
+            İşler
+            <span>›</span>
+          </button>
+        </nav>
+        <div className="sidebar-footer">
+          <div className="user-block">
+            <span>{user.email}</span>
+            <small>{user.roles.join(", ")}</small>
+          </div>
+          <button className="icon-button" type="button" title="Oturumu kapat" onClick={() => void logout()}>
+            <LogOut size={18} aria-hidden="true" />
+          </button>
+        </div>
+      </aside>
+
+      <main className="workspace">
+        <header className="page-header">
+          <div>
+            <p className="eyebrow">{activeView === "review" ? "Moderasyon" : activeView === "jobs" ? "Worker kuyruğu" : "Kaynak kataloğu"}</p>
+            <h1>{activeView === "review" ? "İnceleme kuyruğu" : activeView === "jobs" ? "Arka plan işleri" : "Veri kaynakları"}</h1>
+          </div>
+          {activeView !== "jobs" && (
+            <button className="primary-button" type="button" onClick={() => createDialog.current?.showModal()}>
+              <Plus size={18} aria-hidden="true" />Yeni kaynak
+            </button>
+          )}
+        </header>
+
+        <section className="summary-strip" aria-label="Kaynak özeti">
+          <Summary icon={<FileText />} label="Toplam" value={sources.length} />
+          <Summary icon={<ShieldCheck />} label="Hakları temiz" value={clearedCount} tone="green" />
+          <Summary icon={<CheckCircle2 />} label="Dosyası alınan" value={ingestedCount} tone="blue" />
+        </section>
+
+        {notice && (
+          <div className="notice" role="status">
+            <span>{notice}</span>
+            <button className="icon-button compact" type="button" title="Bildirimi kapat" onClick={() => setNotice(null)}>
+              <X size={16} aria-hidden="true" />
+            </button>
+          </div>
+        )}
+
+        {activeView === "jobs" ? <JobsPanel onNotice={setNotice} /> : <section className={`catalog-layout${selected ? " with-inspector" : ""}`}>
+          <div className="catalog-panel">
+            <div className="table-toolbar">
+              <label className="search-field">
+                <Search size={17} aria-hidden="true" />
+                <span className="sr-only">Kaynak ara</span>
+                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Kaynak ara" />
+              </label>
+              <button className="icon-button" type="button" title="Kaynakları yenile" onClick={() => void loadSources()}>
+                <RefreshCw className={loadingSources ? "spin" : ""} size={18} aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Kaynak</th>
+                    <th>Amaç</th>
+                    <th>Hak durumu</th>
+                    <th>İşlem durumu</th>
+                    <th>PII</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredSources.map((source) => (
+                    <tr key={source.id} className={selected?.id === source.id ? "selected-row" : undefined}>
+                      <td>
+                        <button className="source-link" type="button" onClick={() => setSelected(source)}>
+                          <strong>{source.name}</strong>
+                          <span>{source.domain}</span>
+                        </button>
+                      </td>
+                      <td><span className="purpose-label">{purposeLabels[source.content_purpose]}</span></td>
+                      <td><Status value={source.rights_status} /></td>
+                      <td>{statusLabels[source.approval_status] ?? source.approval_status}</td>
+                      <td><span className={`pii-status ${source.pii_status}`}>{source.pii_status}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!loadingSources && filteredSources.length === 0 && (
+                <div className="empty-state">
+                  <FilePlus2 size={24} aria-hidden="true" />
+                  <p>{sources.length === 0 ? "Henüz kaynak kaydı yok." : "Aramayla eşleşen kaynak yok."}</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {selected && <SourceInspector source={selected} user={user} onClose={() => setSelected(null)} onNotice={setNotice} onRefresh={loadSources} onChanged={(updated) => { setSelected(updated); setSources((current) => current.map((source) => source.id === updated.id ? updated : source)); }} />}
+        </section>}
+      </main>
+
+      <dialog ref={createDialog} className="source-dialog">
+        <form onSubmit={createSource}>
+          <div className="dialog-header">
+            <div>
+              <span>Kaynak kataloğu</span>
+              <h2>Yeni kaynak</h2>
+            </div>
+            <button className="icon-button" type="button" title="Pencereyi kapat" onClick={() => createDialog.current?.close()}>
+              <X size={19} aria-hidden="true" />
+            </button>
+          </div>
+          <div className="form-grid">
+            <label className="full-width">Kaynak adı<input name="name" required maxLength={240} /></label>
+            <label>Kaynak tipi<input name="source_type" placeholder="web_corpus" required /></label>
+            <label>
+              İçerik amacı
+              <select name="content_purpose" defaultValue="pretrain" required>
+                {Object.entries(purposeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+            </label>
+            <label>Lisans<input name="license" placeholder="CC-BY-4.0" required /></label>
+            <label>
+              Hak durumu
+              <select name="rights_status" defaultValue="unknown" required>
+                <option value="unknown">Bilinmiyor</option>
+                <option value="cleared">Temizlendi</option>
+                <option value="restricted">Kısıtlı</option>
+                <option value="blocked">Engelli</option>
+              </select>
+            </label>
+            <label>Dil<input name="language" defaultValue="tr" required /></label>
+            <label>Alan<input name="domain" placeholder="genel" required /></label>
+            <label className="full-width">Kaynak URL’si<input name="source_url" type="url" /></label>
+            <label className="full-width">Lisans kanıtı<input name="license_evidence_ref" /></label>
+            <label className="full-width">Köken bilgisi<input name="lineage_ref" placeholder="Dosya yolu, URL veya kayıt referansı" required /></label>
+          </div>
+          <div className="dialog-actions">
+            <button className="text-button" type="button" onClick={() => createDialog.current?.close()}>İptal</button>
+            <button className="primary-button" type="submit">Kaynağı kaydet</button>
+          </div>
+        </form>
+      </dialog>
+    </div>
+  );
+}
+
+function Login({ onLogin }: { onLogin: (user: User) => void }) {
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSubmitting(true);
+    setError(null);
+    const data = new FormData(event.currentTarget);
+    try {
+      const payload = await requestJSON<{ user: User }>("/api/session/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: data.get("email"), password: data.get("password") }),
+      });
+      onLogin(payload.user);
+    } catch (requestError) {
+      setError(messageFrom(requestError));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <main className="login-page">
+      <section className="login-panel">
+        <div className="login-brand"><Database size={28} aria-hidden="true" /><span>Derlem</span></div>
+        <h1>Veri atölyesine giriş</h1>
+        <form onSubmit={submit}>
+          <label>E-posta<input name="email" type="email" autoComplete="username" required autoFocus /></label>
+          <label>Parola<input name="password" type="password" autoComplete="current-password" required /></label>
+          {error && <p className="form-error" role="alert">{error}</p>}
+          <button className="primary-button login-button" type="submit" disabled={submitting}>
+            {submitting ? <LoaderCircle className="spin" size={18} /> : <LogIn size={18} />}
+            Giriş yap
+          </button>
+        </form>
+      </section>
+    </main>
+  );
+}
+
+function Summary({ icon, label, value, tone = "neutral" }: { icon: React.ReactElement; label: string; value: number; tone?: string }) {
+  return <div className={`summary-item ${tone}`}>{icon}<span>{label}</span><strong>{value.toLocaleString("tr-TR")}</strong></div>;
+}
+
+function Status({ value }: { value: string }) {
+  const labels: Record<string, string> = { unknown: "Bilinmiyor", cleared: "Temiz", restricted: "Kısıtlı", blocked: "Engelli" };
+  return <span className={`status ${value}`}>{labels[value] ?? value}</span>;
+}

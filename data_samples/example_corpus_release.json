@@ -1,0 +1,93 @@
+{
+  "schema_version": "tva-corpus-release-1",
+  "release_id": "celik_faz2_v3_8_20260621",
+  "frozen": true,
+  "frozen_by": "llm_team",
+  "frozen_at": "2026-06-21T00:00:00Z",
+  "corpus": {
+    "name": "gardash_tr_dedup_faz2",
+    "format": "text",
+    "path": "C:\\CELIK-GARDASH\\datasets\\faz2_corpus\\gardash_tr_dedup.lf.txt",
+    "text_field": "",
+    "line_count": 6027968,
+    "document_count": 6027968,
+    "raw_bytes": 13560000000,
+    "estimated_tokens": 2510000000,
+    "sha256": "38b812046831c9176f217bfae364093cb55c768da3081110e0c062825c6f8a07"
+  },
+  "mixture": [
+    {
+      "name": "turkish_primary",
+      "language": "tr",
+      "domain": "mixed_clean",
+      "share": 1.0,
+      "source_ids": ["src-celik-faz2-dedup-20260621"],
+      "source_sha256s": ["38b812046831c9176f217bfae364093cb55c768da3081110e0c062825c6f8a07"],
+      "sample_weight": 1.0,
+      "notes": "Existing Faz 2 release imported as baseline; do not mutate."
+    }
+  ],
+  "normalization": {
+    "policy": "identity_plus_canonical_lf",
+    "unicode_form": "raw",
+    "line_ending": "lf",
+    "remove_extra_whitespaces": false,
+    "mojibake_repair": false,
+    "ocr_cleanup": false,
+    "notes": "Whitespace collapse was used for dedup only; tokenizer-facing policy remains identity unless jointly changed."
+  },
+  "dedup": {
+    "status": "complete",
+    "exact_method": "cross_source_exact_whitespace_normalized",
+    "near_method": "",
+    "near_duplicate_policy": "waived_for_data_constrained_faz2",
+    "documents_in": 10465675,
+    "documents_kept": 6027968,
+    "duplicate_rate": 0.424,
+    "report_path": "C:\\CELIK-GARDASH\\docs\\FAZ2_CORPUS_FINDINGS.md"
+  },
+  "tokenizer_contract": {
+    "registry_unchanged": true,
+    "effective_vocab_size": 64384,
+    "sp_vocab_size": 64000,
+    "pad_id": 64256,
+    "unk_id": 0,
+    "document_boundaries_preserved": false
+  },
+  "quality_gates": [
+    {
+      "name": "final_corpus_manifest_preflight",
+      "status": "pass",
+      "report_path": "C:\\CELIK-GARDASH\\artifacts\\tokenizer_v3_0\\v3_8_faz2_final_corpus_preflight_lf",
+      "notes": "Existing project gate result."
+    },
+    {
+      "name": "near_dedup",
+      "status": "skipped",
+      "report_path": "",
+      "notes": "Waived only for this data-constrained release; required by default for larger future releases."
+    }
+  ],
+  "decontamination": {
+    "status": "skipped",
+    "method": "",
+    "against_splits": ["eval", "holdout"],
+    "report_path": "",
+    "notes": "Baseline import; future pretrain releases must run exact-match decontamination."
+  },
+  "audit": {
+    "audit_event_id": "import-celik-faz2-v3-8-20260621",
+    "pipeline_config_version": "manual-import-v1",
+    "manifest_sha256": "",
+    "source_snapshot_path": "C:\\CELIK-GARDASH\\datasets\\faz2_corpus\\final_corpus_manifest.v3_8.json"
+  },
+  "exports": {
+    "canonical_text_path": "C:\\CELIK-GARDASH\\datasets\\faz2_corpus\\gardash_tr_dedup.lf.txt",
+    "final_corpus_manifest_path": "C:\\CELIK-GARDASH\\datasets\\faz2_corpus\\final_corpus_manifest.v3_8.json",
+    "tokenized_manifest_path": "",
+    "checksums_path": ""
+  },
+  "created_at": "2026-06-21T00:00:00Z",
+  "created_by": "llm_team",
+  "notes": "Baseline release record for Turkce Veri Atolyesi registry."
+}

@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Turkce Veri Atolyesi Corpus Release",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "release_id",
+    "frozen",
+    "frozen_by",
+    "frozen_at",
+    "corpus",
+    "mixture",
+    "normalization",
+    "dedup",
+    "quality_gates",
+    "created_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "tva-corpus-release-1"
+    },
+    "release_id": { "type": "string" },
+    "frozen": { "type": "boolean" },
+    "frozen_by": { "type": "string" },
+    "frozen_at": { "type": "string", "format": "date-time" },
+    "corpus": {
+      "type": "object",
+      "required": ["name", "format", "path", "sha256"],
+      "properties": {
+        "name": { "type": "string" },
+        "format": { "type": "string", "enum": ["jsonl", "text", "parquet"] },
+        "path": { "type": "string" },
+        "text_field": { "type": "string" },
+        "line_count": { "type": "integer", "minimum": 0 },
+        "document_count": { "type": "integer", "minimum": 0 },
+        "raw_bytes": { "type": "integer", "minimum": 0 },
+        "estimated_tokens": { "type": "integer", "minimum": 0 },
+        "sha256": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "mixture": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "language", "domain", "share"],
+        "properties": {
+          "name": { "type": "string" },
+          "language": { "type": "string" },
+          "domain": { "type": "string" },
+          "share": { "type": "number", "minimum": 0, "maximum": 1 },
+          "source_ids": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "source_sha256s": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "sample_weight": { "type": "number", "minimum": 0 },
+          "notes": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "normalization": {
+      "type": "object",
+      "required": ["policy", "unicode_form", "remove_extra_whitespaces"],
+      "properties": {
+        "policy": { "type": "string" },
+        "unicode_form": { "type": "string" },
+        "line_ending": { "type": "string", "enum": ["lf", "crlf", "mixed", "unknown"] },
+        "remove_extra_whitespaces": { "type": "boolean" },
+        "mojibake_repair": { "type": "boolean" },
+        "ocr_cleanup": { "type": "boolean" },
+        "notes": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "dedup": {
+      "type": "object",
+      "required": ["status", "exact_method", "near_duplicate_policy"],
+      "properties": {
+        "status": { "type": "string" },
+        "exact_method": { "type": "string" },
+        "near_method": { "type": "string" },
+        "near_duplicate_policy": { "type": "string" },
+        "documents_in": { "type": "integer", "minimum": 0 },
+        "documents_kept": { "type": "integer", "minimum": 0 },
+        "duplicate_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "report_path": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "tokenizer_contract": {
+      "type": "object",
+      "properties": {
+        "registry_unchanged": { "type": "boolean" },
+        "effective_vocab_size": { "type": "integer", "minimum": 0 },
+        "sp_vocab_size": { "type": "integer", "minimum": 0 },
+        "pad_id": { "type": "integer", "minimum": 0 },
+        "unk_id": { "type": "integer", "minimum": 0 },
+        "document_boundaries_preserved": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "tokenizer_metrics": {
+      "type": "object",
+      "properties": {
+        "tokenizer_version": { "type": "string" },
+        "model_sha256": { "type": "string" },
+        "tokens_per_raw_byte": { "type": "number", "minimum": 0 },
+        "fallback_rate": { "type": "number", "minimum": 0 },
+        "protected_span_count": { "type": "integer", "minimum": 0 },
+        "masked_token_rate": { "type": "number", "minimum": 0 },
+        "bpb_sample_id": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "quality_gates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "status"],
+        "properties": {
+          "name": { "type": "string" },
+          "status": { "type": "string", "enum": ["pass", "warn", "fail", "skipped"] },
+          "report_path": { "type": "string" },
+          "notes": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "decontamination": {
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "enum": ["pass", "warn", "fail", "skipped"] },
+        "method": { "type": "string" },
+        "against_splits": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "report_path": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "audit": {
+      "type": "object",
+      "properties": {
+        "audit_event_id": { "type": "string" },
+        "pipeline_config_version": { "type": "string" },
+        "manifest_sha256": { "type": "string" },
+        "source_snapshot_path": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "exports": {
+      "type": "object",
+      "properties": {
+        "canonical_text_path": { "type": "string" },
+        "final_corpus_manifest_path": { "type": "string" },
+        "tokenized_manifest_path": { "type": "string" },
+        "checksums_path": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "created_at": { "type": "string", "format": "date-time" },
+    "created_by": { "type": "string" },
+    "notes": { "type": "string" }
+  },
+  "additionalProperties": false
+}

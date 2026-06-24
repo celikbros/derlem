@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Turkce Veri Atolyesi Contribution",
+  "type": "object",
+  "required": [
+    "id",
+    "task_type",
+    "input",
+    "output",
+    "status",
+    "created_at"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "task_type": {
+      "type": "string",
+      "enum": [
+        "simplification",
+        "grounded_qa",
+        "answer_review",
+        "naturalize_tr",
+        "preference",
+        "reasoning"
+      ]
+    },
+    "input": {
+      "type": "object"
+    },
+    "output": {
+      "type": "object"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "submitted",
+        "auto_rejected",
+        "needs_review",
+        "approved",
+        "rejected",
+        "sensitive_review",
+        "holdout_eval"
+      ]
+    },
+    "quality": {
+      "type": "object",
+      "properties": {
+        "natural_turkish": { "type": "integer", "minimum": 1, "maximum": 5 },
+        "task_fit": { "type": "integer", "minimum": 1, "maximum": 5 },
+        "factuality": { "type": "integer", "minimum": 1, "maximum": 5 },
+        "clarity": { "type": "integer", "minimum": 1, "maximum": 5 },
+        "risk_level": {
+          "type": "string",
+          "enum": ["low", "medium", "high"]
+        }
+      }
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "review_notes": {
+      "type": "string"
+    }
+  }
+}

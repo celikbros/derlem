@@ -1,0 +1,17 @@
+.env
+.env.local
+.venv/
+node_modules/
+dist/
+build/
+__pycache__/
+*.pyc
+*.egg-info/
+*.tsbuildinfo
+.pytest_cache/
+.next/
+test-results/
+playwright-report/
+data_private/
+exports/
+var/

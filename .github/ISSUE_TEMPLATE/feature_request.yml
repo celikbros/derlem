@@ -1,0 +1,39 @@
+name: Özellik isteği / Feature request
+description: Veri kalitesi veya iş akışı için değişiklik önerin. Propose a data-quality or workflow change.
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Çözülecek ihtiyaç / Problem to solve
+      description: Çözümden önce kullanıcı veya veri problemi nedir? Describe the user or data problem before the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Öneri / Proposal
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatifler / Alternatives considered
+  - type: checkboxes
+    id: impact
+    attributes:
+      label: Etki alanı / Impact area
+      options:
+        - label: Canonical schema veya export
+        - label: PII, haklar veya audit kapısı
+        - label: Migration veya backfill
+        - label: API veya web iş akışı
+        - label: Worker veya object storage
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Kabul kriterleri / Acceptance criteria
+      description: Test edilebilir sonuçları yazın. List testable outcomes.
+    validations:
+      required: true

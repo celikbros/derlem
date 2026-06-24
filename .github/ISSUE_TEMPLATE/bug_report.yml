@@ -1,0 +1,60 @@
+name: Hata bildirimi / Bug report
+description: Tekrarlanabilir bir ürün veya geliştirme hatası bildirin. Report a reproducible defect.
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Gerçek secret, PII veya corpus içeriği eklemeyin. Do not include real secrets, PII, or corpus content.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Sorun / Problem
+      description: Gerçekleşen davranışı kısa ve açık biçimde anlatın. Describe the observed behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Yeniden üretme / Reproduction
+      description: Sentetik veri kullanarak adımları yazın. Provide steps using synthetic data.
+      placeholder: "1. ...\n2. ...\n3. ..."
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Beklenen davranış / Expected behavior
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Commit veya sürüm / Commit or version
+      placeholder: 42f8b4d
+  - type: dropdown
+    id: component
+    attributes:
+      label: Bileşen / Component
+      options:
+        - Go API
+        - PostgreSQL / migration
+        - Python worker
+        - Next.js web
+        - Storage / upload
+        - Documentation / schema
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Redakte edilmiş log / Redacted logs
+      render: shell
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Güvenlik kontrolü / Safety check
+      options:
+        - label: Bu bildirim gerçek secret, PII veya özel corpus verisi içermiyor. This report contains no real secrets, PII, or private corpus data.
+          required: true

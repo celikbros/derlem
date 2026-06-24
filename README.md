@@ -1,93 +1,442 @@
 # Derlem
 
-Derlem, Turkce merkezli ve cok dilli yapay zeka modelleri icin temiz, denetlenebilir, surumlenebilir ve yuksek sinyalli veri uretmeyi hedefleyen bir veri atolyesidir.
+**Türkçe merkezli, modelden bağımsız, denetlenebilir yapay zekâ veri atölyesi.**
 
-Bu proje "ne kadar cok metin, o kadar iyi model" varsayimi ile kurulmaz. Hedef, insanlarin web sitesi uzerinden yapilandirilmis gorevler tamamlayarak kaliteli Turkce instruction, preference, reasoning, duzeltme ve degerlendirme verisi uretmesidir.
+[Türkçe](README.md) | [English](README.en.md)
 
-## Iki Veri Hatti
+[![CI](https://github.com/celikbros/derlem/actions/workflows/ci.yml/badge.svg)](https://github.com/celikbros/derlem/actions/workflows/ci.yml)
 
-Atolye iki farkli ama birbirine bagli veri hattindan olusur:
+Derlem; LLM ve tokenizer ekipleri için ham kaynakları kaydeden, dosyaları
+içerik adresli değişmez depoya alan, otomatik kalite kapıları çalıştıran,
+insan incelemesini izleyen ve ileride yeniden üretilebilir dataset release'leri
+hazırlayacak bir veri yönetim sistemidir.
 
-1. **Corpus Factory:** LLM pretraining ve tokenizer egitimi icin buyuk ham/temiz metin corpus'u toplar, temizler, dedup eder, surumler ve donmus manifest olarak teslim eder.
-2. **Human Data Workshop:** instruction, preference, answer review, natural Turkish duzeltme ve eval verisi gibi daha kucuk ama yuksek sinyalli insan katkisini toplar.
+Proje model eğitmez ve tokenizer koduna müdahale etmez. Eğitim ekipleri,
+Derlem'in onaylanmış ve sürümlenmiş çıktılarını kendi model adaptörleriyle
+kullanır.
 
-Atolye LLM veya tokenizer koduna mudahale etmez. Bu ekipler, ihtiyac duyduklari veriyi Atolye'nin onayli ve surumlenmis export paketlerinden alir.
+> **Durum:** Aktif MVP geliştirmesi. Kaynak kataloğu, JWT tabanlı yetkilendirme,
+> tarayıcıdan akışlı dosya yükleme, içerik adresli saklama, PostgreSQL iş
+> kuyruğu, temel PII taraması, SHA256 exact-duplicate kapısı, moderasyon ve
+> append-only audit çalışmaktadır. Release Builder henüz tamamlanmamıştır.
 
-Buyuk corpus verisi veritabanina ham dosya olarak basilmaz. Ham ve temizlenmis metinler object storage / filesystem uzerinde tutulur; PostgreSQL yalnizca kaynak kaydi, kalite sinyalleri, onay durumu, denetim izi ve release metadata'si icin kullanilir.
+## İçindekiler
 
-## Temel Ilke
+- [Neden Derlem?](#neden-derlem)
+- [Kapsam](#kapsam)
+- [Tasarım İlkeleri](#tasarım-ilkeleri)
+- [Mimari](#mimari)
+- [Veri Yaşam Döngüsü](#veri-yaşam-döngüsü)
+- [Kalite ve Güvenlik Kapıları](#kalite-ve-güvenlik-kapıları)
+- [Modelden Bağımsız Veri](#modelden-bağımsız-veri)
+- [Teknoloji Seçimleri](#teknoloji-seçimleri)
+- [Proje Yapısı](#proje-yapısı)
+- [Yerel Kurulum](#yerel-kurulum)
+- [API Özeti](#api-özeti)
+- [Testler](#testler)
+- [Ölçekleme Yaklaşımı](#ölçekleme-yaklaşımı)
+- [Yol Haritası](#yol-haritası)
+- [Dokümantasyon](#dokümantasyon)
+- [Güvenlik ve Lisans](#güvenlik-ve-lisans)
 
-Ham veri coplugu degil, kalite kontrollu veri isligi.
+## Neden Derlem?
 
-Toplanan her katki dogrudan egitim verisi olmaz. Katkilar once otomatik filtrelerden, sonra insan incelemesinden, gerekirse uzman onayindan gecer. Bazi veriler egitimde kullanilmaz; sadece test ve degerlendirme icin ayrilir.
+Model geliştirme ekiplerinin yalnızca daha fazla metne değil; kökeni bilinen,
+hak durumu kaydedilmiş, hassas veri açısından taranmış, tekrarları kontrol
+edilmiş ve hangi kararlarla onaylandığı izlenebilen veriye ihtiyacı vardır.
 
-## Ilk MVP Gorevleri
+Derlem şu sorunları çözmek için tasarlanır:
 
-1. Metin sadelestirme
-2. Metinden soru-cevap uretme
-3. Model cevabini puanlama ve duzeltme
-4. Bozuk/dogal olmayan Turkceyi dogal hale getirme
+- Ham corpus dosyalarının farklı klasörlerde kontrolsüz biçimde çoğalması.
+- Lisans, kaynak, checksum ve işleme geçmişinin kaybolması.
+- Eval/holdout içeriğinin yanlışlıkla eğitim havuzuna karışması.
+- PII veya exact duplicate bulgularının sessizce release'e girmesi.
+- Model-spesifik chat template'lerinin kanonik veriye gömülmesi.
+- Bir dataset release'inin daha sonra aynı girdilerle üretilememesi.
+- İnsan ve otomasyon kararlarının denetlenebilir bir kayıt bırakmaması.
 
-## Veri Havuzlari
+İlk seed kaynak, `C:\CELIK-GARDASH` altındaki mevcut Türkçe corpus'tur. Bu
+yerel yol yalnızca lineage bilgisidir; bir kaynak, dosyası değişmez depoya
+alınmadan onaylanmış veri sayılmaz.
 
-| Havuz | Amac |
+## Kapsam
+
+### Derlem ne yapar?
+
+- Kaynak metadata'sı, hak durumu, lisans kanıtı ve lineage kaydeder.
+- TXT, JSONL, JSON, CSV ve TSV dosyalarını tarayıcıdan akışlı olarak alır.
+- Dosyaları SHA256 kimliğiyle içerik adresli değişmez depoda saklar.
+- Dosya boyutu, satır sayısı, encoding ve checksum üretir.
+- TCKN, IBAN, e-posta, telefon ve ödeme kartı için temel PII taraması yapar.
+- Byte-level SHA256 ile exact source-artifact tekrarlarını yakalar.
+- Rol tabanlı insan incelemesi, ret gerekçesi ve self-review engeli uygular.
+- Her önemli değişikliği append-only audit kaydına ekler.
+- Onaylı verileri ileride frozen release, manifest ve export olarak sunar.
+
+### Derlem ne yapmaz?
+
+- LLM eğitimi veya tokenizer eğitimi çalıştırmaz.
+- Model kalitesi veya hukuki uygunluk konusunda tek başına nihai hüküm vermez.
+- Büyük metin blob'larını PostgreSQL içine basmaz.
+- Modelin chat template'ini kanonik veri formatı olarak kabul etmez.
+- Lisansı veya hak durumu belirsiz veriyi otomatik olarak onaylamaz.
+- Mevcut frozen release'i yerinde değiştirmez; düzeltme yeni release'tir.
+
+## Tasarım İlkeleri
+
+1. **Kanonik veri modelden bağımsızdır.** GLM, DeepSeek, Kimi veya başka bir
+   modelin template'i türetilmiş export katmanına aittir.
+2. **Dosya kimliği path değil SHA256'dır.** Orijinal path yalnızca lineage
+   bilgisidir.
+3. **Haklar kapısı default-deny çalışır.** `unknown`, `restricted` veya
+   `blocked` durumundaki kaynak onaylanamaz.
+4. **Eval ve eğitim amacı kayıt anında ayrılır.** `content_purpose` zorunlu ve
+   veritabanı trigger'ıyla değişmezdir.
+5. **Audit kaydı append-only'dir.** Update, delete ve truncate veritabanı
+   trigger'larıyla engellenir.
+6. **İnsan ve ajan aynı yetki modeline tabidir.** Kritik freeze ve hak kararları
+   insan kapısında kalır.
+7. **Frozen release değişmez.** Kaynak kimlikleri ve checksum snapshot'ı freeze
+   anında sabitlenir.
+8. **Ölçek ölçümle büyür.** MVP'de PostgreSQL kuyruğu ve local object store;
+   ihtiyaç kanıtlandığında S3/MinIO ve ayrı mesajlaşma katmanı kullanılır.
+
+## Mimari
+
+```mermaid
+flowchart LR
+    U[İnsan veya ajan istemci] --> W[Next.js web]
+    W --> A[Go Core API]
+    A --> P[(PostgreSQL)]
+    A --> T[Staging alanı]
+    P --> Q[PostgreSQL job queue]
+    Q --> Y[Python worker]
+    T --> Y
+    Y --> O[İçerik adresli object store]
+    Y --> P
+    C[LLM / tokenizer ekipleri] <-->|manifest ve export| R[Release katmanı]
+    P --> R
+    O --> R
+```
+
+### İstek yolu
+
+Go API; auth, rol kontrolü, kaynak CRUD, optimistic locking, upload akışı,
+inceleme kararları ve audit işlemlerini yürütür. API stateless tasarlanır;
+yatay ölçekleme için oturum durumu proses belleğinde tutulmaz.
+
+### Metadata ve iş kuyruğu
+
+PostgreSQL; kullanıcılar, roller, kaynak metadata'sı, kalite durumları,
+incelemeler, release kayıtları, audit olayları ve background job'ları tutar.
+Worker'lar `FOR UPDATE SKIP LOCKED` ile çakışmadan iş alabilir.
+
+### Dosya saklama
+
+Ham ve işlenmiş büyük dosyalar PostgreSQL blob'u değildir. MVP'de storage
+interface arkasındaki local filesystem kullanılır:
+
+```text
+var/storage/objects/sha256/aa/bb/<64-karakter-sha256>
+```
+
+Aynı interface ileride S3 veya MinIO implementasyonuna geçirilebilir.
+
+### Ağır veri işleme
+
+Python worker; immutable ingest, encoding kontrolü, satır sayımı, PII taraması
+ve exact-duplicate işlerini yürütür. İlerleyen fazlarda DuckDB/Polars tabanlı
+normalizasyon, shard üretimi ve export işleri bu katmana eklenecektir.
+
+## Veri Yaşam Döngüsü
+
+```text
+source_registered
+  -> browser upload veya güvenilir local ingest
+  -> immutable SHA256 object
+  -> raw_ingested
+  -> scan_pii + check_exact_duplicate
+  -> auto_checked | quarantined
+  -> human review
+  -> approved_source | rejected | sensitive_review
+  -> release_candidate
+  -> frozen release
+```
+
+1. Kullanıcı zorunlu metadata ile kaynak kaydı açar.
+2. Dosya staging alanına stream edilir; RAM'e bütünüyle alınmaz.
+3. Worker SHA256, byte size, line count ve UTF-8 durumunu hesaplar.
+4. İçerik, SHA256 anahtarıyla immutable store'a atomik olarak alınır.
+5. PII ve exact-duplicate işleri bağımsız job olarak çalışır.
+6. Tüm kapılar temizse yetkili reviewer karar verebilir.
+7. İleride Release Builder aynı `content_purpose` içindeki onaylı kaynakları
+   seçerek manifest, checksum ve export üretecektir.
+
+## Kalite ve Güvenlik Kapıları
+
+Bir kaynak `approved_source` olabilmek için:
+
+| Kapı | Zorunlu sonuç | Neden |
+| --- | --- | --- |
+| Immutable ingest | `object_sha256` mevcut | İncelenen dosyanın sonradan değişmemesi |
+| Hak durumu | `rights_status=cleared` | Belirsiz veya engelli veriyi reddetmek |
+| Lisans kanıtı | `license_evidence_ref` mevcut | Kararın dayanağını izlemek |
+| PII taraması | `pii_status=clear` | Hassas verinin sessiz geçmesini önlemek |
+| Exact duplicate | `duplicate_status=unique` | Aynı artifact'in ikinci kez onaylanmasını engellemek |
+| İnsan kararı | Yetkili reviewer | Otomasyonun kritik kararı tek başına vermemesi |
+
+Exact-duplicate kontrolü şu anda **kaynak dosyanın byte-level SHA256** eşitliğini
+yakalar. Normalize edilmiş doküman exact-match, MinHash/SimHash near-dedup ve
+n-gram overlap sonraki fazlardadır.
+
+PII taraması eşleşen ham değerleri veritabanına yazmaz; yalnızca tür bazında
+sayım ve durum saklar. Geçerli TCKN checksum, IBAN mod-97 ve ödeme kartı Luhn
+kontrolleri uygulanır.
+
+## Modelden Bağımsız Veri
+
+LLM'e giden prompt çoğu zaman düz metin değil; mesaj rolleri, tool call'lar,
+multimodal parçalar, özel token'lar ve modele özgü chat template ile render
+edilmiş bir dizidir. Derlem bu nedenle veritabanını tek bir modelin template'ine
+göre tasarlamaz.
+
+Kanonik yaklaşım:
+
+- `conversation_sample`: bir görev veya konuşma örneği.
+- `message`: `system`, `user`, `assistant` veya `tool` rolü.
+- `message_part`: text, image, audio, video veya tool reference parçası.
+- `tool_definition`, `tool_call`, `tool_result`: araç sözleşmesi ve yürütme izi.
+- `export_profile`: kanonik örneğin uyduğu standart çıktı sözleşmesi.
+- `model_adapter`: model ailesinin render kuralları.
+- `prompt_rendering`: belirli adapter'dan üretilmiş türetilmiş artifact.
+
+Yeni model çıktığında veri tek tek yeniden onaylanmaz. Model ekibi kanonik
+export'u kendi adapter'ıyla dönüştürür. Model-spesifik render saklanacaksa büyük
+prompt blob'u DB'ye değil immutable object store'a yazılır.
+
+## Teknoloji Seçimleri
+
+| Katman | Teknoloji | Seçim nedeni |
+| --- | --- | --- |
+| Core API | Go 1.25+ | Düşük bellek, güçlü concurrency, sade deployment ve yüksek istek kapasitesi |
+| Metadata DB | PostgreSQL 17+ | Transaction, constraint, JSONB, audit ve güvenilir queue semantiği |
+| Worker | Python 3.12+ | Veri işleme, PII ve ilerideki NLP ekosistemiyle güçlü uyum |
+| Web | Next.js 16 + React 19 + TypeScript | Tip güvenli yönetim arayüzü ve server-side API proxy |
+| Object storage | Local content-addressed store | MVP'de düşük operasyon yükü; S3/MinIO'ya açık interface |
+| Job queue | PostgreSQL `SKIP LOCKED` | Ek servis gerektirmeden güvenilir MVP; ölçülürse Redis/NATS/Kafka |
+| Auth | JWT + RBAC | İlk günden gerçek kimlik ve rol denetimi; ileride Keycloak/OAuth |
+| CI | GitHub Actions | Go, Python ve web kontrollerini her push/PR'da tekrarlamak |
+
+Rust yerine Go seçimi bilinçlidir: Derlem'in sıcak yolu ağ, auth, metadata ve
+dosya akışıdır. Go bu iş yükünde yeterli performansı daha düşük geliştirme ve
+bakım maliyetiyle sunar. CPU-ağır özel bir bileşen ölçümle darboğaz olursa o
+bileşen bağımsız olarak Rust ile yazılabilir.
+
+## Proje Yapısı
+
+```text
+cmd/api/                         Go API giriş noktası
+cmd/migrate/                     PostgreSQL migration komutu
+internal/auth/                   Parola, JWT, bootstrap admin
+internal/database/               Bağlantı ve sıralı SQL migration'ları
+internal/domain/                 API/domain veri tipleri
+internal/httpapi/                Route, middleware ve handler'lar
+internal/repository/             Transaction ve sorgu katmanı
+internal/storage/                İçerik adresli storage interface'i
+worker/src/derlem_worker/        Python background worker
+worker/tests/                    Worker birim testleri
+web/app/                         Next.js App Router ve API proxy
+web/components/                  Yönetim arayüzü bileşenleri
+web/tests/e2e/                   Playwright senaryoları
+schemas/                         Modelden bağımsız JSON Schema sözleşmeleri
+data_samples/                    Küçük ve güvenli örnek kayıtlar
+docs/                            Mimari, yönetişim ve danışman belgeleri
+```
+
+## Yerel Kurulum
+
+### Gereksinimler
+
+- Go 1.25+
+- PostgreSQL 17+
+- Python 3.12+
+- Node.js 22+
+
+Docker, Redis veya MinIO yerel MVP için zorunlu değildir.
+
+### 1. Yapılandırma
+
+```powershell
+Copy-Item .env.example .env
+Copy-Item web/.env.local.example web/.env.local
+```
+
+`.env` içinde en az `DATABASE_URL`, güçlü bir `JWT_SECRET` ve bootstrap admin
+bilgilerini yerel değerlerle değiştirin. Gerçek secret'ları commit etmeyin.
+
+Başlıca ayarlar:
+
+| Değişken | Amaç |
 | --- | --- |
-| `raw_sources` | Orijinal kaynaklar, lisans ve sahiplik metadata'si |
-| `clean_corpus_candidates` | Temizlenmis ama henuz release olmamis buyuk corpus parcalari |
-| `pretraining_releases` | LLM/tokenizer ekiplerine dondurulmus corpus surumleri |
-| `clean_tr_text` | Temiz genel Turkce metin |
-| `instruction_answer` | Talimat-cevap egitimi |
-| `preference` | Iki cevap arasinda tercih / DPO-RLHF |
-| `reasoning` | Gerekceli cevap ve adim adim dusunme verisi |
-| `evaluation_holdout` | Egitimde kullanilmayan test verisi |
-| `sensitive_review` | Uzman kontrolu gerektiren riskli alanlar |
+| `DATABASE_URL` | PostgreSQL bağlantısı |
+| `JWT_SECRET` | En az 32 karakterli token imza anahtarı |
+| `BOOTSTRAP_ADMIN_EMAIL` | İlk admin hesabı |
+| `BOOTSTRAP_ADMIN_PASSWORD` | İlk admin parolası |
+| `STORAGE_ROOT` | Immutable object store kökü |
+| `STAGING_ROOT` | Stream upload geçici alanı |
+| `MAX_UPLOAD_BYTES` | Tek upload üst sınırı; varsayılan 50 GiB |
+| `WORKER_POLL_INTERVAL` | Worker queue polling aralığı |
 
-## Ilk Hedef
+### 2. Bağımlılıklar ve migration
 
-Kucuk ama guvenilir bir pilot kurmak:
+```powershell
+go mod download
+go run ./cmd/migrate
 
-- 100-500 gonullu katilimci
-- 10.000 kaliteli ve onayli ornek
-- Veri kalite skoru ve denetim kaydi
-- Egitim havuzu ile eval havuzunun kesin ayrimi
-- Ilk acik rapor: hangi veri turu ne kadar toplandi, kalite dagilimi nedir?
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e ".\worker[dev]"
 
-Buyuk corpus icin paralel ilk hedef:
+Set-Location web
+npm ci
+Set-Location ..
+```
 
-- Mevcut `C:\CELIK-GARDASH` corpus manifest/gate disiplinini atolye standardi yapmak
-- Her kaynak icin lisans, dil, domain, PII riski ve checksum kaydi tutmak
-- Exact dedup + opsiyonel MinHash near-dedup raporu uretmek
-- Tokenizer ekibine `final_corpus_manifest.json` ve canonical text view teslim etmek
-- LLM ekibine manifest, checksum ve kalite raporlariyla birlikte frozen release vermek
+### 3. Servisleri çalıştırma
 
-## Ana Dokumanlar
+Üç ayrı terminal açın:
 
-- [docs/pretraining_data_factory.md](docs/pretraining_data_factory.md) - buyuk corpus mimarisi ve yasam dongusu
-- [docs/web_app_design.md](docs/web_app_design.md) - web uygulamasi rolleri, ekranlari ve veri modeli
-- [docs/web_data_atolyesi_mvp_plan.md](docs/web_data_atolyesi_mvp_plan.md) - uygulanabilir MVP plani
-- [docs/model_prompt_format_abstraction.md](docs/model_prompt_format_abstraction.md) - model chat template/encoding bagimsiz veri modeli
-- [docs/scalability_architecture.md](docs/scalability_architecture.md) - milyonlarca kullanici icin olceklenebilir mimari
-- [docs/advisor_request_web_data_atolyesi_mvp.md](docs/advisor_request_web_data_atolyesi_mvp.md) - danisman inceleme istegi
-- [docs/advisor_feedback_web_data_atolyesi_mvp.md](docs/advisor_feedback_web_data_atolyesi_mvp.md) - ic on degerlendirme notlari
-- [docs/advisor_response_web_data_atolyesi_mvp.md](docs/advisor_response_web_data_atolyesi_mvp.md) - gercek danisman yaniti
-- [docs/advisor_review_packet.md](docs/advisor_review_packet.md) - danismanlara sorulacak karar sorulari
-- [docs/mvp_plan.md](docs/mvp_plan.md) - asamali MVP plani
-- [docs/data_governance.md](docs/data_governance.md) - veri yonetisimi ve kalite kurallari
+```powershell
+go run ./cmd/api
+```
 
-## Calisan Ilk Dilim
+```powershell
+.\.venv\Scripts\python.exe -m derlem_worker --worker-id local-worker
+```
 
-Depoda su anda calisan ilk kaynak katalogu dilimi bulunur:
+```powershell
+Set-Location web
+npm run dev
+```
 
-- Go Core API: JWT auth, rol kontrolu, kaynak katalogu ve audit
-- PostgreSQL: migration, metadata, release temeli ve job queue
-- Python worker: SHA256, UTF-8, satir sayimi, immutable ingest ve temel PII taramasi
-- Next.js arayuz: kaynak katalogu, metadata duzenleme, review kapilari ve job takibi
+- Web: `http://localhost:3000`
+- API: `http://localhost:8080`
+- Liveness: `http://localhost:8080/health/live`
+- Readiness: `http://localhost:8080/health/ready`
 
-Yerel gelistirme ve test komutlari icin
-[docs/local_development.md](docs/local_development.md) belgesine bakiniz.
-API ve durum makinesi icin [docs/api_workflows.md](docs/api_workflows.md)
-belgesine bakiniz.
+Ayrıntılı yönergeler: [docs/local_development.md](docs/local_development.md)
 
-## Neden Bu Proje?
+## API Özeti
 
-Turkce modellerin en buyuk aciklarindan biri sadece token sayisi degil, kaliteli Turkce talimat, duzeltme, tercih ve gerekce verisinin azligidir. Bu proje, buyuk ham corpus ihtiyacini tek basina kapatmayi hedeflemez; onun yerine kucuk hacimde yuksek etki ureten veri katmanini insa eder.
+| Method | Endpoint | Amaç |
+| --- | --- | --- |
+| `POST` | `/api/v1/auth/login` | JWT oturumu açar |
+| `GET` | `/api/v1/me` | Aktif kullanıcı ve rolleri |
+| `GET/POST` | `/api/v1/sources` | Kaynakları listeler veya oluşturur |
+| `GET/PATCH` | `/api/v1/sources/{id}` | Kaynak ayrıntısı ve optimistic update |
+| `POST` | `/api/v1/sources/{id}/upload` | Tarayıcıdan stream upload |
+| `POST` | `/api/v1/sources/{id}/ingest` | Güvenilir yerel path ingest'i |
+| `GET/POST` | `/api/v1/sources/{id}/reviews` | İnceleme geçmişi ve karar |
+| `GET` | `/api/v1/sources/{id}/pii-scans` | PII tarama sonuçları |
+| `GET` | `/api/v1/jobs` | Background job görünümü |
+
+Listeleme cursor pagination kullanır. Metadata güncellemesi mevcut `version`
+değerini ister ve çakışmada `409 version_conflict` döndürür.
+
+## Testler
+
+```powershell
+go test ./...
+
+$env:TEMP='C:\tmp'
+$env:TMP='C:\tmp'
+.\.venv\Scripts\python.exe -m pytest worker\tests
+
+Set-Location web
+npm run lint
+npm run build
+npm audit --audit-level=moderate
+```
+
+Playwright için çalışan API/web servisleri ve yerel E2E hesabı gerekir:
+
+```powershell
+$env:E2E_EMAIL='admin@derlem.local'
+$env:E2E_PASSWORD='your-local-password'
+npm run test:e2e
+```
+
+Mutating upload senaryosu ayrıca `E2E_MUTATING=1` ile açıkça etkinleştirilir.
+
+## Ölçekleme Yaklaşımı
+
+Milyonlarca kullanıcı yalnızca programlama dili seçimiyle çözülmez. Derlem şu
+ölçekleme sınırlarını korur:
+
+- API stateless'tir ve birden fazla Go instance'ı çalıştırılabilir.
+- Büyük upload API belleğine alınmadan stream edilir.
+- Dosya verisi DB yerine object storage'da tutulur.
+- Job tüketicileri `SKIP LOCKED` ile yatay çoğaltılabilir.
+- Cursor pagination büyük kataloglarda offset maliyetini önler.
+- Optimistic locking eşzamanlı edit kaybını engeller.
+- Storage interface local diskten S3/MinIO'ya geçişi izole eder.
+- Ölçülen queue baskısında Redis Streams, NATS veya Kafka değerlendirilebilir.
+
+Kubernetes ve mikroservisler MVP önkoşulu değildir. Önce tek makinede ölçüm,
+sonra kanıtlanan darboğaza göre ayrıştırma yapılır.
+
+## Yol Haritası
+
+### Tamamlanan çalışan dilim
+
+- [x] Go API, JWT auth ve RBAC
+- [x] PostgreSQL migration ve append-only audit
+- [x] Kaynak kataloğu, cursor pagination ve optimistic locking
+- [x] Tarayıcıdan akışlı upload ve local güvenilir ingest
+- [x] İçerik adresli immutable storage
+- [x] PostgreSQL background job queue
+- [x] TCKN/IBAN/kart/telefon/e-posta PII taraması
+- [x] Source artifact SHA256 exact-duplicate kapısı
+- [x] Moderasyon, ret gerekçesi ve self-review engeli
+- [x] Next.js yönetim arayüzü
+- [x] GitHub Actions CI
+
+### Sıradaki işler
+
+- [ ] Document çıkarma, sürümleme ve editor ekranı
+- [ ] Normalize edilmiş document exact-dedup
+- [ ] Kalite skorları ve risk bazlı örneklem
+- [ ] Dataset havuzları ve Release Builder
+- [ ] JSONL/TXT manifest ve checksum export'u
+- [ ] Eval/holdout ile pretrain exact decontamination
+- [ ] Frozen release arşivi ve consumer download
+- [ ] Near-dedup ve yaklaşık decontamination
+- [ ] S3/MinIO object store implementasyonu
+- [ ] Keycloak/OAuth ve servis hesapları
+
+## Dokümantasyon
+
+- [MVP planı](docs/web_data_atolyesi_mvp_plan.md)
+- [Yerel geliştirme](docs/local_development.md)
+- [API ve iş akışları](docs/api_workflows.md)
+- [Pretraining data factory](docs/pretraining_data_factory.md)
+- [Model prompt format soyutlaması](docs/model_prompt_format_abstraction.md)
+- [Ölçeklenebilirlik mimarisi](docs/scalability_architecture.md)
+- [Web uygulama tasarımı](docs/web_app_design.md)
+- [Veri yönetişimi](docs/data_governance.md)
+- [Görev taksonomisi](docs/task_taxonomy.md)
+- [Danışman yanıtı](docs/advisor_response_web_data_atolyesi_mvp.md)
+
+## Katkı
+
+Kod, schema veya yönetişim değişikliği yapmadan önce
+[CONTRIBUTING.md](CONTRIBUTING.md) belgesini okuyun. Değişiklikler küçük,
+test edilebilir ve audit/release garantilerini zayıflatmayacak şekilde
+tasarlanmalıdır.
+
+## Güvenlik ve Lisans
+
+Güvenlik açığını normal issue olarak yayımlamayın;
+[SECURITY.md](SECURITY.md) içindeki özel bildirim yolunu kullanın.
+
+Bu repo için henüz açık kaynak lisansı seçilmemiştir. Repo private tutulur ve
+aksi yazılı olarak belirtilmedikçe içerik yeniden kullanım izni vermez.

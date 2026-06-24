@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -123,6 +124,71 @@ func (s *Server) updateDocument(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, document)
+}
+
+func (s *Server) listDocumentReviews(w http.ResponseWriter, r *http.Request) {
+	documentID := r.PathValue("id")
+	if _, err := s.documents.Get(r.Context(), documentID); errors.Is(err, repository.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "document_not_found", "Belge bulunamadı.")
+		return
+	} else if err != nil {
+		s.logger.Error("get document before review list failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "Belge doğrulanamadı.")
+		return
+	}
+	reviews, err := s.documents.ListReviews(r.Context(), documentID)
+	if err != nil {
+		s.logger.Error("list document reviews failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "Belge incelemeleri getirilemedi.")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": reviews})
+}
+
+func (s *Server) reviewDocument(w http.ResponseWriter, r *http.Request) {
+	var input domain.ReviewDocumentInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	principal, _ := principalFrom(r.Context())
+	source, document, review, err := s.documents.Review(
+		r.Context(),
+		r.PathValue("id"),
+		input,
+		principal.Subject,
+		slices.Contains(principal.Roles, "admin"),
+	)
+	if errors.Is(err, repository.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "document_not_found", "Belge bulunamadı.")
+		return
+	}
+	if errors.Is(err, repository.ErrSelfReview) {
+		writeError(w, http.StatusForbidden, "self_review_forbidden", "Kendi kaynağınızdaki belge örneğini onaylayamazsınız.")
+		return
+	}
+	if errors.Is(err, repository.ErrConflict) {
+		writeError(w, http.StatusConflict, "review_conflict", "Bu belge sürümü değişti veya tarafınızdan daha önce incelendi.")
+		return
+	}
+	var gateError *repository.GateError
+	if errors.As(err, &gateError) {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
+			"error": map[string]any{
+				"code":    "document_review_gate_blocked",
+				"message": "Belge inceleme girdileri geçerli değil.",
+				"reasons": gateError.Reasons,
+			},
+		})
+		return
+	}
+	if err != nil {
+		s.logger.Error("review document failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "Belge incelemesi kaydedilemedi.")
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"source": source, "document": document, "review": review,
+	})
 }
 
 func (s *Server) readDocumentObject(r *http.Request, digest string) (string, error) {

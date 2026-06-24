@@ -17,6 +17,8 @@ GET   /sources/{id}/pii-scans
 GET   /sources/{id}/documents
 GET   /documents/{id}
 PATCH /documents/{id}
+GET   /documents/{id}/reviews
+POST  /documents/{id}/reviews
 GET   /sources/{id}/reviews
 POST  /sources/{id}/reviews
 GET   /jobs?source_id={id}
@@ -62,11 +64,21 @@ insan incelemesi icin bounded sample katmanidir.
 - `pii_status=clear` olmali.
 - `duplicate_status=unique` olmali.
 - `document_sampling_status=sampled` olmali.
+- Ornek belgelerin tamami guncel surumlerinde `approved` olmali.
+- Reddedilmis veya hassas incelemeye yonlendirilmis belge bulunmamali.
 - Kaynak daha once onaylanmamis olmali.
 
 Belge duzenlemesi `PATCH /documents/{id}` ile yeni immutable object ve yeni
 `document_versions` satiri uretir. Mevcut `version` zorunludur; eszamanli
 degisiklikte `409 version_conflict` doner. Eski surum yerinde degistirilmez.
+Belge duzenlenince onceki inceleme yalnizca eski surumun kaniti olarak kalir;
+kaynak kapsama sayaclari yeniden hesaplanir ve kaynak yeniden incelemeye iner.
+
+Belge incelemesi `POST /documents/{id}/reviews` ile `approved`, `rejected` veya
+`sensitive_review` karari ve 1-5 kalite puani alir. Ret ve hassas incelemede
+gerekce zorunludur. Her kayit belge surumu ve object SHA256 snapshot'i ile
+degistirilemez kanit olarak saklanir. Ayni reviewer ayni belge surumunu ikinci
+kez inceleyemez; admin disindaki kullanici kendi kaynagini inceleyemez.
 
 Ret ve hassas inceleme kararlarinda gerekce zorunludur. Karar, kaynak surumu,
 reviewer, kapilarin snapshot'i ve zaman bilgisiyle saklanir. Admin disindaki
@@ -75,5 +87,6 @@ kullanicilar kendi kaynagini inceleyemez.
 ## Denetim
 
 Her create, metadata update, ingest queue, ingest completion, PII scan, exact
-duplicate kontrolu, login ve review islemi `audit_events` tablosuna eklenir.
+duplicate kontrolu, login, belge review ve kaynak review islemi `audit_events`
+tablosuna eklenir.
 Tablo update, delete ve truncate islemlerini trigger ile reddeder.

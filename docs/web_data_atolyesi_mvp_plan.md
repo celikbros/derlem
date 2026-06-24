@@ -442,7 +442,8 @@ Tamamlanan calisan dilim:
 - Exact duplicate kapisi: SHA256 ile kanonik ilk kaynagi belirleme, tekrar kaynagi karantinaya alma
 - Bounded belge ornekleme: SHA256 seed'li deterministik reservoir sample, immutable document surumleri
 - Document editor: tam icerigi object store'dan okuma, optimistic locking ile yeni surum kaydetme
-- Review kapisi: dosya + cleared rights + lisans kaniti + clear PII + unique exact duplicate + hazir belge ornekleri zorunlu
+- Document moderation: 1-5 kalite puani, surum/checksum snapshot'li immutable review ve self-review engeli
+- Review kapisi: dosya + cleared rights + lisans kaniti + clear PII + unique exact duplicate + tum belge orneklerinde guncel onay zorunlu
 - Next.js: kaynak katalogu, metadata duzenleme, inceleme ve job gorunumu
 
 PII taramasi eslesen ham degerleri saklamaz; yalnizca tur bazinda sayim tutar.

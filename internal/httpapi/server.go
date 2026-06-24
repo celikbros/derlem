@@ -57,6 +57,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/sources/{id}/documents", s.authenticate(http.HandlerFunc(s.listSourceDocuments)))
 	mux.Handle("GET /api/v1/documents/{id}", s.authenticate(http.HandlerFunc(s.getDocument)))
 	mux.Handle("PATCH /api/v1/documents/{id}", s.authenticate(requireRoles("admin", "editor")(http.HandlerFunc(s.updateDocument))))
+	mux.Handle("GET /api/v1/documents/{id}/reviews", s.authenticate(http.HandlerFunc(s.listDocumentReviews)))
+	mux.Handle("POST /api/v1/documents/{id}/reviews", s.authenticate(requireRoles("admin", "moderator", "expert_reviewer")(http.HandlerFunc(s.reviewDocument))))
 	mux.Handle("GET /api/v1/jobs", s.authenticate(http.HandlerFunc(s.listJobs)))
 	return s.middleware(mux)
 }

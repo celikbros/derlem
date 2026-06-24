@@ -18,7 +18,8 @@ kullanır.
 > **Durum:** Aktif MVP geliştirmesi. Kaynak kataloğu, JWT tabanlı yetkilendirme,
 > tarayıcıdan akışlı dosya yükleme, içerik adresli saklama, PostgreSQL iş
 > kuyruğu, temel PII taraması, SHA256 exact-duplicate kapısı, bounded belge
-> örnekleme, immutable belge sürümleri, moderasyon ve append-only audit
+> örnekleme, immutable belge sürümleri, kalite puanlı belge moderasyonu ve
+> append-only audit
 > çalışmaktadır. Release Builder henüz tamamlanmamıştır.
 
 ## İçindekiler
@@ -188,6 +189,7 @@ Bir kaynak `approved_source` olabilmek için:
 | Lisans kanıtı | `license_evidence_ref` mevcut | Kararın dayanağını izlemek |
 | PII taraması | `pii_status=clear` | Hassas verinin sessiz geçmesini önlemek |
 | Exact duplicate | `duplicate_status=unique` | Aynı artifact'in ikinci kez onaylanmasını engellemek |
+| Belge örnekleri | Tüm örnekler güncel sürümde onaylı | Kaynak kararını incelenmemiş içeriğe dayandırmamak |
 | İnsan kararı | Yetkili reviewer | Otomasyonun kritik kararı tek başına vermemesi |
 
 Exact-duplicate kontrolü şu anda **kaynak dosyanın byte-level SHA256** eşitliğini
@@ -351,6 +353,7 @@ Ayrıntılı yönergeler: [docs/local_development.md](docs/local_development.md)
 | `GET` | `/api/v1/sources/{id}/pii-scans` | PII tarama sonuçları |
 | `GET` | `/api/v1/sources/{id}/documents` | Bounded belge örnekleri |
 | `GET/PATCH` | `/api/v1/documents/{id}` | Immutable içerik okuma veya yeni sürüm |
+| `GET/POST` | `/api/v1/documents/{id}/reviews` | Belge kalite puanı ve moderasyon geçmişi |
 | `GET` | `/api/v1/jobs` | Background job görünümü |
 
 Listeleme cursor pagination kullanır. Metadata güncellemesi mevcut `version`
@@ -414,15 +417,16 @@ sonra kanıtlanan darboğaza göre ayrıştırma yapılır.
 - [x] Source artifact SHA256 exact-duplicate kapısı
 - [x] Deterministik ve bounded belge örnekleme
 - [x] Object store tabanlı immutable belge sürümleri ve editor diyaloğu
+- [x] Belge kalite puanı, immutable review geçmişi ve tam örnek kapsama kapısı
 - [x] Moderasyon, ret gerekçesi ve self-review engeli
 - [x] Next.js yönetim arayüzü
 - [x] GitHub Actions CI
 
 ### Sıradaki işler
 
-- [ ] Tam document indeksleme ve gelişmiş editor/review iş akışı
+- [ ] Tam corpus document indeksleme ve toplu review iş akışı
 - [ ] Normalize edilmiş document exact-dedup
-- [ ] Kalite skorları ve risk bazlı örneklem
+- [ ] Çok boyutlu kalite skorları ve risk bazlı örneklem
 - [ ] Dataset havuzları ve Release Builder
 - [ ] JSONL/TXT manifest ve checksum export'u
 - [ ] Eval/holdout ile pretrain exact decontamination

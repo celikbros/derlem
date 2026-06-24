@@ -1,6 +1,9 @@
 package domain
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type Document struct {
 	ID                  string    `json:"id"`
@@ -22,4 +25,24 @@ type UpdateDocumentInput struct {
 	Content string  `json:"content"`
 	Version int64   `json:"version"`
 	Reason  *string `json:"reason"`
+}
+
+type ReviewDocumentInput struct {
+	Decision        string  `json:"decision"`
+	Reason          *string `json:"reason"`
+	QualityScore    int16   `json:"quality_score"`
+	DocumentVersion int64   `json:"document_version"`
+}
+
+type DocumentReview struct {
+	ID              string          `json:"id"`
+	DocumentID      string          `json:"document_id"`
+	ReviewerID      string          `json:"reviewer_id"`
+	Decision        string          `json:"decision"`
+	Reason          *string         `json:"reason,omitempty"`
+	QualityScore    int16           `json:"quality_score"`
+	DocumentVersion int64           `json:"document_version"`
+	ObjectSHA256    string          `json:"object_sha256"`
+	Context         json.RawMessage `json:"context"`
+	CreatedAt       time.Time       `json:"created_at"`
 }

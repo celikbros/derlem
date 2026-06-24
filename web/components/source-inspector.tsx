@@ -19,7 +19,7 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import { JobStatus } from "@/components/jobs-panel";
 import { messageFrom, requestJSON } from "@/lib/client-api";
-import type { BackgroundJob, Document, PIIScan, Review, Source, User } from "@/lib/types";
+import type { BackgroundJob, Document, DocumentReview, PIIScan, Review, Source, User } from "@/lib/types";
 
 const purposeLabels: Record<string, string> = {
   pretrain: "Pretrain",
@@ -58,6 +58,7 @@ export function SourceInspector({
   const [jobs, setJobs] = useState<BackgroundJob[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [activeDocument, setActiveDocument] = useState<Document | null>(null);
+  const [documentReviews, setDocumentReviews] = useState<DocumentReview[]>([]);
   const [documentContent, setDocumentContent] = useState("");
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -112,6 +113,13 @@ export function SourceInspector({
     { label: "PII temiz", passed: source.pii_status === "clear" },
     { label: "Exact tekrar yok", passed: source.duplicate_status === "unique" },
     { label: "Belge örnekleri hazır", passed: source.document_sampling_status === "sampled" },
+    {
+      label: "Örnekler onaylandı",
+      passed: source.sampled_document_count > 0
+        && source.reviewed_document_count === source.sampled_document_count
+        && source.approved_document_count === source.sampled_document_count
+        && source.flagged_document_count === 0,
+    },
   ];
   const approvalReady = gateChecks.every((gate) => gate.passed) && source.approval_status !== "approved_source";
   const latestScan = scans[0];
@@ -164,9 +172,13 @@ export function SourceInspector({
   async function openDocument(document: Document) {
     setLoading(true);
     try {
-      const payload = await requestJSON<{ document: Document; content: string }>(`/api/documents/${document.id}`);
+      const [payload, reviewPayload] = await Promise.all([
+        requestJSON<{ document: Document; content: string }>(`/api/documents/${document.id}`),
+        requestJSON<{ items: DocumentReview[] }>(`/api/documents/${document.id}/reviews`),
+      ]);
       setActiveDocument(payload.document);
       setDocumentContent(payload.content);
+      setDocumentReviews(reviewPayload.items);
       documentDialog.current?.showModal();
     } catch (error) {
       onNotice(messageFrom(error));
@@ -191,8 +203,53 @@ export function SourceInspector({
       });
       setDocuments((current) => current.map((document) => document.id === updated.id ? updated : document));
       setActiveDocument(updated);
+      setDocumentReviews([]);
       documentDialog.current?.close();
       onNotice(`Belge sürüm ${updated.current_version} olarak kaydedildi.`);
+      await onRefresh();
+    } catch (error) {
+      onNotice(messageFrom(error));
+    }
+  }
+
+  async function submitDocumentReview(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!activeDocument) return;
+    const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+    const decision = submitter?.value;
+    if (!decision) return;
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const reason = String(data.get("reason") ?? "").trim();
+    const qualityScore = Number(data.get("quality_score"));
+    if (!Number.isInteger(qualityScore) || qualityScore < 1 || qualityScore > 5) {
+      onNotice("Kalite puanı 1 ile 5 arasında olmalıdır.");
+      return;
+    }
+    if (decision !== "approved" && !reason) {
+      onNotice("Ret veya hassas inceleme kararında gerekçe zorunludur.");
+      return;
+    }
+    try {
+      const payload = await requestJSON<{ source: Source; document: Document; review: DocumentReview }>(
+        `/api/documents/${activeDocument.id}/reviews`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            decision,
+            reason: reason || null,
+            quality_score: qualityScore,
+            document_version: activeDocument.current_version,
+          }),
+        },
+      );
+      setActiveDocument(payload.document);
+      setDocuments((current) => current.map((document) => document.id === payload.document.id ? payload.document : document));
+      setDocumentReviews((current) => [payload.review, ...current]);
+      onChanged(payload.source);
+      form.reset();
+      onNotice("Belge inceleme kararı kaydedildi.");
     } catch (error) {
       onNotice(messageFrom(error));
     }
@@ -246,6 +303,7 @@ export function SourceInspector({
         <Detail label="Exact tekrar" value={source.duplicate_status} />
         {source.duplicate_of_source_id && <Detail label="Kanonik kaynak" value={source.duplicate_of_source_id} mono />}
         <Detail label="Belge örnekleme" value={`${source.document_sampling_status} / ${source.sampled_document_count}`} />
+        <Detail label="Örnek inceleme" value={`${source.approved_document_count} onay · ${source.flagged_document_count} işaretli`} />
         {source.declared_sha256 && <Detail label="Beyan SHA256" value={source.declared_sha256} mono />}
         {source.declared_byte_size !== undefined && <Detail label="Beyan boyutu" value={formatBytes(source.declared_byte_size)} />}
         {source.declared_line_count !== undefined && <Detail label="Beyan satırı" value={source.declared_line_count.toLocaleString("tr-TR")} />}
@@ -292,7 +350,7 @@ export function SourceInspector({
             <button key={document.id} type="button" onClick={() => void openDocument(document)}>
               <span>#{document.source_ordinal}</span>
               <strong>{document.text_preview}</strong>
-              <small>v{document.current_version} · {document.char_count.toLocaleString("tr-TR")} karakter</small>
+              <small>{document.status} · v{document.current_version} · {document.char_count.toLocaleString("tr-TR")} karakter</small>
             </button>
           ))}
           {!loading && documents.length === 0 && (
@@ -350,7 +408,7 @@ export function SourceInspector({
 
       <dialog ref={documentDialog} className="source-dialog document-dialog">
         {activeDocument && (
-          <form onSubmit={updateDocument}>
+          <div className="document-dialog-body">
             <div className="dialog-header">
               <div><span>Satır {activeDocument.source_ordinal} · sürüm {activeDocument.current_version}</span><h2>Belge örneği</h2></div>
               <button className="icon-button" type="button" title="Pencereyi kapat" onClick={() => documentDialog.current?.close()}><X size={19} /></button>
@@ -364,12 +422,37 @@ export function SourceInspector({
                 readOnly={!canEditDocument}
               />
             </label>
-            {canEditDocument && <label>Düzenleme gerekçesi<input name="reason" placeholder="Kısa değişiklik notu" /></label>}
-            <div className="dialog-actions">
-              <button className="text-button" type="button" onClick={() => documentDialog.current?.close()}>Kapat</button>
-              {canEditDocument && <button className="primary-button" type="submit"><Save size={16} />Yeni sürümü kaydet</button>}
+            {canEditDocument && (
+              <form className="document-edit-form" onSubmit={updateDocument}>
+                <label>Düzenleme gerekçesi<input name="reason" placeholder="Kısa değişiklik notu" /></label>
+                <div className="dialog-actions"><button className="primary-button" type="submit"><Save size={16} />Yeni sürümü kaydet</button></div>
+              </form>
+            )}
+            {canReview && (
+              <form className="document-review-form" onSubmit={submitDocumentReview}>
+                <h3><CheckCircle2 size={16} /> Belge moderasyonu</h3>
+                <div className="document-review-fields">
+                  <label>Kalite puanı<input name="quality_score" type="number" min="1" max="5" step="1" defaultValue="3" required /></label>
+                  <label>Karar gerekçesi<textarea name="reason" rows={2} placeholder="Ret ve hassas incelemede zorunlu" /></label>
+                </div>
+                <div className="review-actions">
+                  <button className="approve-button" type="submit" name="decision" value="approved"><Check size={16} />Onayla</button>
+                  <button className="warning-button" type="submit" name="decision" value="sensitive_review"><ShieldAlert size={16} />Hassas</button>
+                  <button className="danger-button" type="submit" name="decision" value="rejected"><XCircle size={16} />Reddet</button>
+                </div>
+              </form>
+            )}
+            <div className="document-review-history">
+              {documentReviews.map((review) => (
+                <div key={review.id}>
+                  <span className={`review-decision ${review.decision}`}>{review.decision}</span>
+                  <strong>{review.quality_score}/5</strong>
+                  <small>v{review.document_version} · {formatDate(review.created_at)}</small>
+                </div>
+              ))}
             </div>
-          </form>
+            <div className="dialog-actions"><button className="text-button" type="button" onClick={() => documentDialog.current?.close()}>Kapat</button></div>
+          </div>
         )}
       </dialog>
     </aside>

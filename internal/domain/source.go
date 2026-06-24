@@ -40,6 +40,9 @@ type Source struct {
 	DocumentCount          *int64    `json:"document_count,omitempty"`
 	DocumentSamplingStatus string    `json:"document_sampling_status"`
 	SampledDocumentCount   int64     `json:"sampled_document_count"`
+	ReviewedDocumentCount  int64     `json:"reviewed_document_count"`
+	ApprovedDocumentCount  int64     `json:"approved_document_count"`
+	FlaggedDocumentCount   int64     `json:"flagged_document_count"`
 	DetectedEncoding       *string   `json:"detected_encoding,omitempty"`
 	PIIStatus              string    `json:"pii_status"`
 	DuplicateStatus        string    `json:"duplicate_status"`

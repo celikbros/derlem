@@ -26,6 +26,9 @@ export type Source = {
   document_count?: number;
   document_sampling_status: "not_sampled" | "sampled" | "failed";
   sampled_document_count: number;
+  reviewed_document_count: number;
+  approved_document_count: number;
+  flagged_document_count: number;
   detected_encoding?: string;
   pii_status: string;
   duplicate_status: "not_checked" | "unique" | "duplicate";
@@ -52,6 +55,19 @@ export type Document = {
   sampling_method: string;
   created_at: string;
   updated_at: string;
+};
+
+export type DocumentReview = {
+  id: string;
+  document_id: string;
+  reviewer_id: string;
+  decision: "approved" | "rejected" | "sensitive_review";
+  reason?: string;
+  quality_score: number;
+  document_version: number;
+  object_sha256: string;
+  context: Record<string, unknown>;
+  created_at: string;
 };
 
 export type Review = {

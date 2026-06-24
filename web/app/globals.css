@@ -898,6 +898,15 @@ textarea:focus {
 
 .document-dialog {
   width: min(860px, calc(100vw - 28px));
+  overflow-y: auto;
+}
+
+.document-dialog-body {
+  padding: 22px;
+}
+
+.document-dialog form {
+  padding: 0;
 }
 
 .document-content-label {
@@ -910,6 +919,60 @@ textarea:focus {
   max-height: 58vh;
   resize: vertical;
   font: 13px/1.55 var(--mono);
+}
+
+.document-edit-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.document-edit-form .dialog-actions {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.document-review-form {
+  margin-top: 20px;
+  padding-top: 18px !important;
+  border-top: 1px solid var(--line);
+}
+
+.document-review-form h3 {
+  margin: 0 0 13px;
+}
+
+.document-review-fields {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.document-review-form .review-actions {
+  margin-top: 12px;
+}
+
+.document-review-history {
+  display: grid;
+  gap: 7px;
+  margin-top: 16px;
+}
+
+.document-review-history > div {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+}
+
+.document-review-history small {
+  color: var(--muted);
+  text-align: right;
 }
 
 .form-grid {
@@ -1156,6 +1219,14 @@ textarea:focus {
 
   .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .document-review-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .document-content-label textarea {
+    min-height: 220px;
   }
 
   .full-width {

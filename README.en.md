@@ -16,7 +16,8 @@ consume approved, versioned Derlem exports through their own model adapters.
 > **Status:** Active MVP development. The source catalog, JWT authorization,
 > streaming browser uploads, content-addressed storage, PostgreSQL job queue,
 > baseline PII scanning, SHA256 exact-duplicate gate, bounded document
-> sampling, immutable document versions, moderation, and append-only audit are
+> sampling, immutable document versions, scored document moderation, and
+> append-only audit are
 > operational. The Release Builder is not complete yet.
 
 ## Contents
@@ -186,6 +187,7 @@ A source can become `approved_source` only when:
 | License evidence | `license_evidence_ref` exists | Preserve the basis for the rights decision |
 | PII scan | `pii_status=clear` | Prevent sensitive data from silently passing |
 | Exact duplicate | `duplicate_status=unique` | Prevent the same artifact from being approved twice |
+| Document samples | Every sample is approved at its current version | Keep source decisions from relying on unreviewed content |
 | Human decision | Authorized reviewer | Keep critical approval outside automation alone |
 
 The current exact-duplicate gate detects **byte-identical source files using
@@ -346,6 +348,7 @@ See [docs/local_development.md](docs/local_development.md) for details.
 | `GET` | `/api/v1/sources/{id}/pii-scans` | PII scan results |
 | `GET` | `/api/v1/sources/{id}/documents` | Bounded document samples |
 | `GET/PATCH` | `/api/v1/documents/{id}` | Read immutable content or create a version |
+| `GET/POST` | `/api/v1/documents/{id}/reviews` | Document quality score and moderation history |
 | `GET` | `/api/v1/jobs` | Background job status |
 
 Lists use cursor pagination. Metadata updates require the current `version` and
@@ -409,15 +412,16 @@ on one machine first and split only around demonstrated bottlenecks.
 - [x] Source-artifact SHA256 exact-duplicate gate
 - [x] Deterministic bounded document sampling
 - [x] Object-store-backed immutable document versions and editor dialog
+- [x] Document quality scores, immutable review history, and full-sample gate
 - [x] Moderation, rejection reasons, and self-review prevention
 - [x] Next.js operations UI
 - [x] GitHub Actions CI
 
 ### Next
 
-- [ ] Full document indexing and advanced editor/review workflow
+- [ ] Full-corpus document indexing and bulk review workflow
 - [ ] Normalized document exact-dedup
-- [ ] Quality scores and risk-based sampling
+- [ ] Multidimensional quality scores and risk-based sampling
 - [ ] Dataset pools and Release Builder
 - [ ] JSONL/TXT manifest and checksum exports
 - [ ] Exact pretrain decontamination against eval/holdout data

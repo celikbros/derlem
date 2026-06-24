@@ -69,6 +69,9 @@ func (r *Sources) Review(
 		"duplicate_of_source_id":   source.DuplicateOfSourceID,
 		"document_sampling_status": source.DocumentSamplingStatus,
 		"sampled_document_count":   source.SampledDocumentCount,
+		"reviewed_document_count":  source.ReviewedDocumentCount,
+		"approved_document_count":  source.ApprovedDocumentCount,
+		"flagged_document_count":   source.FlaggedDocumentCount,
 		"risk_level":               source.RiskLevel,
 		"object_sha256":            source.ObjectSHA256,
 		"approval_before":          source.ApprovalStatus,
@@ -176,6 +179,11 @@ func approvalGateReasons(source domain.Source) []string {
 	}
 	if source.DocumentSamplingStatus != "sampled" {
 		reasons = append(reasons, "documents_not_sampled")
+	} else if source.SampledDocumentCount <= 0 ||
+		source.ReviewedDocumentCount != source.SampledDocumentCount ||
+		source.ApprovedDocumentCount != source.SampledDocumentCount ||
+		source.FlaggedDocumentCount > 0 {
+		reasons = append(reasons, "document_sample_review_incomplete")
 	}
 	if source.ApprovalStatus == "approved_source" || source.ApprovalStatus == "release_candidate" {
 		reasons = append(reasons, "already_approved")

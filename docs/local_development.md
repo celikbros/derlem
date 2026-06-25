@@ -97,6 +97,26 @@ bastan sona okuyacagi icin uzun surebilir:
 .\.venv\Scripts\python.exe -m derlem_worker.triage --source-id <SOURCE_ID> --output-dir .\var\reports --scan-pii-lines
 ```
 
+## Clean Candidate Uretimi
+
+Karantinadaki ham kaynak degistirilmez. PII iceren satirlari, oversized satirlari
+ve normalize fingerprint fazlaliklarini cikararak yerel bir temiz aday dosya
+uretmek icin:
+
+```powershell
+.\.venv\Scripts\python.exe -m derlem_worker.clean_candidate --source-id <SOURCE_ID> --output-dir .\var\derived
+```
+
+Bu komut buyuk corpuslarda dosyayi bastan sona okur; Gardas/Faz 2 gibi 13 GB+
+dosyalarda uzun surebilir. Hizli duman testi icin:
+
+```powershell
+.\.venv\Scripts\python.exe -m derlem_worker.clean_candidate --source-id <SOURCE_ID> --output-dir .\var\derived --limit-lines 10000 --force
+```
+
+Uretilen `.manifest.json` dosyasi ham metin veya PII degeri icermez; yalnizca
+hangi tur satirlarin kac adet cikarildigini ve cikti SHA256 bilgisini tutar.
+
 ## Testler
 
 ```powershell

@@ -122,6 +122,18 @@ def build_report(
             """,
             (source_id,),
         ).fetchone()
+        normalized_dedup_audit = connection.execute(
+            """
+            SELECT action, details, created_at
+            FROM audit_events
+            WHERE entity_type = 'source'
+              AND entity_id = %s
+              AND action IN ('source.normalized_dedup_recomputed', 'source.normalized_dedup_checked')
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (source_id,),
+        ).fetchone()
 
     source_dict = dict(source)
     object_path = None
@@ -146,6 +158,7 @@ def build_report(
         },
         "latest_jobs": {str(row["job_type"]): _json_safe(dict(row)) for row in jobs},
         "pii_scan": _json_safe(dict(pii_scan)) if pii_scan else None,
+        "normalized_dedup_audit": _json_safe(dict(normalized_dedup_audit)) if normalized_dedup_audit else None,
         "pii_line_triage": pii_line_triage,
         "release_blockers": release_blockers(source_dict),
     }
@@ -265,21 +278,28 @@ def render_markdown(report: dict[str, Any]) -> str:
         )
 
     normalized_job = report.get("latest_jobs", {}).get("index_document_fingerprints")
+    normalized_audit = report.get("normalized_dedup_audit")
     if normalized_job and normalized_job.get("result"):
         result = normalized_job["result"]
+        audit_details = normalized_audit.get("details") if normalized_audit else {}
         lines.extend(
             [
                 "",
                 "## Normalized Dedup Result",
                 "",
+                f"- Status: `{source.get('normalized_dedup_status')}`",
+                f"- Duplicate count: `{source.get('normalized_duplicate_count')}`",
+                f"- Duplicate source count: `{source.get('normalized_duplicate_source_count')}`",
                 f"- Total documents: `{result.get('total_documents')}`",
                 f"- Indexed documents: `{result.get('indexed_documents')}`",
                 f"- Skipped oversized: `{result.get('skipped_oversized')}`",
                 f"- Skipped too short: `{result.get('skipped_too_short')}`",
-                f"- Internal duplicate count: `{result.get('internal_duplicate_count')}`",
-                f"- External duplicate count: `{result.get('external_duplicate_count')}`",
             ]
         )
+        if audit_details:
+            lines.append(f"- Latest audit action: `{normalized_audit.get('action')}`")
+            if audit_details.get("lineage_excluded_source_id"):
+                lines.append(f"- Lineage-excluded source: `{audit_details.get('lineage_excluded_source_id')}`")
 
     pii_line_triage = report.get("pii_line_triage")
     if pii_line_triage:

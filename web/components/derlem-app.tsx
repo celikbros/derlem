@@ -242,6 +242,7 @@ export function DerlemApp() {
                     <th>Amaç</th>
                     <th>Hak durumu</th>
                     <th>İşlem durumu</th>
+                    <th>Sıradaki kapı</th>
                     <th>PII</th>
                   </tr>
                 </thead>
@@ -257,6 +258,7 @@ export function DerlemApp() {
                       <td><span className="purpose-label">{purposeLabels[source.content_purpose]}</span></td>
                       <td><Status value={source.rights_status} /></td>
                       <td>{statusLabels[source.approval_status] ?? source.approval_status}</td>
+                      <td><NextStep source={source} /></td>
                       <td><span className={`pii-status ${source.pii_status}`}>{source.pii_status}</span></td>
                     </tr>
                   ))}
@@ -381,4 +383,32 @@ function Summary({ icon, label, value, tone = "neutral" }: { icon: React.ReactEl
 function Status({ value }: { value: string }) {
   const labels: Record<string, string> = { unknown: "Bilinmiyor", cleared: "Temiz", restricted: "Kısıtlı", blocked: "Engelli" };
   return <span className={`status ${value}`}>{labels[value] ?? value}</span>;
+}
+
+function NextStep({ source }: { source: Source }) {
+  const step = nextStepFor(source);
+  return <span className={`next-step ${step.tone}`}>{step.label}</span>;
+}
+
+function nextStepFor(source: Source) {
+  if (!source.object_sha256) return { label: "Dosya bekliyor", tone: "neutral" };
+  if (source.rights_status !== "cleared") return { label: "Hak incelemesi", tone: "warning" };
+  if (!source.license_evidence_ref) return { label: "Lisans kanıtı", tone: "warning" };
+  if (source.pii_status !== "clear") return { label: "PII kapısı", tone: "danger" };
+  if (source.duplicate_status !== "unique") return { label: "Exact dedup", tone: "danger" };
+  if (source.normalized_dedup_status !== "unique") return { label: "Normalize dedup", tone: "danger" };
+  if (source.document_sampling_status !== "sampled") return { label: "Örnekleme", tone: "warning" };
+  if (source.flagged_document_count > 0) return { label: "İşaretli örnek", tone: "danger" };
+  if (
+    source.sampled_document_count === 0
+    || source.reviewed_document_count !== source.sampled_document_count
+    || source.approved_document_count !== source.sampled_document_count
+  ) {
+    return {
+      label: `Örnek ${source.approved_document_count.toLocaleString("tr-TR")}/${source.sampled_document_count.toLocaleString("tr-TR")}`,
+      tone: "warning",
+    };
+  }
+  if (source.approval_status !== "approved_source") return { label: "Kaynak onayı", tone: "ready" };
+  return { label: "Onaylı", tone: "ready" };
 }

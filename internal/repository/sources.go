@@ -66,11 +66,13 @@ func (r *Sources) Update(ctx context.Context, id string, input domain.UpdateSour
 	details, _ := json.Marshal(map[string]any{
 		"before": map[string]any{
 			"name": before.Name, "license": before.License, "rights_status": before.RightsStatus,
-			"language": before.Language, "domain": before.Domain, "lineage_ref": before.LineageRef,
+			"language": before.Language, "domain": before.Domain, "source_url": before.SourceURL,
+			"license_evidence_ref": before.LicenseEvidenceRef, "lineage_ref": before.LineageRef,
 		},
 		"after": map[string]any{
 			"name": updated.Name, "license": updated.License, "rights_status": updated.RightsStatus,
-			"language": updated.Language, "domain": updated.Domain, "lineage_ref": updated.LineageRef,
+			"language": updated.Language, "domain": updated.Domain, "source_url": updated.SourceURL,
+			"license_evidence_ref": updated.LicenseEvidenceRef, "lineage_ref": updated.LineageRef,
 		},
 		"source_version": updated.Version,
 	})

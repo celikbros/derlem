@@ -9,6 +9,7 @@ import {
   History,
   LoaderCircle,
   RefreshCw,
+  Scale,
   ScanLine,
   Save,
   ShieldAlert,
@@ -141,6 +142,14 @@ export function SourceInspector({
   const reviewedCount = source.reviewed_document_count;
   const sampleCount = source.sampled_document_count;
   const reviewPercent = sampleCount > 0 ? Math.round((reviewedCount / sampleCount) * 100) : 0;
+  const rightsEvidenceReady = source.rights_status === "cleared" && Boolean(source.license_evidence_ref);
+  const rightsTone = source.rights_status === "blocked"
+    ? "blocked"
+    : source.rights_status === "restricted"
+      ? "restricted"
+      : rightsEvidenceReady
+        ? "cleared"
+        : "unknown";
 
   async function updateSource(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -366,6 +375,28 @@ export function SourceInspector({
 
       <section className="inspector-section">
         <div className="section-heading">
+          <h3><Scale size={16} /> Hak ve lisans</h3>
+          <button className="icon-button compact" type="button" title="Hak bilgisini düzenle" onClick={() => editDialog.current?.showModal()}>
+            <Edit3 size={15} />
+          </button>
+        </div>
+        <div className={`rights-evidence-card ${rightsTone}`}>
+          <div>
+            <span>Release kapısı</span>
+            <strong>{rightsEvidenceReady ? "Hazır" : "Bekliyor"}</strong>
+          </div>
+          <dl>
+            <div><dt>Hak durumu</dt><dd>{rightsStatusLabel(source.rights_status)}</dd></div>
+            <div><dt>Lisans</dt><dd>{source.license}</dd></div>
+            <div><dt>Kanıt</dt><dd>{source.license_evidence_ref ?? "Kanıt bekliyor"}</dd></div>
+            {source.source_url && <div><dt>Kaynak URL</dt><dd>{source.source_url}</dd></div>}
+          </dl>
+          <p>{rightsEvidenceReady ? "Hak kapısı release için hazır." : "Release için hak durumu temizlenmeli ve lisans kanıtı kaydedilmelidir."}</p>
+        </div>
+      </section>
+
+      <section className="inspector-section">
+        <div className="section-heading">
           <h3><ShieldAlert size={16} /> Onay kapısı</h3>
           <button className="icon-button compact" type="button" title="Ayrıntıları yenile" onClick={() => void loadActivity()}>
             <RefreshCw className={loading ? "spin" : ""} size={15} />
@@ -543,6 +574,16 @@ function documentStatusLabel(status: Document["status"]) {
     sensitive_review: "Hassas",
   };
   return labels[status];
+}
+
+function rightsStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    unknown: "Bilinmiyor",
+    cleared: "Temizlendi",
+    restricted: "Kısıtlı",
+    blocked: "Engelli",
+  };
+  return labels[status] ?? status;
 }
 
 function formatDate(value: string) {

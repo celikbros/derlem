@@ -770,7 +770,8 @@ tbody tr:hover,
 }
 
 .purpose-label,
-.status {
+.status,
+.next-step {
   display: inline-flex;
   align-items: center;
   min-height: 24px;
@@ -804,6 +805,32 @@ tbody tr:hover,
 .status.blocked {
   background: #fbe9e9;
   color: var(--red);
+}
+
+.next-step {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.next-step.neutral {
+  background: #eef2f1;
+  color: #52605b;
+}
+
+.next-step.warning {
+  background: #fff1d9;
+  color: var(--amber);
+}
+
+.next-step.danger {
+  background: #fbe9e9;
+  color: var(--red);
+}
+
+.next-step.ready {
+  background: #e8f5ef;
+  color: #176946;
 }
 
 .empty-state {
@@ -989,6 +1016,83 @@ select:focus {
 .scan-summary small {
   color: var(--muted);
   overflow-wrap: anywhere;
+}
+
+.rights-evidence-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid #a6b1ac;
+  border-radius: var(--radius);
+  background: #ffffff;
+}
+
+.rights-evidence-card.cleared {
+  border-left-color: var(--green);
+}
+
+.rights-evidence-card.restricted {
+  border-left-color: var(--amber);
+}
+
+.rights-evidence-card.blocked {
+  border-left-color: var(--red);
+}
+
+.rights-evidence-card > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.rights-evidence-card > div:first-child span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.rights-evidence-card > div:first-child strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.rights-evidence-card dl {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+}
+
+.rights-evidence-card dl > div {
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr);
+  gap: 8px;
+  padding: 0;
+  border: 0;
+}
+
+.rights-evidence-card dt,
+.rights-evidence-card dd {
+  margin: 0;
+  font-size: 11px;
+}
+
+.rights-evidence-card dt {
+  color: var(--muted);
+}
+
+.rights-evidence-card dd {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+}
+
+.rights-evidence-card p {
+  margin: 0;
+  color: #52605b;
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 textarea {

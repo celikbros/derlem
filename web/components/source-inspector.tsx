@@ -142,6 +142,12 @@ export function SourceInspector({
   const reviewedCount = source.reviewed_document_count;
   const sampleCount = source.sampled_document_count;
   const reviewPercent = sampleCount > 0 ? Math.round((reviewedCount / sampleCount) * 100) : 0;
+  const corpusByteSize = source.byte_size ?? source.declared_byte_size;
+  const corpusLineCount = source.line_count ?? source.declared_line_count;
+  const corpusDocumentCount = source.document_count ?? source.line_count ?? source.declared_line_count;
+  const normalizedDuplicateText = source.normalized_duplicate_source_count > 0
+    ? `${source.normalized_duplicate_count.toLocaleString("tr-TR")} / ${source.normalized_duplicate_source_count.toLocaleString("tr-TR")} kaynak`
+    : source.normalized_duplicate_count.toLocaleString("tr-TR");
   const rightsEvidenceReady = source.rights_status === "cleared" && Boolean(source.license_evidence_ref);
   const rightsTone = source.rights_status === "blocked"
     ? "blocked"
@@ -360,6 +366,24 @@ export function SourceInspector({
         {source.line_count !== undefined && <Detail label="Satır" value={source.line_count.toLocaleString("tr-TR")} />}
       </dl>
 
+      <section className="inspector-section">
+        <h3><FileText size={16} /> Corpus özeti</h3>
+        <div className="corpus-summary-grid">
+          <CorpusMetric label="Boyut" value={corpusByteSize !== undefined ? formatBytes(corpusByteSize) : "Bilinmiyor"} />
+          <CorpusMetric label="Satır" value={corpusLineCount !== undefined ? corpusLineCount.toLocaleString("tr-TR") : "Bilinmiyor"} />
+          <CorpusMetric label="Doküman" value={corpusDocumentCount !== undefined ? corpusDocumentCount.toLocaleString("tr-TR") : "Bilinmiyor"} />
+          <CorpusMetric label="Örnek" value={`${reviewedCount.toLocaleString("tr-TR")} / ${sampleCount.toLocaleString("tr-TR")}`} tone={reviewPercent === 100 ? "good" : "watch"} />
+          <CorpusMetric label="PII" value={source.pii_status} tone={source.pii_status === "clear" ? "good" : "risk"} />
+          <CorpusMetric label="Normalize tekrar" value={normalizedDuplicateText} tone={source.normalized_dedup_status === "unique" ? "good" : "risk"} />
+        </div>
+        {source.object_sha256 && (
+          <div className="corpus-hash-row">
+            <span>SHA256</span>
+            <code>{source.object_sha256}</code>
+          </div>
+        )}
+      </section>
+
       {!source.object_sha256 && (
         <section className="inspector-section">
           <h3><Upload size={16} /> Dosya</h3>
@@ -557,6 +581,10 @@ export function SourceInspector({
 
 function Detail({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
   return <div><dt>{label}</dt><dd className={mono ? "mono" : undefined}>{value}</dd></div>;
+}
+
+function CorpusMetric({ label, value, tone = "neutral" }: { label: string; value: string; tone?: "neutral" | "good" | "watch" | "risk" }) {
+  return <div className={`corpus-metric ${tone}`}><span>{label}</span><strong>{value}</strong></div>;
 }
 
 function findingSummary(scan: PIIScan) {

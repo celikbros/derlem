@@ -1022,6 +1022,74 @@ select:focus {
   overflow-wrap: anywhere;
 }
 
+.corpus-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.corpus-metric {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-left: 3px solid #a6b1ac;
+  border-radius: var(--radius);
+  background: #ffffff;
+}
+
+.corpus-metric span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.corpus-metric strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.corpus-metric.good {
+  border-left-color: var(--green);
+}
+
+.corpus-metric.watch {
+  border-left-color: var(--amber);
+}
+
+.corpus-metric.risk {
+  border-left-color: var(--red);
+}
+
+.corpus-hash-row {
+  display: grid;
+  gap: 5px;
+  margin-top: 9px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #ffffff;
+}
+
+.corpus-hash-row span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.corpus-hash-row code {
+  overflow-wrap: anywhere;
+  color: #33423c;
+  font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  font-size: 10px;
+}
+
 .rights-evidence-card {
   display: grid;
   gap: 10px;

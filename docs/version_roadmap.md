@@ -106,7 +106,7 @@ Yapılacaklar:
 - Tam corpus document fingerprint indeksini source bazında çıkar.
 - Index job'larında ilerleme metrikleri ekle: okunan byte, satır, indexed document, skipped oversized.
 - `documents` tablosunu sadece sample için tutmaya devam et; tam indeks ham metin saklamasın.
-- Review UI'da büyük kaynaklar için "tam corpus özet kartı" göster.
+- Review UI'da büyük kaynaklar için "tam corpus özet kartı" göster. **Tamamlandı.**
 - Büyük kaynaklarda bounded sample stratejisini risk bazlı hale getirmek için hazırlık yap.
 
 Kapanış kriteri:
@@ -234,9 +234,9 @@ Kapanış kriteri:
 1. Gardas/Faz 2 seed manifestini ve immutable ingest yolunu netleştir.
 2. Büyük dosya ingest job'una progress/result raporu ekle.
 3. Tam corpus fingerprint indeksini büyük kaynak üzerinde çalıştır.
-4. Kaynak ayrıntısına corpus özet kartı ekle.
-5. Toplu review ekranı için UX iskeletini başlat.
-6. Export Builder tasarımını ve ilk JSONL/TXT çıktısını oluştur.
+4. Toplu review ekranını kaynak bazlı özet ve öncelik sırasıyla genişlet. **Tamamlandı.**
+5. Export Builder tasarımını ve ilk JSONL/TXT çıktısını oluştur.
+6. Büyük dosya ingest ve index job'larında progress/result raporunu derinleştir.
 
 ## Şu Anki Karar
 

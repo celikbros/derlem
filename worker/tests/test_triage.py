@@ -1,0 +1,46 @@
+from pathlib import Path
+
+from derlem_worker.triage import collect_pii_line_triage, release_blockers
+
+
+def test_collect_pii_line_triage_records_counts_without_values(tmp_path: Path) -> None:
+    source = tmp_path / "source.txt"
+    source.write_text(
+        "temiz satir\n"
+        "mail test@example.com\n"
+        "tckn 10000000146 ve kart 4242 4242 4242 4242\n",
+        encoding="utf-8",
+    )
+
+    report = collect_pii_line_triage(source, max_ordinals=10)
+
+    assert report.total_lines == 3
+    assert report.pii_line_count == 2
+    assert report.finding_counts["email"] == 1
+    assert report.finding_counts["tckn"] == 1
+    assert report.finding_counts["payment_card"] == 1
+    assert report.line_counts["email"] == 1
+    assert report.line_counts["tckn"] == 1
+    assert report.first_ordinals_by_type["email"] == [2]
+    assert report.first_ordinals_by_type["tckn"] == [3]
+    assert report.first_any_pii_ordinals == [2, 3]
+    assert "example.com" not in str(report)
+
+
+def test_release_blockers_match_review_gates() -> None:
+    source = {
+        "rights_status": "unknown",
+        "license_evidence_ref": None,
+        "pii_status": "flagged",
+        "duplicate_status": "unique",
+        "normalized_dedup_status": "duplicates_found",
+        "document_sampling_status": "not_sampled",
+    }
+
+    assert release_blockers(source) == [
+        "rights_not_cleared",
+        "license_evidence_missing",
+        "pii_not_clear",
+        "normalized_dedup_not_clear",
+        "documents_not_sampled",
+    ]

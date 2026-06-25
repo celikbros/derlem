@@ -80,6 +80,23 @@ DOCUMENT_SAMPLE_SIZE=200
 MAX_DOCUMENT_BYTES=262144
 ```
 
+## Kaynak Triage Raporu
+
+Bir kaynak karantinaya dustugunde yerel, Git disi rapor uretmek icin:
+
+```powershell
+.\.venv\Scripts\python.exe -m derlem_worker.triage --source-id <SOURCE_ID> --output-dir .\var\reports
+```
+
+Bu rapor ham metin veya PII degeri yazmaz; gate durumlarini, release blocker
+listesini ve PII/dedup sayilarini ozetler. Satir ordinali bazli PII triage
+gerekiyorsa asagidaki opsiyon kullanilir, fakat buyuk corpuslarda dosyayi
+bastan sona okuyacagi icin uzun surebilir:
+
+```powershell
+.\.venv\Scripts\python.exe -m derlem_worker.triage --source-id <SOURCE_ID> --output-dir .\var\reports --scan-pii-lines
+```
+
 ## Testler
 
 ```powershell

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from derlem_worker.pii import PIIScanner, is_valid_iban, is_valid_luhn, is_valid_tckn
+from derlem_worker.pii import PIIScanner, count_pii_in_text, is_valid_iban, is_valid_luhn, is_valid_tckn
 
 
 def test_checksum_validators() -> None:
@@ -44,3 +44,13 @@ def test_scanner_marks_clean_text_clear(tmp_path: Path) -> None:
 
     assert report.status == "clear"
     assert sum(report.findings.values()) == 0
+
+
+def test_count_pii_in_text_uses_same_validators() -> None:
+    counts = count_pii_in_text("mail test@example.com tckn 10000000146 kart 4242 4242 4242 4242")
+
+    assert counts["email"] == 1
+    assert counts["tckn"] == 1
+    assert counts["payment_card"] == 1
+    assert counts["iban"] == 0
+    assert counts["phone"] == 0

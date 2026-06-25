@@ -17,6 +17,7 @@ dev = ["pytest>=8,<9"]
 [project.scripts]
 derlem-worker = "derlem_worker.main:main"
 derlem-seed-gardas = "derlem_worker.seed_gardas:main"
+derlem-source-triage = "derlem_worker.triage:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

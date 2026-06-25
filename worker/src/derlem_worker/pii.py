@@ -11,6 +11,7 @@ TCKN_PATTERN = re.compile(r"(?<!\d)\d{11}(?!\d)")
 IBAN_PATTERN = re.compile(r"(?<![A-Z0-9])TR(?:[ ]?\d){24}(?![A-Z0-9])", re.IGNORECASE)
 PHONE_PATTERN = re.compile(r"(?<!\d)(?:\+?90[\s().-]*)?0?5\d{2}(?:[\s().-]*\d){7}(?!\d)")
 CARD_PATTERN = re.compile(r"(?<![A-Z0-9])(?:\d[ -]?){13,19}(?![\d -])", re.IGNORECASE)
+PII_KEYS = ("tckn", "iban", "email", "phone", "payment_card")
 
 
 @dataclass(frozen=True)
@@ -30,17 +31,23 @@ class PIIScanner:
         counts: Counter[str] = Counter()
         with path.open("r", encoding="utf-8", errors="strict") as source:
             for line in source:
-                counts["email"] += len(EMAIL_PATTERN.findall(line))
-                counts["tckn"] += sum(is_valid_tckn(value) for value in TCKN_PATTERN.findall(line))
-                counts["iban"] += sum(is_valid_iban(value) for value in IBAN_PATTERN.findall(line))
-                counts["phone"] += sum(is_valid_tr_phone(value) for value in PHONE_PATTERN.findall(line))
-                counts["payment_card"] += sum(is_valid_luhn(value) for value in CARD_PATTERN.findall(line))
+                counts.update(count_pii_in_text(line))
 
         findings = {
             key: counts.get(key, 0)
-            for key in ("tckn", "iban", "email", "phone", "payment_card")
+            for key in PII_KEYS
         }
         return PIIReport(scanner_version=self.version, findings=findings)
+
+
+def count_pii_in_text(text: str) -> dict[str, int]:
+    return {
+        "tckn": sum(is_valid_tckn(value) for value in TCKN_PATTERN.findall(text)),
+        "iban": sum(is_valid_iban(value) for value in IBAN_PATTERN.findall(text)),
+        "email": len(EMAIL_PATTERN.findall(text)),
+        "phone": sum(is_valid_tr_phone(value) for value in PHONE_PATTERN.findall(text)),
+        "payment_card": sum(is_valid_luhn(value) for value in CARD_PATTERN.findall(text)),
+    }
 
 
 def is_valid_tckn(value: str) -> bool:

@@ -95,7 +95,8 @@ Güncel operasyon notu:
 - Gardas/Faz 2 seed import kaydı: [Gardas Seed Import](gardash_seed_import.md).
 - Seed dosyası immutable local object store'a kopyalandı ve SHA256 doğrulandı.
 - Exact file dedup kapısı `unique` sonucu verdi.
-- PII scan ve tam normalized document fingerprint indeksleme işleri arka planda çalışıyor.
+- PII scan `flagged`, normalized document dedup `duplicates_found` sonucu verdi; ham seed karantinada.
+- Yerel source triage raporu `var/reports` altında üretildi; rapor ham metin veya PII değeri içermez.
 
 Yapılacaklar:
 

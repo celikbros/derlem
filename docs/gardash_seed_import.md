@@ -39,14 +39,20 @@ Son bilinen durum:
 |---|---|---|
 | Ingest | `succeeded` | Dosya kopyalandi, SHA256 dogrulandi. |
 | Exact file dedup | `unique` | Ayni SHA256 ile daha eski canonical kaynak bulunmadi. |
-| PII scan | `running` | 13.6 GB dosya uzerinde satir satir tarama devam ediyor. |
-| Normalized document dedup | `running` | Belge parmak izi indeksleme devam ediyor. |
-| Document sampling | `not_sampled` | Normalized dedup tamamlanmadan calismaz. |
+| PII scan | `flagged` | `email=86435`, `phone=114437`, `payment_card=13830`, `iban=2087`, `tckn=665`. |
+| Normalized document dedup | `duplicates_found` | `6,027,968` dokuman tarandi; `221` internal duplicate bulundu, external duplicate yok. |
+| Document sampling | `not_sampled` | Normalized dedup ve PII temizlenmeden review orneklemesine gecilmez. |
 | Rights/license | `license_review` | Hukuk/hak kaniti netlesmeden release'e giremez. |
+
+Yerel, Git disi triage raporu:
+
+- `C:\TURKCE-VERI-ATOLYESI\var\reports\gardash_faz2_tr_dedup_20260621_06ac330e_triage.md`
+- `C:\TURKCE-VERI-ATOLYESI\var\reports\gardash_faz2_tr_dedup_20260621_06ac330e_triage.json`
 
 ## Karar
 
 Bu import bir onay veya release karari degildir. Gardas corpus Derlem tarafina
-yonetilen, checksum'li ve yeniden izlenebilir bir seed olarak alindi. Release'e
-girmesi icin PII, normalized dedup, belge ornekleme, hak/lisans ve insan onay
-kapilarinin tamamlanmasi gerekir.
+yonetilen, checksum'li ve yeniden izlenebilir bir seed olarak alindi. Mevcut ham
+kaynak karantinadadir; release'e girmesi icin PII bulgularinin ve internal
+duplicate satirlarin temiz bir turev kaynakta cozulmesi, ardindan belge
+ornekleme, hak/lisans ve insan onay kapilarinin tamamlanmasi gerekir.

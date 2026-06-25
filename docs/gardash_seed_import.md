@@ -94,8 +94,21 @@ Tam corpus clean candidate uretildi:
 | Cikti boyutu | `12,850,383,067` byte |
 
 Clean candidate Derlem'e ayri kaynak olarak kaydedildi ve immutable store'a
-ingest edildi. Son bilinen gate durumu: ingest `succeeded`, exact file dedup
-`unique`; PII scan ve normalized document dedup tekrar calisiyor.
+ingest edildi. Son gate durumu:
+
+| Gate | Durum |
+|---|---|
+| Ingest | `succeeded` |
+| PII scan | `clear` |
+| Exact file dedup | `unique` |
+| Normalized document dedup | `unique` |
+| Document sampling | `sampled` (`200` ornek) |
+| Approval status | `sampled_for_review` |
+
+Not: Clean candidate'in parent ham Gardas kaynagiyla icerik cakismasi beklenen
+bir lineage iliskisidir. Bu nedenle normalized dedup kapisi, `derived_from_source_id`
+ile isaretlenen parent kaynagi external duplicate sayimindan haric tutar.
+Kalan zorunlu kapilar: hak/lisans kaniti ve 200 ornegin insan review onayi.
 
 ## Karar
 

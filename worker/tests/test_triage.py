@@ -35,6 +35,10 @@ def test_release_blockers_match_review_gates() -> None:
         "duplicate_status": "unique",
         "normalized_dedup_status": "duplicates_found",
         "document_sampling_status": "not_sampled",
+        "sampled_document_count": 0,
+        "reviewed_document_count": 0,
+        "approved_document_count": 0,
+        "flagged_document_count": 0,
     }
 
     assert release_blockers(source) == [
@@ -44,3 +48,37 @@ def test_release_blockers_match_review_gates() -> None:
         "normalized_dedup_not_clear",
         "documents_not_sampled",
     ]
+
+
+def test_release_blockers_require_all_sampled_documents_to_be_approved() -> None:
+    source = {
+        "rights_status": "cleared",
+        "license_evidence_ref": "legal/ok.md",
+        "pii_status": "clear",
+        "duplicate_status": "unique",
+        "normalized_dedup_status": "unique",
+        "document_sampling_status": "sampled",
+        "sampled_document_count": 200,
+        "reviewed_document_count": 199,
+        "approved_document_count": 199,
+        "flagged_document_count": 0,
+    }
+
+    assert release_blockers(source) == ["document_sample_review_incomplete"]
+
+
+def test_release_blockers_pass_when_quality_gates_and_reviews_are_complete() -> None:
+    source = {
+        "rights_status": "cleared",
+        "license_evidence_ref": "legal/ok.md",
+        "pii_status": "clear",
+        "duplicate_status": "unique",
+        "normalized_dedup_status": "unique",
+        "document_sampling_status": "sampled",
+        "sampled_document_count": 200,
+        "reviewed_document_count": 200,
+        "approved_document_count": 200,
+        "flagged_document_count": 0,
+    }
+
+    assert release_blockers(source) == []

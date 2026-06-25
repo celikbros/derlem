@@ -923,7 +923,7 @@ class Worker:
         with connection.transaction():
             source = connection.execute(
                 """
-                SELECT object_sha256, duplicate_status, normalized_dedup_status
+                SELECT object_sha256, duplicate_status, normalized_dedup_status, pii_status
                 FROM sources
                 WHERE id = %s
                 FOR UPDATE
@@ -990,12 +990,16 @@ class Worker:
                     ),
                     document_sampling_status = 'sampled',
                     approval_status = CASE
-                        WHEN approval_status = 'auto_checked' THEN 'sampled_for_review'
+                        WHEN %s = 'clear'
+                             AND duplicate_status = 'unique'
+                             AND normalized_dedup_status = 'unique'
+                             AND approval_status NOT IN ('approved_source', 'release_candidate', 'rejected')
+                            THEN 'sampled_for_review'
                         ELSE approval_status
                     END
                 WHERE id = %s AND object_sha256 = %s
                 """,
-                (report.total_documents, source_id, source_id, object_sha256),
+                (report.total_documents, source_id, source[3], source_id, object_sha256),
             )
             if updated.rowcount != 1:
                 raise RuntimeError("Source object changed while recording document samples")

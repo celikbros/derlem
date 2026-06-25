@@ -215,6 +215,13 @@ def release_blockers(source: dict[str, Any]) -> list[str]:
         blockers.append("normalized_dedup_not_clear")
     if source.get("document_sampling_status") != "sampled":
         blockers.append("documents_not_sampled")
+    elif (
+        int(source.get("sampled_document_count") or 0) <= 0
+        or int(source.get("reviewed_document_count") or 0) != int(source.get("sampled_document_count") or 0)
+        or int(source.get("approved_document_count") or 0) != int(source.get("sampled_document_count") or 0)
+        or int(source.get("flagged_document_count") or 0) > 0
+    ):
+        blockers.append("document_sample_review_incomplete")
     return blockers
 
 

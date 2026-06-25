@@ -420,6 +420,10 @@ on one machine first and split only around demonstrated bottlenecks.
 
 ## Roadmap
 
+For detailed version targets, see [Derlem Version Roadmap](docs/version_roadmap.md).
+In short: **v0.1 Core MVP is complete; v0.2 Large Corpus Ingest and Full
+Document Index is the next active target.**
+
 ### Operational slice
 
 - [x] Go API, JWT authentication, and RBAC
@@ -454,6 +458,7 @@ on one machine first and split only around demonstrated bottlenecks.
 ## Documentation
 
 - [MVP plan](docs/web_data_atolyesi_mvp_plan.md)
+- [Version roadmap](docs/version_roadmap.md)
 - [Local development](docs/local_development.md)
 - [API and workflows](docs/api_workflows.md)
 - [Pretraining data factory](docs/pretraining_data_factory.md)

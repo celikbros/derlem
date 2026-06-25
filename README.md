@@ -424,6 +424,10 @@ sonra kanıtlanan darboğaza göre ayrıştırma yapılır.
 
 ## Yol Haritası
 
+Ayrıntılı versiyon hedefleri için [Derlem Versiyon Yol Haritası](docs/version_roadmap.md)
+belgesini izleyin. Özetle: **v0.1 Core MVP tamamlandı; v0.2 Büyük Corpus Ingest
+ve Tam Document İndeks sıradaki aktif hedef.**
+
 ### Tamamlanan çalışan dilim
 
 - [x] Go API, JWT auth ve RBAC
@@ -458,6 +462,7 @@ sonra kanıtlanan darboğaza göre ayrıştırma yapılır.
 ## Dokümantasyon
 
 - [MVP planı](docs/web_data_atolyesi_mvp_plan.md)
+- [Versiyon yol haritası](docs/version_roadmap.md)
 - [Yerel geliştirme](docs/local_development.md)
 - [API ve iş akışları](docs/api_workflows.md)
 - [Pretraining data factory](docs/pretraining_data_factory.md)

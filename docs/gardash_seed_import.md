@@ -49,6 +49,38 @@ Yerel, Git disi triage raporu:
 - `C:\TURKCE-VERI-ATOLYESI\var\reports\gardash_faz2_tr_dedup_20260621_06ac330e_triage.md`
 - `C:\TURKCE-VERI-ATOLYESI\var\reports\gardash_faz2_tr_dedup_20260621_06ac330e_triage.json`
 
+## Clean Candidate Hazirligi
+
+Ham seed degistirilmez. Temiz aday dosya, PII iceren satirlari, oversized
+satirlari ve normalize fingerprint fazlaliklarini cikaran ayri bir turev olarak
+uretilir.
+
+Hizli duman testi calisti:
+
+```powershell
+.\.venv\Scripts\python.exe -m derlem_worker.clean_candidate --source-id 06ac330e-350f-45f0-b596-3dd4aa1dbc57 --output-dir .\var\derived --limit-lines 10000 --force
+```
+
+10K duman testi sonucu:
+
+| Alan | Deger |
+|---|---|
+| Okunan satir | `10,000` |
+| Yazilan satir | `9,995` |
+| Cikarilan PII satiri | `5` |
+| Cikarilan duplicate satiri | `0` |
+| Cikarilan oversized satir | `0` |
+| Cikti SHA256 | `f6d1e4bd17f852b887429a2684fb46b9f6b3d176ba3e23e54dac7f001ab6aa83` |
+
+Tam corpus clean candidate komutu:
+
+```powershell
+.\.venv\Scripts\python.exe -m derlem_worker.clean_candidate --source-id 06ac330e-350f-45f0-b596-3dd4aa1dbc57 --output-dir .\var\derived
+```
+
+Bu komut 13.6 GB dosyayi bastan sona okuyacagi icin uzun surebilir. Cikti
+dosyasi ve manifest `var\derived` altinda kalir; Git'e eklenmez.
+
 ## Karar
 
 Bu import bir onay veya release karari degildir. Gardas corpus Derlem tarafina

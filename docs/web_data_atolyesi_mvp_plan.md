@@ -431,7 +431,7 @@ olcumler veya uretim saklama gereksinimleri gerekli kilarsa eklenir.
 Bu plan muhendislik/surec tasarimidir. Lisans, KVKK, telif, takedown ve ozel
 nitelikli veri politikasi icin hukuk danismani tarafindan ayri onay gerekir.
 
-## Uygulama Durumu - 2026-06-24
+## Uygulama Durumu - 2026-06-25
 
 Tamamlanan calisan dilim:
 
@@ -440,10 +440,11 @@ Tamamlanan calisan dilim:
 - Worker: immutable ingest, SHA256, UTF-8, satir sayimi ve otomatik PII job zinciri
 - PII minimumu: TCKN checksum, IBAN mod-97, kart Luhn, telefon ve e-posta
 - Exact duplicate kapisi: SHA256 ile kanonik ilk kaynagi belirleme, tekrar kaynagi karantinaya alma
+- Normalize document dedup kapisi: NFKC + casefold + whitespace collapse fingerprint index, hash/ordinal/sayac disinda ham metin saklamama
 - Bounded belge ornekleme: SHA256 seed'li deterministik reservoir sample, immutable document surumleri
 - Document editor: tam icerigi object store'dan okuma, optimistic locking ile yeni surum kaydetme
 - Document moderation: 1-5 kalite puani, surum/checksum snapshot'li immutable review ve self-review engeli
-- Review kapisi: dosya + cleared rights + lisans kaniti + clear PII + unique exact duplicate + tum belge orneklerinde guncel onay zorunlu
+- Review kapisi: dosya + cleared rights + lisans kaniti + clear PII + unique source artifact + unique normalized document dedup + tum belge orneklerinde guncel onay zorunlu
 - Release Builder: ayni content_purpose icindeki onayli kaynaklardan draft ve worker tabanli frozen release
 - Frozen kanit: kaynak surumu/SHA256 snapshot'i, deterministic manifest, manifest hash'i ve append-only audit
 - Pretrain decontamination: eval/holdout belge metinlerine karsi exact SHA256; eslesmede freeze bloke

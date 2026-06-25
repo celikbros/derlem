@@ -20,7 +20,7 @@ func TestApprovalGateReasons(t *testing.T) {
 			name: "all gates pass",
 			source: domain.Source{
 				ObjectSHA256: &digest, RightsStatus: "cleared", LicenseEvidenceRef: &evidence,
-				PIIStatus: "clear", DuplicateStatus: "unique", DocumentSamplingStatus: "sampled",
+				PIIStatus: "clear", DuplicateStatus: "unique", NormalizedDedupStatus: "unique", DocumentSamplingStatus: "sampled",
 				SampledDocumentCount: 2, ReviewedDocumentCount: 2, ApprovedDocumentCount: 2,
 				ApprovalStatus: "sampled_for_review",
 			},
@@ -29,13 +29,13 @@ func TestApprovalGateReasons(t *testing.T) {
 		{
 			name:   "all mandatory gates fail",
 			source: domain.Source{RightsStatus: "unknown", PIIStatus: "not_scanned", ApprovalStatus: "source_registered"},
-			want:   []string{"file_not_ingested", "rights_not_cleared", "license_evidence_missing", "pii_not_clear", "exact_duplicate_not_clear", "documents_not_sampled"},
+			want:   []string{"file_not_ingested", "rights_not_cleared", "license_evidence_missing", "pii_not_clear", "exact_duplicate_not_clear", "normalized_dedup_not_clear", "documents_not_sampled"},
 		},
 		{
 			name: "already approved",
 			source: domain.Source{
 				ObjectSHA256: &digest, RightsStatus: "cleared", LicenseEvidenceRef: &evidence,
-				PIIStatus: "clear", DuplicateStatus: "unique", DocumentSamplingStatus: "sampled",
+				PIIStatus: "clear", DuplicateStatus: "unique", NormalizedDedupStatus: "unique", DocumentSamplingStatus: "sampled",
 				SampledDocumentCount: 1, ReviewedDocumentCount: 1, ApprovedDocumentCount: 1,
 				ApprovalStatus: "approved_source",
 			},
@@ -45,7 +45,7 @@ func TestApprovalGateReasons(t *testing.T) {
 			name: "exact duplicate blocks approval",
 			source: domain.Source{
 				ObjectSHA256: &digest, RightsStatus: "cleared", LicenseEvidenceRef: &evidence,
-				PIIStatus: "clear", DuplicateStatus: "duplicate", DocumentSamplingStatus: "sampled",
+				PIIStatus: "clear", DuplicateStatus: "duplicate", NormalizedDedupStatus: "unique", DocumentSamplingStatus: "sampled",
 				SampledDocumentCount: 1, ReviewedDocumentCount: 1, ApprovedDocumentCount: 1,
 				ApprovalStatus: "quarantined",
 			},
@@ -55,7 +55,7 @@ func TestApprovalGateReasons(t *testing.T) {
 			name: "document sample review blocks approval",
 			source: domain.Source{
 				ObjectSHA256: &digest, RightsStatus: "cleared", LicenseEvidenceRef: &evidence,
-				PIIStatus: "clear", DuplicateStatus: "unique", DocumentSamplingStatus: "sampled",
+				PIIStatus: "clear", DuplicateStatus: "unique", NormalizedDedupStatus: "unique", DocumentSamplingStatus: "sampled",
 				SampledDocumentCount: 2, ReviewedDocumentCount: 1, ApprovedDocumentCount: 1,
 				ApprovalStatus: "sampled_for_review",
 			},

@@ -16,6 +16,10 @@ const gateReasonLabels: Record<string, string> = {
   rights_not_cleared: "haklar temizlenmedi",
   license_evidence_missing: "lisans kanıtı eksik",
   pii_not_clear: "PII taraması temiz değil",
+  exact_duplicate_not_clear: "dosya dedup temiz degil",
+  normalized_dedup_not_clear: "normalize dedup temiz degil",
+  documents_not_sampled: "belge ornekleri hazirlanmadi",
+  document_sample_review_incomplete: "belge ornek incelemesi tamamlanmadi",
   already_approved: "kaynak zaten onaylı",
 };
 

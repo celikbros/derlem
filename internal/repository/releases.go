@@ -198,6 +198,7 @@ func (r *Releases) QueueFreeze(ctx context.Context, id, actorID string) (string,
 			source.license_evidence_ref IS NULL OR
 			source.pii_status <> 'clear' OR
 			source.duplicate_status <> 'unique' OR
+			source.normalized_dedup_status <> 'unique' OR
 			source.document_sampling_status <> 'sampled' OR
 			source.sampled_document_count <= 0 OR
 			source.reviewed_document_count <> source.sampled_document_count OR

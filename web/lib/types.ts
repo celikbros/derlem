@@ -33,6 +33,9 @@ export type Source = {
   pii_status: string;
   duplicate_status: "not_checked" | "unique" | "duplicate";
   duplicate_of_source_id?: string;
+  normalized_dedup_status: "not_checked" | "unique" | "duplicates_found" | "failed";
+  normalized_duplicate_count: number;
+  normalized_duplicate_source_count: number;
   risk_level: string;
   approval_status: string;
   version: number;

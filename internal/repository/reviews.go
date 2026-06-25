@@ -63,18 +63,21 @@ func (r *Sources) Review(
 	}
 
 	contextJSON, _ := json.Marshal(map[string]any{
-		"rights_status":            source.RightsStatus,
-		"pii_status":               source.PIIStatus,
-		"duplicate_status":         source.DuplicateStatus,
-		"duplicate_of_source_id":   source.DuplicateOfSourceID,
-		"document_sampling_status": source.DocumentSamplingStatus,
-		"sampled_document_count":   source.SampledDocumentCount,
-		"reviewed_document_count":  source.ReviewedDocumentCount,
-		"approved_document_count":  source.ApprovedDocumentCount,
-		"flagged_document_count":   source.FlaggedDocumentCount,
-		"risk_level":               source.RiskLevel,
-		"object_sha256":            source.ObjectSHA256,
-		"approval_before":          source.ApprovalStatus,
+		"rights_status":                     source.RightsStatus,
+		"pii_status":                        source.PIIStatus,
+		"duplicate_status":                  source.DuplicateStatus,
+		"duplicate_of_source_id":            source.DuplicateOfSourceID,
+		"normalized_dedup_status":           source.NormalizedDedupStatus,
+		"normalized_duplicate_count":        source.NormalizedDuplicateCount,
+		"normalized_duplicate_source_count": source.NormalizedDuplicateSourceCount,
+		"document_sampling_status":          source.DocumentSamplingStatus,
+		"sampled_document_count":            source.SampledDocumentCount,
+		"reviewed_document_count":           source.ReviewedDocumentCount,
+		"approved_document_count":           source.ApprovedDocumentCount,
+		"flagged_document_count":            source.FlaggedDocumentCount,
+		"risk_level":                        source.RiskLevel,
+		"object_sha256":                     source.ObjectSHA256,
+		"approval_before":                   source.ApprovalStatus,
 	})
 	var review domain.Review
 	if err := tx.QueryRow(ctx, `
@@ -176,6 +179,9 @@ func approvalGateReasons(source domain.Source) []string {
 	}
 	if source.DuplicateStatus != "unique" {
 		reasons = append(reasons, "exact_duplicate_not_clear")
+	}
+	if source.NormalizedDedupStatus != "unique" {
+		reasons = append(reasons, "normalized_dedup_not_clear")
 	}
 	if source.DocumentSamplingStatus != "sampled" {
 		reasons = append(reasons, "documents_not_sampled")

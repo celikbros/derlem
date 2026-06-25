@@ -259,6 +259,7 @@ const sourceColumns = `
 	document_sampling_status, sampled_document_count, reviewed_document_count,
 	approved_document_count, flagged_document_count, detected_encoding,
 	pii_status, duplicate_status, duplicate_of_source_id::text,
+	normalized_dedup_status, normalized_duplicate_count, normalized_duplicate_source_count,
 	risk_level, approval_status, version, created_by::text,
 	created_at, updated_at`
 
@@ -278,7 +279,10 @@ func scanSource(row scanner) (domain.Source, error) {
 		&source.ReviewedDocumentCount, &source.ApprovedDocumentCount, &source.FlaggedDocumentCount,
 		&source.DetectedEncoding,
 		&source.PIIStatus, &source.DuplicateStatus,
-		&source.DuplicateOfSourceID, &source.RiskLevel,
+		&source.DuplicateOfSourceID,
+		&source.NormalizedDedupStatus, &source.NormalizedDuplicateCount,
+		&source.NormalizedDuplicateSourceCount,
+		&source.RiskLevel,
 		&source.ApprovalStatus, &source.Version, &source.CreatedBy,
 		&source.CreatedAt, &source.UpdatedAt,
 	)

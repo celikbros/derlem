@@ -43,7 +43,8 @@ source_registered
   -> immutable SHA256 object
   -> raw_ingested
   -> scan_pii + check_exact_duplicate queued
-  -> sample_documents queued (yalnizca kanonik unique kaynak)
+  -> index_document_fingerprints queued (yalnizca kanonik unique kaynak)
+  -> sample_documents queued (yalnizca normalized dedup unique kaynak)
   -> auto_checked | quarantined
 ```
 
@@ -51,8 +52,10 @@ PII taramasi TCKN checksum, IBAN mod-97, Luhn-dogrulamali odeme karti, telefon
 ve e-posta sayimlari uretir. Ham eslesme degerleri DB'ye yazilmaz.
 Worker baslangicta daha once ingest edilmis ama exact duplicate sonucu olmayan
 kaynaklar icin eksik kontrol job'larini idempotent olarak kuyruga ekler.
-MVP kontrolu kaynak artifact'inin byte-level SHA256 tekrarini yakalar;
-normalize edilmis dokuman ve near-dedup kontrolleri sonraki fazdadir.
+Byte-level kontrol kaynak artifact'inin SHA256 tekrarini yakalar. Normalize
+document exact-dedup ise duz satir veya JSONL `text`, `content`, `body` alanini
+NFKC + casefold + whitespace collapse ile fingerprint'e cevirir. DB'ye ham metin
+degil, hash/ordinal/sayac yazilir. Near-dedup kontrolleri sonraki fazdadir.
 
 `sample_documents`, kaynak dosyasini bounded satir okuyucuyla tarar ve SHA256
 seed'li deterministik reservoir sample uretir. Varsayilan olarak en fazla 200
@@ -69,6 +72,7 @@ insan incelemesi icin bounded sample katmanidir.
 - `license_evidence_ref` bulunmali.
 - `pii_status=clear` olmali.
 - `duplicate_status=unique` olmali.
+- `normalized_dedup_status=unique` olmali.
 - `document_sampling_status=sampled` olmali.
 - Ornek belgelerin tamami guncel surumlerinde `approved` olmali.
 - Reddedilmis veya hassas incelemeye yonlendirilmis belge bulunmamali.
@@ -98,11 +102,11 @@ yaninda source version, lisans, hak durumu, dil, alan ve lineage snapshot'i
 saklar. Draft olustuktan sonra kaynak degisirse freeze kapisi sert hata verir.
 
 `POST /releases/{id}/freeze` yalnizca admin rolune aciktir ve `freeze_release`
-isini PostgreSQL kuyruguna ekler. Worker zorunlu source, rights, PII, duplicate
-ve document-review kapilarini yeniden dogrular. Pretrain release'inde eval ve
-holdout kaynaklarinin belge metinleri `document-text-sha256-v1` exact-match
-yontemiyle karsilastirilir. Eslesme veya bounded satir limitinin asilmasi
-freeze'i bloke eder.
+isini PostgreSQL kuyruguna ekler. Worker zorunlu source, rights, PII, source
+artifact duplicate, normalized document dedup ve document-review kapilarini
+yeniden dogrular. Pretrain release'inde eval ve holdout kaynaklarinin belge
+metinleri `document-text-sha256-v1` exact-match yontemiyle karsilastirilir.
+Eslesme veya bounded satir limitinin asilmasi freeze'i bloke eder.
 
 Basarili freeze, deterministik `derlem.release-manifest.v1` JSON manifestini
 immutable store'a yazar, manifest SHA256'sini ve freeze zamanini sabitler.
@@ -113,6 +117,7 @@ salt-okunur indirilir.
 ## Denetim
 
 Her create, metadata update, ingest queue, ingest completion, PII scan, exact
-duplicate kontrolu, login, belge review, kaynak review, release create, freeze
-queue, freeze ve freeze-block islemi `audit_events` tablosuna eklenir.
+duplicate kontrolu, normalized dedup kontrolu, login, belge review, kaynak
+review, release create, freeze queue, freeze ve freeze-block islemi
+`audit_events` tablosuna eklenir.
 Tablo update, delete ve truncate islemlerini trigger ile reddeder.

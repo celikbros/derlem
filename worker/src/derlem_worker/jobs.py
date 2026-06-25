@@ -15,13 +15,20 @@ import psycopg
 from psycopg.rows import dict_row
 
 from derlem_worker.config import Config
+from derlem_worker.fingerprints import FINGERPRINT_VERSION, document_fingerprint
 from derlem_worker.pii import PIIReport, PIIScanner
 from derlem_worker.releases import (
     ReleaseGateError,
     build_release_manifest,
     exact_decontamination,
 )
-from derlem_worker.sampling import SampledDocument, SamplingReport, sample_line_documents
+from derlem_worker.sampling import (
+    SampledDocument,
+    SamplingReport,
+    _bounded_lines,
+    _document_from_line,
+    sample_line_documents,
+)
 from derlem_worker.storage import ContentAddressedStore, StoredObject
 
 LOGGER = logging.getLogger(__name__)
@@ -76,6 +83,30 @@ class Worker:
                 ON CONFLICT DO NOTHING
                 """
             )
+            fingerprint_jobs = connection.execute(
+                """
+                INSERT INTO background_jobs(job_type, payload, created_by)
+                SELECT
+                    'index_document_fingerprints',
+                    jsonb_build_object(
+                        'source_id', source.id::text,
+                        'object_sha256', source.object_sha256::text
+                    ),
+                    source.created_by
+                FROM sources AS source
+                WHERE source.object_sha256 IS NOT NULL
+                  AND source.duplicate_status = 'unique'
+                  AND source.normalized_dedup_status = 'not_checked'
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM background_jobs AS job
+                      WHERE job.job_type = 'index_document_fingerprints'
+                        AND job.payload->>'source_id' = source.id::text
+                        AND job.status IN ('queued', 'running')
+                  )
+                ON CONFLICT DO NOTHING
+                """
+            )
             sample_jobs = connection.execute(
                 """
                 INSERT INTO background_jobs(job_type, payload, created_by)
@@ -89,6 +120,7 @@ class Worker:
                 FROM sources AS source
                 WHERE source.object_sha256 IS NOT NULL
                   AND source.duplicate_status = 'unique'
+                  AND source.normalized_dedup_status = 'unique'
                   AND source.document_sampling_status = 'not_sampled'
                   AND NOT EXISTS (
                       SELECT 1
@@ -101,11 +133,12 @@ class Worker:
                 """
             )
             connection.commit()
-        total = duplicate_jobs.rowcount + sample_jobs.rowcount
+        total = duplicate_jobs.rowcount + fingerprint_jobs.rowcount + sample_jobs.rowcount
         if total > 0:
             LOGGER.info(
-                "maintenance_jobs_queued exact_duplicate=%s document_samples=%s",
+                "maintenance_jobs_queued exact_duplicate=%s document_fingerprints=%s document_samples=%s",
                 duplicate_jobs.rowcount,
+                fingerprint_jobs.rowcount,
                 sample_jobs.rowcount,
             )
         return total
@@ -138,6 +171,19 @@ class Worker:
                     job.id,
                     status,
                     duplicate_of,
+                )
+            elif job.job_type == "index_document_fingerprints":
+                with psycopg.connect(self.config.database_url) as connection:
+                    status, duplicate_count, duplicate_source_count = self._index_document_fingerprints(
+                        connection,
+                        job,
+                    )
+                LOGGER.info(
+                    "job_succeeded job_id=%s normalized_dedup_status=%s duplicate_count=%s duplicate_source_count=%s",
+                    job.id,
+                    status,
+                    duplicate_count,
+                    duplicate_source_count,
                 )
             elif job.job_type == "sample_documents":
                 object_sha256, report, stored_samples = self._sample_documents(job)
@@ -274,7 +320,8 @@ class Worker:
         with psycopg.connect(self.config.database_url, row_factory=dict_row) as connection:
             row = connection.execute(
                 """
-                SELECT source.object_sha256, source.duplicate_status, object.storage_key
+                SELECT source.object_sha256, source.duplicate_status,
+                    source.normalized_dedup_status, object.storage_key
                 FROM sources AS source
                 JOIN storage_objects AS object ON object.sha256 = source.object_sha256
                 WHERE source.id = %s
@@ -286,8 +333,8 @@ class Worker:
         object_sha256 = str(row["object_sha256"])
         if expected_sha256 and expected_sha256 != object_sha256:
             raise ValueError("Source object changed before document sampling")
-        if row["duplicate_status"] != "unique":
-            raise ValueError("Only canonical unique sources can be sampled")
+        if row["duplicate_status"] != "unique" or row["normalized_dedup_status"] != "unique":
+            raise ValueError("Only canonical deduplicated sources can be sampled")
 
         object_path = (self.config.storage_root / str(row["storage_key"])).resolve()
         object_path.relative_to(self.config.storage_root)
@@ -454,8 +501,13 @@ class Worker:
                     approval_status = CASE
                         WHEN %s = 'flagged' THEN 'quarantined'
                         WHEN duplicate_status = 'duplicate' THEN 'quarantined'
-                        WHEN document_sampling_status = 'sampled' THEN 'sampled_for_review'
-                        ELSE 'auto_checked'
+                        WHEN normalized_dedup_status = 'duplicates_found' THEN 'quarantined'
+                        WHEN duplicate_status = 'unique' AND normalized_dedup_status = 'unique'
+                            THEN CASE
+                                WHEN document_sampling_status = 'sampled' THEN 'sampled_for_review'
+                                ELSE 'auto_checked'
+                            END
+                        ELSE approval_status
                     END
                 WHERE id = %s AND object_sha256 = %s
                 """,
@@ -547,6 +599,7 @@ class Worker:
                     approval_status = CASE
                         WHEN %s = 'duplicate' THEN 'quarantined'
                         WHEN pii_status = 'clear'
+                             AND normalized_dedup_status = 'unique'
                              AND approval_status NOT IN ('approved_source', 'release_candidate', 'rejected')
                             THEN CASE
                                 WHEN document_sampling_status = 'sampled' THEN 'sampled_for_review'
@@ -598,6 +651,213 @@ class Worker:
                     """
                     INSERT INTO background_jobs(job_type, payload, created_by)
                     SELECT
+                        'index_document_fingerprints',
+                        jsonb_build_object('source_id', %s::text, 'object_sha256', %s::text),
+                        created_by
+                    FROM sources
+                    WHERE id = %s AND normalized_dedup_status = 'not_checked'
+                    ON CONFLICT DO NOTHING
+                    """,
+                    (source_id, object_sha256, source_id),
+                )
+        return status, duplicate_of
+
+    def _index_document_fingerprints(
+        self,
+        connection: psycopg.Connection,
+        job: Job,
+    ) -> tuple[str, int, int]:
+        source_id = str(job.payload.get("source_id", "")).strip()
+        expected_sha256 = str(job.payload.get("object_sha256", "")).strip()
+        if not source_id:
+            raise ValueError("index_document_fingerprints requires source_id")
+
+        with connection.transaction():
+            source = connection.execute(
+                """
+                SELECT source.object_sha256, source.duplicate_status, object.storage_key
+                FROM sources AS source
+                JOIN storage_objects AS object ON object.sha256 = source.object_sha256
+                WHERE source.id = %s
+                FOR UPDATE OF source
+                """,
+                (source_id,),
+            ).fetchone()
+            if source is None or source[0] is None:
+                raise RuntimeError("Source or stored object was not found")
+            object_sha256 = str(source[0])
+            if expected_sha256 and expected_sha256 != object_sha256:
+                raise RuntimeError("Source object changed before document fingerprinting")
+            if source[1] != "unique":
+                raise RuntimeError("Only canonical unique sources can be fingerprinted")
+
+            connection.execute(
+                """
+                DELETE FROM document_fingerprints
+                WHERE source_id = %s AND source_sha256 = %s AND fingerprint_version = %s
+                """,
+                (source_id, object_sha256, FINGERPRINT_VERSION),
+            )
+
+            total_documents = 0
+            indexed_documents = 0
+            skipped_oversized = 0
+            skipped_too_short = 0
+            batch: list[tuple[str, str, int, str, int, str]] = []
+            object_path = self._stored_object_path(str(source[2]))
+            for ordinal, raw_line, oversized in _bounded_lines(
+                object_path,
+                self.config.max_document_bytes,
+            ):
+                if oversized:
+                    total_documents += 1
+                    skipped_oversized += 1
+                    continue
+                assert raw_line is not None
+                stripped = raw_line.strip()
+                if not stripped:
+                    continue
+                total_documents += 1
+                text, _ = _document_from_line(stripped)
+                if not text:
+                    continue
+                fingerprint = document_fingerprint(text)
+                if fingerprint is None:
+                    skipped_too_short += 1
+                    continue
+                normalized_sha256, normalized_char_count = fingerprint
+                indexed_documents += 1
+                batch.append(
+                    (
+                        source_id,
+                        object_sha256,
+                        ordinal,
+                        normalized_sha256,
+                        normalized_char_count,
+                        FINGERPRINT_VERSION,
+                    )
+                )
+                if len(batch) >= 1000:
+                    self._insert_document_fingerprint_batch(connection, batch)
+                    batch.clear()
+            if batch:
+                self._insert_document_fingerprint_batch(connection, batch)
+
+            duplicate_counts = connection.execute(
+                """
+                WITH current_fingerprints AS (
+                    SELECT source_ordinal, normalized_sha256
+                    FROM document_fingerprints
+                    WHERE source_id = %s
+                      AND source_sha256 = %s
+                      AND fingerprint_version = %s
+                ),
+                internal_duplicates AS (
+                    SELECT COALESCE(sum(count_per_hash - 1), 0)::bigint AS duplicate_count
+                    FROM (
+                        SELECT count(*) AS count_per_hash
+                        FROM current_fingerprints
+                        GROUP BY normalized_sha256
+                        HAVING count(*) > 1
+                    ) AS grouped
+                ),
+                external_duplicates AS (
+                    SELECT
+                        count(DISTINCT current_fingerprints.source_ordinal)::bigint AS duplicate_count,
+                        count(DISTINCT other.source_id)::bigint AS duplicate_source_count
+                    FROM current_fingerprints
+                    JOIN document_fingerprints AS other
+                      ON other.fingerprint_version = %s
+                     AND other.normalized_sha256 = current_fingerprints.normalized_sha256
+                     AND other.source_id <> %s
+                )
+                SELECT
+                    internal_duplicates.duplicate_count,
+                    external_duplicates.duplicate_count,
+                    external_duplicates.duplicate_source_count
+                FROM internal_duplicates, external_duplicates
+                """,
+                (source_id, object_sha256, FINGERPRINT_VERSION, FINGERPRINT_VERSION, source_id),
+            ).fetchone()
+            internal_duplicate_count = int(duplicate_counts[0] or 0)
+            external_duplicate_count = int(duplicate_counts[1] or 0)
+            duplicate_source_count = int(duplicate_counts[2] or 0)
+            duplicate_count = internal_duplicate_count + external_duplicate_count
+            status = "unique" if duplicate_count == 0 else "duplicates_found"
+
+            updated = connection.execute(
+                """
+                UPDATE sources
+                SET normalized_dedup_status = %s,
+                    normalized_duplicate_count = %s,
+                    normalized_duplicate_source_count = %s,
+                    document_count = %s,
+                    risk_level = CASE
+                        WHEN %s = 'duplicates_found' AND risk_level NOT IN ('high', 'critical') THEN 'medium'
+                        ELSE risk_level
+                    END,
+                    approval_status = CASE
+                        WHEN %s = 'duplicates_found' THEN 'quarantined'
+                        WHEN pii_status = 'clear'
+                             AND duplicate_status = 'unique'
+                             AND approval_status NOT IN ('approved_source', 'release_candidate', 'rejected')
+                            THEN CASE
+                                WHEN document_sampling_status = 'sampled' THEN 'sampled_for_review'
+                                ELSE 'auto_checked'
+                            END
+                        ELSE approval_status
+                    END
+                WHERE id = %s AND object_sha256 = %s
+                """,
+                (
+                    status,
+                    duplicate_count,
+                    duplicate_source_count,
+                    total_documents,
+                    status,
+                    status,
+                    source_id,
+                    object_sha256,
+                ),
+            )
+            if updated.rowcount != 1:
+                raise RuntimeError("Source object changed while recording document fingerprints")
+
+            result_json = json.dumps(
+                {
+                    "scanner_version": FINGERPRINT_VERSION,
+                    "status": status,
+                    "total_documents": total_documents,
+                    "indexed_documents": indexed_documents,
+                    "skipped_oversized": skipped_oversized,
+                    "skipped_too_short": skipped_too_short,
+                    "duplicate_count": duplicate_count,
+                    "internal_duplicate_count": internal_duplicate_count,
+                    "external_duplicate_count": external_duplicate_count,
+                    "duplicate_source_count": duplicate_source_count,
+                }
+            )
+            connection.execute(
+                """
+                INSERT INTO audit_events(actor_type, action, entity_type, entity_id, details)
+                VALUES ('system', 'source.normalized_dedup_checked', 'source', %s, %s::jsonb)
+                """,
+                (source_id, result_json),
+            )
+            connection.execute(
+                """
+                UPDATE background_jobs
+                SET status = 'succeeded', result = %s::jsonb,
+                    completed_at = now(), updated_at = now()
+                WHERE id = %s AND status = 'running'
+                """,
+                (result_json, job.id),
+            )
+            if status == "unique":
+                connection.execute(
+                    """
+                    INSERT INTO background_jobs(job_type, payload, created_by)
+                    SELECT
                         'sample_documents',
                         jsonb_build_object('source_id', %s::text, 'object_sha256', %s::text),
                         created_by
@@ -607,7 +867,25 @@ class Worker:
                     """,
                     (source_id, object_sha256, source_id),
                 )
-        return status, duplicate_of
+        return status, duplicate_count, duplicate_source_count
+
+    @staticmethod
+    def _insert_document_fingerprint_batch(
+        connection: psycopg.Connection,
+        batch: list[tuple[str, str, int, str, int, str]],
+    ) -> None:
+        with connection.cursor() as cursor:
+            cursor.executemany(
+                """
+                INSERT INTO document_fingerprints(
+                    source_id, source_sha256, source_ordinal,
+                    normalized_sha256, normalized_char_count, fingerprint_version
+                )
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT DO NOTHING
+                """,
+                batch,
+            )
 
     def _complete_document_sampling(
         self,
@@ -622,7 +900,7 @@ class Worker:
         with connection.transaction():
             source = connection.execute(
                 """
-                SELECT object_sha256, duplicate_status
+                SELECT object_sha256, duplicate_status, normalized_dedup_status
                 FROM sources
                 WHERE id = %s
                 FOR UPDATE
@@ -631,8 +909,8 @@ class Worker:
             ).fetchone()
             if source is None or str(source[0]) != object_sha256:
                 raise RuntimeError("Source object changed while completing document sampling")
-            if source[1] != "unique":
-                raise RuntimeError("Only canonical unique sources can be sampled")
+            if source[1] != "unique" or source[2] != "unique":
+                raise RuntimeError("Only canonical deduplicated sources can be sampled")
 
             for sample, stored in stored_samples:
                 connection.execute(
@@ -757,7 +1035,8 @@ class Worker:
                     source.version AS current_version,
                     source.approval_status, source.rights_status AS current_rights_status,
                     source.license_evidence_ref, source.pii_status,
-                    source.duplicate_status, source.document_sampling_status,
+                    source.duplicate_status, source.normalized_dedup_status,
+                    source.document_sampling_status,
                     source.sampled_document_count, source.reviewed_document_count,
                     source.approved_document_count, source.flagged_document_count
                 FROM release_sources AS release_source
@@ -842,6 +1121,7 @@ class Worker:
             "rights_gate": {"status": "passed"},
             "pii_gate": {"status": "passed"},
             "exact_duplicate_gate": {"status": "passed"},
+            "normalized_dedup_gate": {"status": "passed"},
             "document_review_gate": {"status": "passed"},
             "decontamination": decontamination_result,
         }
@@ -888,6 +1168,7 @@ class Worker:
                         source.license_evidence_ref IS NULL OR
                         source.pii_status <> 'clear' OR
                         source.duplicate_status <> 'unique' OR
+                        source.normalized_dedup_status <> 'unique' OR
                         source.document_sampling_status <> 'sampled' OR
                         source.sampled_document_count <= 0 OR
                         source.reviewed_document_count <> source.sampled_document_count OR
@@ -999,6 +1280,7 @@ class Worker:
             and source["license_evidence_ref"]
             and source["pii_status"] == "clear"
             and source["duplicate_status"] == "unique"
+            and source["normalized_dedup_status"] == "unique"
             and source["document_sampling_status"] == "sampled"
             and int(source["sampled_document_count"]) > 0
             and int(source["reviewed_document_count"]) == int(source["sampled_document_count"])
@@ -1054,6 +1336,15 @@ class Worker:
                 UPDATE sources
                 SET document_sampling_status = 'failed'
                 WHERE id = %s AND document_sampling_status = 'not_sampled'
+                """,
+                (str(job.payload.get("source_id", "")),),
+            )
+        if next_status == "failed" and job.job_type == "index_document_fingerprints":
+            connection.execute(
+                """
+                UPDATE sources
+                SET normalized_dedup_status = 'failed'
+                WHERE id = %s AND normalized_dedup_status = 'not_checked'
                 """,
                 (str(job.payload.get("source_id", "")),),
             )

@@ -147,10 +147,10 @@ Aynı interface ileride S3 veya MinIO implementasyonuna geçirilebilir.
 ### Ağır veri işleme
 
 Python worker; immutable ingest, encoding kontrolü, satır sayımı, PII taraması,
-exact-duplicate, deterministik reservoir belge örnekleme, release freeze ve
-exact pretrain dekontaminasyonu işlerini yürütür. İlerleyen fazlarda
-DuckDB/Polars tabanlı normalizasyon, shard üretimi ve birleşik export işleri bu
-katmana eklenecektir.
+source artifact exact-duplicate, normalize edilmiş document exact-dedup,
+deterministik reservoir belge örnekleme, release freeze ve exact pretrain
+dekontaminasyonu işlerini yürütür. İlerleyen fazlarda DuckDB/Polars tabanlı
+shard üretimi ve birleşik export işleri bu katmana eklenecektir.
 
 ## Veri Yaşam Döngüsü
 
@@ -160,6 +160,7 @@ source_registered
   -> immutable SHA256 object
   -> raw_ingested
   -> scan_pii + check_exact_duplicate
+  -> index_document_fingerprints
   -> sample_documents
   -> auto_checked | quarantined
   -> human review
@@ -173,12 +174,13 @@ source_registered
 3. Worker SHA256, byte size, line count ve UTF-8 durumunu hesaplar.
 4. İçerik, SHA256 anahtarıyla immutable store'a atomik olarak alınır.
 5. PII ve exact-duplicate işleri bağımsız job olarak çalışır.
-6. Kanonik kaynak için bounded ve deterministik belge örnekleri çıkarılır.
-7. Örnek içerikleri immutable object, sürüm metadata'sı PostgreSQL kaydıdır.
-8. Tüm kapılar temizse yetkili reviewer karar verebilir.
-9. Release Builder aynı `content_purpose` içindeki onaylı kaynakları seçer,
+6. Kanonik kaynak için normalize edilmiş document fingerprint index'i çıkarılır.
+7. Document exact-dedup temizse bounded ve deterministik belge örnekleri çıkarılır.
+8. Örnek içerikleri immutable object, sürüm metadata'sı PostgreSQL kaydıdır.
+9. Tüm kapılar temizse yetkili reviewer karar verebilir.
+10. Release Builder aynı `content_purpose` içindeki onaylı kaynakları seçer,
    kaynak sürümü ve SHA256 snapshot'ını alır, kalite kapılarını yeniden çalıştırır.
-10. Freeze işi deterministik manifest üretir; manifest ve kaynak artifact'leri
+11. Freeze işi deterministik manifest üretir; manifest ve kaynak artifact'leri
     consumer ekiplerine salt-okunur indirme olarak sunulur.
 
 ## Kalite ve Güvenlik Kapıları
@@ -192,12 +194,16 @@ Bir kaynak `approved_source` olabilmek için:
 | Lisans kanıtı | `license_evidence_ref` mevcut | Kararın dayanağını izlemek |
 | PII taraması | `pii_status=clear` | Hassas verinin sessiz geçmesini önlemek |
 | Exact duplicate | `duplicate_status=unique` | Aynı artifact'in ikinci kez onaylanmasını engellemek |
+| Normalize document dedup | `normalized_dedup_status=unique` | Aynı metnin farklı whitespace/case biçimleriyle tekrar onaylanmasını engellemek |
 | Belge örnekleri | Tüm örnekler güncel sürümde onaylı | Kaynak kararını incelenmemiş içeriğe dayandırmamak |
 | İnsan kararı | Yetkili reviewer | Otomasyonun kritik kararı tek başına vermemesi |
 
-Exact-duplicate kontrolü şu anda **kaynak dosyanın byte-level SHA256** eşitliğini
-yakalar. Normalize edilmiş doküman exact-match, MinHash/SimHash near-dedup ve
-n-gram overlap sonraki fazlardadır.
+Duplicate kontrolü iki katmandır: `duplicate_status`, kaynak dosyanın byte-level
+SHA256 eşitliğini yakalar; `normalized_dedup_status`, JSONL `text`, `content`,
+`body` veya düz satır metnini NFKC + casefold + whitespace collapse ile
+normalize edip document-level SHA256 fingerprint index'i üretir. Bu kapı ham
+metni veritabanına yazmaz; yalnızca hash, ordinal ve sayaç saklar. MinHash/SimHash
+near-dedup ve n-gram overlap sonraki fazlardadır.
 
 PII taraması eşleşen ham değerleri veritabanına yazmaz; yalnızca tür bazında
 sayım ve durum saklar. Geçerli TCKN checksum, IBAN mod-97 ve ödeme kartı Luhn
@@ -428,6 +434,7 @@ sonra kanıtlanan darboğaza göre ayrıştırma yapılır.
 - [x] PostgreSQL background job queue
 - [x] TCKN/IBAN/kart/telefon/e-posta PII taraması
 - [x] Source artifact SHA256 exact-duplicate kapısı
+- [x] Normalize edilmiş document exact-dedup fingerprint kapısı
 - [x] Deterministik ve bounded belge örnekleme
 - [x] Object store tabanlı immutable belge sürümleri ve editor diyaloğu
 - [x] Belge kalite puanı, immutable review geçmişi ve tam örnek kapsama kapısı
@@ -442,7 +449,6 @@ sonra kanıtlanan darboğaza göre ayrıştırma yapılır.
 ### Sıradaki işler
 
 - [ ] Tam corpus document indeksleme ve toplu review iş akışı
-- [ ] Normalize edilmiş document exact-dedup
 - [ ] Çok boyutlu kalite skorları ve risk bazlı örneklem
 - [ ] Birleşik JSONL/TXT export ve shard üretimi
 - [ ] Near-dedup ve yaklaşık decontamination

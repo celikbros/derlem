@@ -145,10 +145,10 @@ The same interface can later be implemented for S3 or MinIO.
 ### Data processing
 
 The Python worker performs immutable ingest, encoding validation, line counts,
-PII scans, exact-duplicate checks, deterministic reservoir document sampling,
-release freeze, and exact pretrain decontamination. Future DuckDB/Polars jobs
-will add normalization, sharding, full document indexing, and consolidated
-export generation.
+PII scans, source-artifact exact-duplicate checks, normalized document exact
+dedup, deterministic reservoir document sampling, release freeze, and exact
+pretrain decontamination. Future DuckDB/Polars jobs will add sharding, full
+document indexing, and consolidated export generation.
 
 ## Data Lifecycle
 
@@ -158,6 +158,7 @@ source_registered
   -> immutable SHA256 object
   -> raw_ingested
   -> scan_pii + check_exact_duplicate
+  -> index_document_fingerprints
   -> sample_documents
   -> auto_checked | quarantined
   -> human review
@@ -171,12 +172,14 @@ source_registered
 3. The worker calculates SHA256, byte size, line count, and UTF-8 status.
 4. The object is atomically placed under its SHA256 storage key.
 5. PII and exact-duplicate checks run as independent background jobs.
-6. Bounded deterministic document samples are extracted for a canonical source.
-7. Sample content is immutable object data; version metadata stays in PostgreSQL.
-8. An authorized reviewer can decide only after all mandatory gates pass.
-9. The Release Builder selects approved sources of one purpose, snapshots each
+6. The canonical source is indexed with normalized document fingerprints.
+7. Bounded deterministic document samples are extracted only after document
+   exact-dedup is clear.
+8. Sample content is immutable object data; version metadata stays in PostgreSQL.
+9. An authorized reviewer can decide only after all mandatory gates pass.
+10. The Release Builder selects approved sources of one purpose, snapshots each
    source version and SHA256, and reruns mandatory gates.
-10. The freeze job creates a deterministic manifest and exposes the manifest
+11. The freeze job creates a deterministic manifest and exposes the manifest
     and frozen source artifacts as read-only consumer downloads.
 
 ## Quality and Safety Gates
@@ -190,12 +193,16 @@ A source can become `approved_source` only when:
 | License evidence | `license_evidence_ref` exists | Preserve the basis for the rights decision |
 | PII scan | `pii_status=clear` | Prevent sensitive data from silently passing |
 | Exact duplicate | `duplicate_status=unique` | Prevent the same artifact from being approved twice |
+| Normalized document dedup | `normalized_dedup_status=unique` | Prevent repeated text with different whitespace/case from being approved |
 | Document samples | Every sample is approved at its current version | Keep source decisions from relying on unreviewed content |
 | Human decision | Authorized reviewer | Keep critical approval outside automation alone |
 
-The current exact-duplicate gate detects **byte-identical source files using
-SHA256**. Normalized document exact-match, MinHash/SimHash near-dedup, and
-n-gram overlap are later-phase work.
+Duplicate control now has two layers: `duplicate_status` detects byte-identical
+source files using SHA256, while `normalized_dedup_status` indexes document-level
+SHA256 fingerprints after NFKC normalization, casefolding, and whitespace
+collapse. The fingerprint table stores hashes, ordinals, and counts only; it
+does not store raw text. MinHash/SimHash near-dedup and n-gram overlap are
+later-phase work.
 
 PII scans never store raw matched values; they store only category counts and
 status. Checks include valid TCKN checksum, IBAN mod-97, and Luhn-valid payment
@@ -423,6 +430,7 @@ on one machine first and split only around demonstrated bottlenecks.
 - [x] PostgreSQL background job queue
 - [x] TCKN/IBAN/card/phone/email PII scanning
 - [x] Source-artifact SHA256 exact-duplicate gate
+- [x] Normalized document exact-dedup fingerprint gate
 - [x] Deterministic bounded document sampling
 - [x] Object-store-backed immutable document versions and editor dialog
 - [x] Document quality scores, immutable review history, and full-sample gate
@@ -437,7 +445,6 @@ on one machine first and split only around demonstrated bottlenecks.
 ### Next
 
 - [ ] Full-corpus document indexing and bulk review workflow
-- [ ] Normalized document exact-dedup
 - [ ] Multidimensional quality scores and risk-based sampling
 - [ ] Consolidated JSONL/TXT exports and shard generation
 - [ ] Near-dedup and approximate decontamination

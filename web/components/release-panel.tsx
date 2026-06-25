@@ -265,6 +265,7 @@ function gateRows(release: Release) {
     ["rights_gate", "Haklar"],
     ["pii_gate", "PII"],
     ["exact_duplicate_gate", "Exact tekrar"],
+    ["normalized_dedup_gate", "Normalize dedup"],
     ["document_review_gate", "Belge incelemesi"],
     ["decontamination", "Dekontaminasyon"],
   ] as const;

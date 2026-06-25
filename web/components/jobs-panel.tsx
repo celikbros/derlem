@@ -10,6 +10,10 @@ const jobLabels: Record<string, string> = {
   ingest_local_file: "Dosya içe aktarma",
   ingest_staged_file: "Tarayıcı yüklemesi",
   scan_pii: "PII taraması",
+  check_exact_duplicate: "Dosya dedup",
+  index_document_fingerprints: "Normalize dedup",
+  sample_documents: "Belge örnekleme",
+  freeze_release: "Release freeze",
 };
 
 export function JobsPanel({ onNotice }: { onNotice: (message: string) => void }) {
@@ -78,6 +82,7 @@ function resultSummary(job: BackgroundJob) {
   if (job.status === "queued") return "Bekliyor";
   if (job.status === "running") return "İşleniyor";
   if (job.job_type === "scan_pii" && typeof job.result?.status === "string") return `PII: ${job.result.status}`;
+  if (job.job_type === "index_document_fingerprints" && typeof job.result?.status === "string") return `Dedup: ${job.result.status}`;
   return job.status === "succeeded" ? "Başarılı" : "-";
 }
 

@@ -81,11 +81,13 @@ export function SourceInspector({
       const ingestFinished = jobPayload.items.some((job) => ["ingest_local_file", "ingest_staged_file"].includes(job.job_type) && job.status === "succeeded");
       const scanFinished = jobPayload.items.some((job) => job.job_type === "scan_pii" && job.status === "succeeded");
       const duplicateCheckFinished = jobPayload.items.some((job) => job.job_type === "check_exact_duplicate" && job.status === "succeeded");
+      const normalizedDedupFinished = jobPayload.items.some((job) => job.job_type === "index_document_fingerprints" && job.status === "succeeded");
       const samplingFinished = jobPayload.items.some((job) => job.job_type === "sample_documents" && job.status === "succeeded");
       if (
         (!source.object_sha256 && ingestFinished)
         || (source.pii_status === "not_scanned" && scanFinished)
         || (source.duplicate_status === "not_checked" && duplicateCheckFinished)
+        || (source.normalized_dedup_status === "not_checked" && normalizedDedupFinished)
         || (source.document_sampling_status === "not_sampled" && samplingFinished)
       ) {
         await onRefresh();
@@ -95,7 +97,7 @@ export function SourceInspector({
     } finally {
       setLoading(false);
     }
-  }, [onNotice, onRefresh, source.document_sampling_status, source.duplicate_status, source.id, source.object_sha256, source.pii_status]);
+  }, [onNotice, onRefresh, source.document_sampling_status, source.duplicate_status, source.id, source.normalized_dedup_status, source.object_sha256, source.pii_status]);
 
   useEffect(() => { void loadActivity(); }, [loadActivity, source.version]);
   useEffect(() => {
@@ -112,6 +114,7 @@ export function SourceInspector({
     { label: "Lisans kanıtı", passed: Boolean(source.license_evidence_ref) },
     { label: "PII temiz", passed: source.pii_status === "clear" },
     { label: "Exact tekrar yok", passed: source.duplicate_status === "unique" },
+    { label: "Normalize tekrar yok", passed: source.normalized_dedup_status === "unique" },
     { label: "Belge örnekleri hazır", passed: source.document_sampling_status === "sampled" },
     {
       label: "Örnekler onaylandı",
@@ -302,6 +305,8 @@ export function SourceInspector({
         <Detail label="PII / risk" value={`${source.pii_status} / ${source.risk_level}`} />
         <Detail label="Exact tekrar" value={source.duplicate_status} />
         {source.duplicate_of_source_id && <Detail label="Kanonik kaynak" value={source.duplicate_of_source_id} mono />}
+        <Detail label="Normalize dedup" value={`${source.normalized_dedup_status} / ${source.normalized_duplicate_count}`} />
+        {source.normalized_duplicate_source_count > 0 && <Detail label="Tekrar kaynakları" value={source.normalized_duplicate_source_count.toLocaleString("tr-TR")} />}
         <Detail label="Belge örnekleme" value={`${source.document_sampling_status} / ${source.sampled_document_count}`} />
         <Detail label="Örnek inceleme" value={`${source.approved_document_count} onay · ${source.flagged_document_count} işaretli`} />
         {source.declared_sha256 && <Detail label="Beyan SHA256" value={source.declared_sha256} mono />}

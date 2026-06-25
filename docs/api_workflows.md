@@ -22,6 +22,12 @@ POST  /documents/{id}/reviews
 GET   /sources/{id}/reviews
 POST  /sources/{id}/reviews
 GET   /jobs?source_id={id}
+GET   /releases
+POST  /releases
+GET   /releases/{id}
+POST  /releases/{id}/freeze
+GET   /releases/{id}/manifest
+GET   /releases/{id}/sources/{source_id}/artifact
 ```
 
 `PATCH /sources/{id}` optimistic locking kullanir. Istekte mevcut `version`
@@ -84,9 +90,29 @@ Ret ve hassas inceleme kararlarinda gerekce zorunludur. Karar, kaynak surumu,
 reviewer, kapilarin snapshot'i ve zaman bilgisiyle saklanir. Admin disindaki
 kullanicilar kendi kaynagini inceleyemez.
 
+## Release Builder
+
+`POST /releases`, ayni `content_purpose` degerindeki `approved_source`
+kaynaklardan draft olusturur. `release_sources`, kaynak kimligi ve SHA256'nin
+yaninda source version, lisans, hak durumu, dil, alan ve lineage snapshot'i
+saklar. Draft olustuktan sonra kaynak degisirse freeze kapisi sert hata verir.
+
+`POST /releases/{id}/freeze` yalnizca admin rolune aciktir ve `freeze_release`
+isini PostgreSQL kuyruguna ekler. Worker zorunlu source, rights, PII, duplicate
+ve document-review kapilarini yeniden dogrular. Pretrain release'inde eval ve
+holdout kaynaklarinin belge metinleri `document-text-sha256-v1` exact-match
+yontemiyle karsilastirilir. Eslesme veya bounded satir limitinin asilmasi
+freeze'i bloke eder.
+
+Basarili freeze, deterministik `derlem.release-manifest.v1` JSON manifestini
+immutable store'a yazar, manifest SHA256'sini ve freeze zamanini sabitler.
+Frozen release ve release-source satirlari veritabani trigger'lariyla
+degistirilemez. Manifest ve kaynak artifact'leri consumer endpointlerinden
+salt-okunur indirilir.
+
 ## Denetim
 
 Her create, metadata update, ingest queue, ingest completion, PII scan, exact
-duplicate kontrolu, login, belge review ve kaynak review islemi `audit_events`
-tablosuna eklenir.
+duplicate kontrolu, login, belge review, kaynak review, release create, freeze
+queue, freeze ve freeze-block islemi `audit_events` tablosuna eklenir.
 Tablo update, delete ve truncate islemlerini trigger ile reddeder.

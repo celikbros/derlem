@@ -444,7 +444,11 @@ Tamamlanan calisan dilim:
 - Document editor: tam icerigi object store'dan okuma, optimistic locking ile yeni surum kaydetme
 - Document moderation: 1-5 kalite puani, surum/checksum snapshot'li immutable review ve self-review engeli
 - Review kapisi: dosya + cleared rights + lisans kaniti + clear PII + unique exact duplicate + tum belge orneklerinde guncel onay zorunlu
-- Next.js: kaynak katalogu, metadata duzenleme, inceleme ve job gorunumu
+- Release Builder: ayni content_purpose icindeki onayli kaynaklardan draft ve worker tabanli frozen release
+- Frozen kanit: kaynak surumu/SHA256 snapshot'i, deterministic manifest, manifest hash'i ve append-only audit
+- Pretrain decontamination: eval/holdout belge metinlerine karsi exact SHA256; eslesmede freeze bloke
+- Consumer teslimi: frozen manifest ve tekil kaynak artifact indirme endpointleri
+- Next.js: kaynak katalogu, metadata duzenleme, inceleme, job ve Surumler gorunumu
 
 PII taramasi eslesen ham degerleri saklamaz; yalnizca tur bazinda sayim tutar.
 Admin disindaki reviewer kendi olusturdugu kaynagi onaylayamaz.

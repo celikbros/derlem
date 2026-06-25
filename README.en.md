@@ -7,8 +7,8 @@
 [![CI](https://github.com/celikbros/derlem/actions/workflows/ci.yml/badge.svg)](https://github.com/celikbros/derlem/actions/workflows/ci.yml)
 
 Derlem registers raw sources, streams files into content-addressed immutable
-storage, runs automated quality gates, records human review, and will produce
-reproducible dataset releases for LLM and tokenizer teams.
+storage, runs automated quality gates, records human review, and produces
+reproducible frozen dataset releases for LLM and tokenizer teams.
 
 It does not train models and does not modify tokenizer code. Training teams
 consume approved, versioned Derlem exports through their own model adapters.
@@ -16,9 +16,9 @@ consume approved, versioned Derlem exports through their own model adapters.
 > **Status:** Active MVP development. The source catalog, JWT authorization,
 > streaming browser uploads, content-addressed storage, PostgreSQL job queue,
 > baseline PII scanning, SHA256 exact-duplicate gate, bounded document
-> sampling, immutable document versions, scored document moderation, and
-> append-only audit are
-> operational. The Release Builder is not complete yet.
+> sampling, immutable document versions, scored document moderation, exact
+> pretrain decontamination, frozen manifest/artifact downloads, and append-only
+> audit are operational.
 
 ## Contents
 
@@ -71,7 +71,7 @@ copied into immutable storage.
 - Detects exact source-artifact duplicates using byte-level SHA256.
 - Enforces role-based review, rejection reasons, and self-review prevention.
 - Appends every important decision to an immutable audit trail.
-- Will expose approved data as frozen releases, manifests, and exports.
+- Exposes approved data as frozen releases, SHA256 manifests, and downloadable artifacts.
 
 ### What Derlem does not do
 
@@ -145,9 +145,10 @@ The same interface can later be implemented for S3 or MinIO.
 ### Data processing
 
 The Python worker performs immutable ingest, encoding validation, line counts,
-PII scans, exact-duplicate checks, and deterministic reservoir document
-sampling. Future DuckDB/Polars jobs will add normalization, sharding, full
-document indexing, and export generation.
+PII scans, exact-duplicate checks, deterministic reservoir document sampling,
+release freeze, and exact pretrain decontamination. Future DuckDB/Polars jobs
+will add normalization, sharding, full document indexing, and consolidated
+export generation.
 
 ## Data Lifecycle
 
@@ -173,8 +174,10 @@ source_registered
 6. Bounded deterministic document samples are extracted for a canonical source.
 7. Sample content is immutable object data; version metadata stays in PostgreSQL.
 8. An authorized reviewer can decide only after all mandatory gates pass.
-9. The future Release Builder will select approved sources of one purpose and
-   produce manifests, checksums, and exports.
+9. The Release Builder selects approved sources of one purpose, snapshots each
+   source version and SHA256, and reruns mandatory gates.
+10. The freeze job creates a deterministic manifest and exposes the manifest
+    and frozen source artifacts as read-only consumer downloads.
 
 ## Quality and Safety Gates
 
@@ -197,6 +200,11 @@ n-gram overlap are later-phase work.
 PII scans never store raw matched values; they store only category counts and
 status. Checks include valid TCKN checksum, IBAN mod-97, and Luhn-valid payment
 cards.
+
+A pretrain freeze compares document text against registered `eval` and
+`holdout` sources using exact SHA256 matches. The hash index lives in a
+temporary SQLite file; any match or document beyond `MAX_DOCUMENT_BYTES`
+blocks the freeze. This gate does not claim near-duplicate or semantic coverage.
 
 ## Model-Independent Data
 
@@ -289,7 +297,7 @@ credentials. Never commit real secrets.
 | `MAX_UPLOAD_BYTES` | Per-upload limit; defaults to 50 GiB |
 | `WORKER_POLL_INTERVAL` | Worker queue polling interval |
 | `DOCUMENT_SAMPLE_SIZE` | Bounded review samples per source; defaults to 200 |
-| `MAX_DOCUMENT_BYTES` | Maximum sampleable line size; defaults to 256 KiB |
+| `MAX_DOCUMENT_BYTES` | Sampling/decontamination document limit; defaults to 256 KiB |
 | `NEXT_PUBLIC_LOCAL_LOGIN_EMAIL` | Account displayed only on the local login card |
 | `NEXT_PUBLIC_LOCAL_LOGIN_PASSWORD` | Password displayed only on the local login card |
 
@@ -350,6 +358,11 @@ See [docs/local_development.md](docs/local_development.md) for details.
 | `GET/PATCH` | `/api/v1/documents/{id}` | Read immutable content or create a version |
 | `GET/POST` | `/api/v1/documents/{id}/reviews` | Document quality score and moderation history |
 | `GET` | `/api/v1/jobs` | Background job status |
+| `GET/POST` | `/api/v1/releases` | List releases or create a draft from approved sources |
+| `GET` | `/api/v1/releases/{id}` | Release, source snapshots, and gate results |
+| `POST` | `/api/v1/releases/{id}/freeze` | Queue an admin-controlled freeze job |
+| `GET` | `/api/v1/releases/{id}/manifest` | Download a frozen manifest |
+| `GET` | `/api/v1/releases/{id}/sources/{source_id}/artifact` | Download a frozen source artifact |
 
 Lists use cursor pagination. Metadata updates require the current `version` and
 return `409 version_conflict` if another writer changed the record first.
@@ -414,6 +427,10 @@ on one machine first and split only around demonstrated bottlenecks.
 - [x] Object-store-backed immutable document versions and editor dialog
 - [x] Document quality scores, immutable review history, and full-sample gate
 - [x] Moderation, rejection reasons, and self-review prevention
+- [x] Draft/frozen Release Builder for approved sources of one purpose
+- [x] Deterministic manifest, source-version snapshot, and SHA256 snapshot
+- [x] Exact pretrain document decontamination against eval/holdout
+- [x] Frozen manifest and source-artifact downloads
 - [x] Next.js operations UI
 - [x] GitHub Actions CI
 
@@ -422,10 +439,7 @@ on one machine first and split only around demonstrated bottlenecks.
 - [ ] Full-corpus document indexing and bulk review workflow
 - [ ] Normalized document exact-dedup
 - [ ] Multidimensional quality scores and risk-based sampling
-- [ ] Dataset pools and Release Builder
-- [ ] JSONL/TXT manifest and checksum exports
-- [ ] Exact pretrain decontamination against eval/holdout data
-- [ ] Frozen release archive and consumer downloads
+- [ ] Consolidated JSONL/TXT exports and shard generation
 - [ ] Near-dedup and approximate decontamination
 - [ ] S3/MinIO storage implementation
 - [ ] Keycloak/OAuth and service accounts

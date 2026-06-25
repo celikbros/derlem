@@ -8,8 +8,8 @@
 
 Derlem; LLM ve tokenizer ekipleri için ham kaynakları kaydeden, dosyaları
 içerik adresli değişmez depoya alan, otomatik kalite kapıları çalıştıran,
-insan incelemesini izleyen ve ileride yeniden üretilebilir dataset release'leri
-hazırlayacak bir veri yönetim sistemidir.
+insan incelemesini izleyen ve yeniden üretilebilir frozen dataset release'leri
+hazırlayan bir veri yönetim sistemidir.
 
 Proje model eğitmez ve tokenizer koduna müdahale etmez. Eğitim ekipleri,
 Derlem'in onaylanmış ve sürümlenmiş çıktılarını kendi model adaptörleriyle
@@ -18,9 +18,9 @@ kullanır.
 > **Durum:** Aktif MVP geliştirmesi. Kaynak kataloğu, JWT tabanlı yetkilendirme,
 > tarayıcıdan akışlı dosya yükleme, içerik adresli saklama, PostgreSQL iş
 > kuyruğu, temel PII taraması, SHA256 exact-duplicate kapısı, bounded belge
-> örnekleme, immutable belge sürümleri, kalite puanlı belge moderasyonu ve
-> append-only audit
-> çalışmaktadır. Release Builder henüz tamamlanmamıştır.
+> örnekleme, immutable belge sürümleri, kalite puanlı belge moderasyonu,
+> exact pretrain dekontaminasyonu, frozen manifest/artifact indirme ve
+> append-only audit çalışmaktadır.
 
 ## İçindekiler
 
@@ -73,7 +73,7 @@ alınmadan onaylanmış veri sayılmaz.
 - Byte-level SHA256 ile exact source-artifact tekrarlarını yakalar.
 - Rol tabanlı insan incelemesi, ret gerekçesi ve self-review engeli uygular.
 - Her önemli değişikliği append-only audit kaydına ekler.
-- Onaylı verileri ileride frozen release, manifest ve export olarak sunar.
+- Onaylı verileri frozen release, SHA256 manifest ve indirilebilir artifact olarak sunar.
 
 ### Derlem ne yapmaz?
 
@@ -147,9 +147,10 @@ Aynı interface ileride S3 veya MinIO implementasyonuna geçirilebilir.
 ### Ağır veri işleme
 
 Python worker; immutable ingest, encoding kontrolü, satır sayımı, PII taraması,
-exact-duplicate ve deterministik reservoir belge örnekleme işlerini yürütür.
-İlerleyen fazlarda DuckDB/Polars tabanlı normalizasyon, shard üretimi ve export
-işleri bu katmana eklenecektir.
+exact-duplicate, deterministik reservoir belge örnekleme, release freeze ve
+exact pretrain dekontaminasyonu işlerini yürütür. İlerleyen fazlarda
+DuckDB/Polars tabanlı normalizasyon, shard üretimi ve birleşik export işleri bu
+katmana eklenecektir.
 
 ## Veri Yaşam Döngüsü
 
@@ -175,8 +176,10 @@ source_registered
 6. Kanonik kaynak için bounded ve deterministik belge örnekleri çıkarılır.
 7. Örnek içerikleri immutable object, sürüm metadata'sı PostgreSQL kaydıdır.
 8. Tüm kapılar temizse yetkili reviewer karar verebilir.
-9. İleride Release Builder aynı `content_purpose` içindeki onaylı kaynakları
-   seçerek manifest, checksum ve export üretecektir.
+9. Release Builder aynı `content_purpose` içindeki onaylı kaynakları seçer,
+   kaynak sürümü ve SHA256 snapshot'ını alır, kalite kapılarını yeniden çalıştırır.
+10. Freeze işi deterministik manifest üretir; manifest ve kaynak artifact'leri
+    consumer ekiplerine salt-okunur indirme olarak sunulur.
 
 ## Kalite ve Güvenlik Kapıları
 
@@ -199,6 +202,11 @@ n-gram overlap sonraki fazlardadır.
 PII taraması eşleşen ham değerleri veritabanına yazmaz; yalnızca tür bazında
 sayım ve durum saklar. Geçerli TCKN checksum, IBAN mod-97 ve ödeme kartı Luhn
 kontrolleri uygulanır.
+
+Pretrain release freeze'i, kayıtlı `eval` ve `holdout` kaynaklarındaki belge
+metinlerini SHA256 exact-match ile karşılaştırır. Hash indeksi geçici SQLite
+dosyasında tutulur; eşleşme veya `MAX_DOCUMENT_BYTES` sınırını aşan belge varsa
+freeze bloke edilir. Bu kapı near-dedup veya anlamsal benzerlik iddiası taşımaz.
 
 ## Modelden Bağımsız Veri
 
@@ -294,7 +302,7 @@ Başlıca ayarlar:
 | `MAX_UPLOAD_BYTES` | Tek upload üst sınırı; varsayılan 50 GiB |
 | `WORKER_POLL_INTERVAL` | Worker queue polling aralığı |
 | `DOCUMENT_SAMPLE_SIZE` | Kaynak başına bounded review örneği; varsayılan 200 |
-| `MAX_DOCUMENT_BYTES` | Örneklenebilir tek satır üst sınırı; varsayılan 256 KiB |
+| `MAX_DOCUMENT_BYTES` | Örnekleme/dekontaminasyon belge üst sınırı; varsayılan 256 KiB |
 | `NEXT_PUBLIC_LOCAL_LOGIN_EMAIL` | Yalnızca local login kartında gösterilecek hesap |
 | `NEXT_PUBLIC_LOCAL_LOGIN_PASSWORD` | Yalnızca local login kartında gösterilecek parola |
 
@@ -355,6 +363,11 @@ Ayrıntılı yönergeler: [docs/local_development.md](docs/local_development.md)
 | `GET/PATCH` | `/api/v1/documents/{id}` | Immutable içerik okuma veya yeni sürüm |
 | `GET/POST` | `/api/v1/documents/{id}/reviews` | Belge kalite puanı ve moderasyon geçmişi |
 | `GET` | `/api/v1/jobs` | Background job görünümü |
+| `GET/POST` | `/api/v1/releases` | Release listesi veya onaylı kaynaklardan draft oluşturma |
+| `GET` | `/api/v1/releases/{id}` | Release, kaynak snapshot'ları ve gate sonuçları |
+| `POST` | `/api/v1/releases/{id}/freeze` | Admin kontrollü freeze işini kuyruğa alma |
+| `GET` | `/api/v1/releases/{id}/manifest` | Frozen manifest indirme |
+| `GET` | `/api/v1/releases/{id}/sources/{source_id}/artifact` | Frozen kaynak artifact'i indirme |
 
 Listeleme cursor pagination kullanır. Metadata güncellemesi mevcut `version`
 değerini ister ve çakışmada `409 version_conflict` döndürür.
@@ -419,6 +432,10 @@ sonra kanıtlanan darboğaza göre ayrıştırma yapılır.
 - [x] Object store tabanlı immutable belge sürümleri ve editor diyaloğu
 - [x] Belge kalite puanı, immutable review geçmişi ve tam örnek kapsama kapısı
 - [x] Moderasyon, ret gerekçesi ve self-review engeli
+- [x] Aynı amaçtaki onaylı kaynaklardan draft/frozen Release Builder
+- [x] Deterministik manifest, kaynak sürümü ve SHA256 snapshot'ı
+- [x] Eval/holdout ile pretrain document exact decontamination
+- [x] Frozen manifest ve kaynak artifact indirme
 - [x] Next.js yönetim arayüzü
 - [x] GitHub Actions CI
 
@@ -427,10 +444,7 @@ sonra kanıtlanan darboğaza göre ayrıştırma yapılır.
 - [ ] Tam corpus document indeksleme ve toplu review iş akışı
 - [ ] Normalize edilmiş document exact-dedup
 - [ ] Çok boyutlu kalite skorları ve risk bazlı örneklem
-- [ ] Dataset havuzları ve Release Builder
-- [ ] JSONL/TXT manifest ve checksum export'u
-- [ ] Eval/holdout ile pretrain exact decontamination
-- [ ] Frozen release arşivi ve consumer download
+- [ ] Birleşik JSONL/TXT export ve shard üretimi
 - [ ] Near-dedup ve yaklaşık decontamination
 - [ ] S3/MinIO object store implementasyonu
 - [ ] Keycloak/OAuth ve servis hesapları

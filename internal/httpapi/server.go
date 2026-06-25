@@ -16,6 +16,7 @@ type Server struct {
 	pool           *pgxpool.Pool
 	sources        *repository.Sources
 	documents      *repository.Documents
+	releases       *repository.Releases
 	objectStore    storage.Store
 	tokens         *auth.TokenManager
 	logger         *slog.Logger
@@ -29,6 +30,7 @@ func NewServer(pool *pgxpool.Pool, objectStore storage.Store, tokens *auth.Token
 		pool:           pool,
 		sources:        repository.NewSources(pool),
 		documents:      repository.NewDocuments(pool),
+		releases:       repository.NewReleases(pool),
 		objectStore:    objectStore,
 		tokens:         tokens,
 		logger:         logger,
@@ -60,6 +62,12 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/documents/{id}/reviews", s.authenticate(http.HandlerFunc(s.listDocumentReviews)))
 	mux.Handle("POST /api/v1/documents/{id}/reviews", s.authenticate(requireRoles("admin", "moderator", "expert_reviewer")(http.HandlerFunc(s.reviewDocument))))
 	mux.Handle("GET /api/v1/jobs", s.authenticate(http.HandlerFunc(s.listJobs)))
+	mux.Handle("GET /api/v1/releases", s.authenticate(http.HandlerFunc(s.listReleases)))
+	mux.Handle("POST /api/v1/releases", s.authenticate(requireRoles("admin", "data_manager")(http.HandlerFunc(s.createRelease))))
+	mux.Handle("GET /api/v1/releases/{id}", s.authenticate(http.HandlerFunc(s.getRelease)))
+	mux.Handle("POST /api/v1/releases/{id}/freeze", s.authenticate(requireRoles("admin")(http.HandlerFunc(s.freezeRelease))))
+	mux.Handle("GET /api/v1/releases/{id}/manifest", s.authenticate(requireRoles("admin", "data_manager", "consumer_team")(http.HandlerFunc(s.downloadReleaseManifest))))
+	mux.Handle("GET /api/v1/releases/{id}/sources/{source_id}/artifact", s.authenticate(requireRoles("admin", "data_manager", "consumer_team")(http.HandlerFunc(s.downloadReleaseSource))))
 	return s.middleware(mux)
 }
 

@@ -81,6 +81,39 @@ export type Review = {
   created_at: string;
 };
 
+export type ReleaseSource = {
+  source_id: string;
+  source_sha256: string;
+  source_version: number;
+  source_name: string;
+  source_type: string;
+  license: string;
+  rights_status: string;
+  language: string;
+  domain: string;
+  lineage_ref: string;
+  byte_size?: number;
+  line_count?: number;
+  media_type?: string;
+  added_at: string;
+};
+
+export type Release = {
+  id: string;
+  name: string;
+  version: string;
+  content_purpose: Source["content_purpose"];
+  status: "draft" | "frozen" | "superseded";
+  manifest_object_sha256?: string;
+  manifest_sha256?: string;
+  gate_results: Record<string, unknown>;
+  created_by: string;
+  frozen_by?: string;
+  created_at: string;
+  frozen_at?: string;
+  sources: ReleaseSource[];
+};
+
 export type PIIScan = {
   id: string;
   source_id: string;

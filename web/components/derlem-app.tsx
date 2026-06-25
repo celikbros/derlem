@@ -11,6 +11,7 @@ import {
   LoaderCircle,
   LogIn,
   LogOut,
+  PackageCheck,
   Plus,
   RefreshCw,
   Search,
@@ -20,6 +21,7 @@ import {
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { JobsPanel } from "@/components/jobs-panel";
+import { ReleasePanel } from "@/components/release-panel";
 import { SourceInspector } from "@/components/source-inspector";
 import { messageFrom, requestJSON } from "@/lib/client-api";
 import type { Source, User } from "@/lib/types";
@@ -51,6 +53,8 @@ const statusLabels: Record<string, string> = {
   quarantined: "Karantina",
 };
 
+const reviewStatuses = ["license_review", "auto_checked", "sampled_for_review", "quarantined"];
+
 export function DerlemApp() {
   const [user, setUser] = useState<User | null>(null);
   const [booting, setBooting] = useState(true);
@@ -59,7 +63,7 @@ export function DerlemApp() {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Source | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [activeView, setActiveView] = useState<"sources" | "review" | "jobs">("sources");
+  const [activeView, setActiveView] = useState<"sources" | "review" | "releases" | "jobs">("sources");
   const createDialog = useRef<HTMLDialogElement>(null);
 
   const loadSources = useCallback(async () => {
@@ -93,7 +97,7 @@ export function DerlemApp() {
 
   const filteredSources = useMemo(() => {
     const viewSources = activeView === "review"
-      ? sources.filter((source) => ["license_review", "auto_checked", "quarantined"].includes(source.approval_status))
+      ? sources.filter((source) => reviewStatuses.includes(source.approval_status))
       : sources;
     const normalized = query.trim().toLocaleLowerCase("tr-TR");
     if (!normalized) return viewSources;
@@ -165,7 +169,12 @@ export function DerlemApp() {
           <button aria-label="İnceleme" aria-pressed={activeView === "review"} className={`nav-item${activeView === "review" ? " active" : ""}`} type="button" onClick={() => { setActiveView("review"); setSelected(null); }}>
             <ClipboardCheck size={18} aria-hidden="true" />
             İnceleme
-            <span>{sources.filter((source) => ["license_review", "auto_checked", "quarantined"].includes(source.approval_status)).length}</span>
+            <span>{sources.filter((source) => reviewStatuses.includes(source.approval_status)).length}</span>
+          </button>
+          <button aria-label="Sürümler" aria-pressed={activeView === "releases"} className={`nav-item${activeView === "releases" ? " active" : ""}`} type="button" onClick={() => { setActiveView("releases"); setSelected(null); }}>
+            <PackageCheck size={18} aria-hidden="true" />
+            Sürümler
+            <span>›</span>
           </button>
           <button aria-label="İşler" aria-pressed={activeView === "jobs"} className={`nav-item${activeView === "jobs" ? " active" : ""}`} type="button" onClick={() => { setActiveView("jobs"); setSelected(null); }}>
             <ListTodo size={18} aria-hidden="true" />
@@ -187,10 +196,10 @@ export function DerlemApp() {
       <main className="workspace">
         <header className="page-header">
           <div>
-            <p className="eyebrow">{activeView === "review" ? "Moderasyon" : activeView === "jobs" ? "Worker kuyruğu" : "Kaynak kataloğu"}</p>
-            <h1>{activeView === "review" ? "İnceleme kuyruğu" : activeView === "jobs" ? "Arka plan işleri" : "Veri kaynakları"}</h1>
+            <p className="eyebrow">{activeView === "review" ? "Moderasyon" : activeView === "releases" ? "Release Builder" : activeView === "jobs" ? "Worker kuyruğu" : "Kaynak kataloğu"}</p>
+            <h1>{activeView === "review" ? "İnceleme kuyruğu" : activeView === "releases" ? "Sürümler" : activeView === "jobs" ? "Arka plan işleri" : "Veri kaynakları"}</h1>
           </div>
-          {activeView !== "jobs" && (
+          {(activeView === "sources" || activeView === "review") && (
             <button className="primary-button" type="button" onClick={() => createDialog.current?.showModal()}>
               <Plus size={18} aria-hidden="true" />Yeni kaynak
             </button>
@@ -212,7 +221,7 @@ export function DerlemApp() {
           </div>
         )}
 
-        {activeView === "jobs" ? <JobsPanel onNotice={setNotice} /> : <section className={`catalog-layout${selected ? " with-inspector" : ""}`}>
+        {activeView === "jobs" ? <JobsPanel onNotice={setNotice} /> : activeView === "releases" ? <ReleasePanel sources={sources} user={user} onNotice={setNotice} /> : <section className={`catalog-layout${selected ? " with-inspector" : ""}`}>
           <div className="catalog-panel">
             <div className="table-toolbar">
               <label className="search-field">
@@ -256,7 +265,7 @@ export function DerlemApp() {
               {!loadingSources && filteredSources.length === 0 && (
                 <div className="empty-state">
                   <FilePlus2 size={24} aria-hidden="true" />
-                  <p>{sources.length === 0 ? "Henüz kaynak kaydı yok." : "Aramayla eşleşen kaynak yok."}</p>
+                  <p>{sources.length === 0 ? "Henüz kaynak kaydı yok." : activeView === "review" && !query ? "İnceleme bekleyen kaynak yok." : "Aramayla eşleşen kaynak yok."}</p>
                 </div>
               )}
             </div>

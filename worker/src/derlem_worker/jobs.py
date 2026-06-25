@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 import json
 import logging
 import os
@@ -15,6 +16,11 @@ from psycopg.rows import dict_row
 
 from derlem_worker.config import Config
 from derlem_worker.pii import PIIReport, PIIScanner
+from derlem_worker.releases import (
+    ReleaseGateError,
+    build_release_manifest,
+    exact_decontamination,
+)
 from derlem_worker.sampling import SampledDocument, SamplingReport, sample_line_documents
 from derlem_worker.storage import ContentAddressedStore, StoredObject
 
@@ -149,13 +155,26 @@ class Worker:
                     len(report.samples),
                     report.total_documents,
                 )
+            elif job.job_type == "freeze_release":
+                manifest_sha256 = self._freeze_release(job)
+                LOGGER.info(
+                    "job_succeeded job_id=%s release_id=%s manifest_sha256=%s",
+                    job.id,
+                    job.payload.get("release_id"),
+                    manifest_sha256,
+                )
             else:
                 raise ValueError(f"Unsupported job type: {job.job_type}")
         except Exception as error:  # Worker boundary: failure must be persisted.
             LOGGER.error("job_failed job_id=%s error=%s", job.id, error)
             LOGGER.debug("%s", traceback.format_exc())
             with psycopg.connect(self.config.database_url) as connection:
-                self._fail_or_retry(connection, job, error)
+                self._fail_or_retry(
+                    connection,
+                    job,
+                    error,
+                    permanent=isinstance(error, ReleaseGateError),
+                )
         return True
 
     def run_forever(self) -> None:
@@ -707,8 +726,313 @@ class Worker:
                 (result_json, job.id),
             )
 
-    def _fail_or_retry(self, connection: psycopg.Connection, job: Job, error: Exception) -> None:
-        next_status = "failed" if job.attempts >= job.max_attempts else "queued"
+    def _freeze_release(self, job: Job) -> str:
+        release_id = str(job.payload.get("release_id", "")).strip()
+        requested_by = str(job.payload.get("requested_by", "")).strip()
+        if not release_id or not requested_by:
+            raise ReleaseGateError(
+                "freeze_release requires release_id and requested_by",
+                {"freeze": {"status": "blocked", "reason": "invalid_job_payload"}},
+            )
+
+        with psycopg.connect(self.config.database_url, row_factory=dict_row) as connection:
+            release = connection.execute(
+                """
+                SELECT id::text, name, version, content_purpose, status
+                FROM releases
+                WHERE id = %s
+                """,
+                (release_id,),
+            ).fetchone()
+            source_rows = connection.execute(
+                """
+                SELECT release_source.source_id::text, release_source.source_sha256,
+                    release_source.source_version, release_source.source_name,
+                    release_source.source_type, release_source.license,
+                    release_source.rights_status, release_source.language,
+                    release_source.domain, release_source.lineage_ref,
+                    release_source.byte_size, release_source.line_count,
+                    object.media_type, object.storage_key,
+                    source.object_sha256 AS current_sha256,
+                    source.version AS current_version,
+                    source.approval_status, source.rights_status AS current_rights_status,
+                    source.license_evidence_ref, source.pii_status,
+                    source.duplicate_status, source.document_sampling_status,
+                    source.sampled_document_count, source.reviewed_document_count,
+                    source.approved_document_count, source.flagged_document_count
+                FROM release_sources AS release_source
+                JOIN sources AS source ON source.id = release_source.source_id
+                JOIN storage_objects AS object ON object.sha256 = release_source.source_sha256
+                WHERE release_source.release_id = %s
+                ORDER BY release_source.source_id
+                """,
+                (release_id,),
+            ).fetchall()
+            reference_rows = []
+            if release is not None and release["content_purpose"] == "pretrain":
+                reference_rows = connection.execute(
+                    """
+                    SELECT source.object_sha256, object.storage_key
+                    FROM sources AS source
+                    JOIN storage_objects AS object ON object.sha256 = source.object_sha256
+                    WHERE source.content_purpose IN ('eval', 'holdout')
+                      AND source.object_sha256 IS NOT NULL
+                      AND source.duplicate_status <> 'duplicate'
+                    ORDER BY source.id
+                    """
+                ).fetchall()
+
+        if release is None:
+            raise ReleaseGateError(
+                "Release was not found",
+                {"freeze": {"status": "blocked", "reason": "release_not_found"}},
+            )
+        if release["status"] != "draft":
+            raise ReleaseGateError(
+                "Only draft releases can be frozen",
+                {"freeze": {"status": "blocked", "reason": "release_not_draft"}},
+            )
+        if not source_rows:
+            raise ReleaseGateError(
+                "Release has no sources",
+                {"source_gate": {"status": "blocked", "reason": "empty_release"}},
+            )
+
+        for source in source_rows:
+            if not self._release_source_is_current(source):
+                raise ReleaseGateError(
+                    "Release source changed or is no longer eligible",
+                    {
+                        "source_gate": {
+                            "status": "blocked",
+                            "reason": "source_changed_or_ineligible",
+                            "source_id": source["source_id"],
+                        }
+                    },
+                )
+
+        release_paths = [
+            (str(source["source_sha256"]), self._stored_object_path(str(source["storage_key"])))
+            for source in source_rows
+        ]
+        if release["content_purpose"] == "pretrain":
+            reference_paths = [
+                (str(reference["object_sha256"]), self._stored_object_path(str(reference["storage_key"])))
+                for reference in reference_rows
+            ]
+            decontamination = exact_decontamination(
+                reference_paths,
+                release_paths,
+                max_document_bytes=self.config.max_document_bytes,
+            )
+            if decontamination.status != "passed":
+                raise ReleaseGateError(
+                    "Eval or holdout content was found in the pretrain release",
+                    {"decontamination": decontamination.to_dict()},
+                )
+            decontamination_result = decontamination.to_dict()
+        else:
+            decontamination_result = {
+                "status": "not_applicable",
+                "reason": "content_purpose_is_not_pretrain",
+            }
+
+        gate_results: dict[str, object] = {
+            "source_gate": {"status": "passed", "source_count": len(source_rows)},
+            "rights_gate": {"status": "passed"},
+            "pii_gate": {"status": "passed"},
+            "exact_duplicate_gate": {"status": "passed"},
+            "document_review_gate": {"status": "passed"},
+            "decontamination": decontamination_result,
+        }
+        frozen_at = datetime.now(timezone.utc)
+        frozen_at_text = frozen_at.isoformat().replace("+00:00", "Z")
+        manifest_sources = [self._manifest_source(source) for source in source_rows]
+        manifest_bytes = build_release_manifest(
+            dict(release),
+            manifest_sources,
+            gate_results,
+            frozen_at_text,
+        )
+        stored_manifest = self.store.ingest_bytes(manifest_bytes)
+
+        with psycopg.connect(self.config.database_url, row_factory=dict_row) as connection:
+            with connection.transaction():
+                locked_release = connection.execute(
+                    "SELECT status FROM releases WHERE id = %s FOR UPDATE",
+                    (release_id,),
+                ).fetchone()
+                if locked_release is None or locked_release["status"] != "draft":
+                    raise ReleaseGateError(
+                        "Release changed before freeze commit",
+                        {"freeze": {"status": "blocked", "reason": "release_changed"}},
+                    )
+                connection.execute(
+                    """
+                    SELECT source.id
+                    FROM release_sources AS release_source
+                    JOIN sources AS source ON source.id = release_source.source_id
+                    WHERE release_source.release_id = %s
+                    ORDER BY source.id
+                    FOR SHARE OF source
+                    """,
+                    (release_id,),
+                ).fetchall()
+                validity = connection.execute(
+                    """
+                    SELECT count(*) AS source_count, count(*) FILTER (WHERE
+                        source.object_sha256 IS DISTINCT FROM release_source.source_sha256 OR
+                        source.version <> release_source.source_version OR
+                        source.approval_status <> 'approved_source' OR
+                        source.rights_status <> 'cleared' OR
+                        source.license_evidence_ref IS NULL OR
+                        source.pii_status <> 'clear' OR
+                        source.duplicate_status <> 'unique' OR
+                        source.document_sampling_status <> 'sampled' OR
+                        source.sampled_document_count <= 0 OR
+                        source.reviewed_document_count <> source.sampled_document_count OR
+                        source.approved_document_count <> source.sampled_document_count OR
+                        source.flagged_document_count > 0
+                    ) AS invalid_count
+                    FROM release_sources AS release_source
+                    JOIN sources AS source ON source.id = release_source.source_id
+                    WHERE release_source.release_id = %s
+                    """,
+                    (release_id,),
+                ).fetchone()
+                if (
+                    validity is None
+                    or int(validity["source_count"]) != len(source_rows)
+                    or int(validity["invalid_count"]) > 0
+                ):
+                    raise ReleaseGateError(
+                        "Release sources changed before freeze commit",
+                        {"source_gate": {"status": "blocked", "reason": "source_changed"}},
+                    )
+
+                connection.execute(
+                    """
+                    INSERT INTO storage_objects(sha256, storage_key, byte_size, media_type)
+                    VALUES (%s, %s, %s, 'application/vnd.derlem.release-manifest+json')
+                    ON CONFLICT (sha256) DO NOTHING
+                    """,
+                    (stored_manifest.sha256, stored_manifest.storage_key, stored_manifest.byte_size),
+                )
+                updated = connection.execute(
+                    """
+                    UPDATE releases
+                    SET status = 'frozen', manifest_object_sha256 = %s,
+                        manifest_sha256 = %s, gate_results = %s::jsonb,
+                        frozen_by = %s, frozen_at = %s
+                    WHERE id = %s AND status = 'draft'
+                    """,
+                    (
+                        stored_manifest.sha256,
+                        stored_manifest.sha256,
+                        json.dumps(gate_results, ensure_ascii=False),
+                        requested_by,
+                        frozen_at,
+                        release_id,
+                    ),
+                )
+                if updated.rowcount != 1:
+                    raise ReleaseGateError(
+                        "Release changed before freeze",
+                        {"freeze": {"status": "blocked", "reason": "release_changed"}},
+                    )
+                connection.execute(
+                    """
+                    INSERT INTO audit_events(actor_type, action, entity_type, entity_id, details)
+                    VALUES (
+                        'system', 'release.frozen', 'release', %s,
+                        jsonb_build_object(
+                            'job_id', %s::text,
+                            'manifest_sha256', %s::text,
+                            'source_count', %s::integer,
+                            'gate_results', %s::jsonb
+                        )
+                    )
+                    """,
+                    (
+                        release_id,
+                        str(job.id),
+                        stored_manifest.sha256,
+                        len(source_rows),
+                        json.dumps(gate_results, ensure_ascii=False),
+                    ),
+                )
+                connection.execute(
+                    """
+                    UPDATE background_jobs
+                    SET status = 'succeeded',
+                        result = jsonb_build_object(
+                            'release_id', %s::text,
+                            'manifest_sha256', %s::text,
+                            'source_count', %s::integer,
+                            'gate_results', %s::jsonb
+                        ),
+                        completed_at = now(), updated_at = now()
+                    WHERE id = %s AND status = 'running'
+                    """,
+                    (
+                        release_id,
+                        stored_manifest.sha256,
+                        len(source_rows),
+                        json.dumps(gate_results, ensure_ascii=False),
+                        job.id,
+                    ),
+                )
+        return stored_manifest.sha256
+
+    def _stored_object_path(self, storage_key: str) -> Path:
+        path = (self.config.storage_root / storage_key).resolve(strict=True)
+        path.relative_to(self.config.storage_root)
+        return path
+
+    @staticmethod
+    def _release_source_is_current(source: dict[str, object]) -> bool:
+        return bool(
+            str(source["current_sha256"]) == str(source["source_sha256"])
+            and int(source["current_version"]) == int(source["source_version"])
+            and source["approval_status"] == "approved_source"
+            and source["current_rights_status"] == "cleared"
+            and source["license_evidence_ref"]
+            and source["pii_status"] == "clear"
+            and source["duplicate_status"] == "unique"
+            and source["document_sampling_status"] == "sampled"
+            and int(source["sampled_document_count"]) > 0
+            and int(source["reviewed_document_count"]) == int(source["sampled_document_count"])
+            and int(source["approved_document_count"]) == int(source["sampled_document_count"])
+            and int(source["flagged_document_count"]) == 0
+        )
+
+    @staticmethod
+    def _manifest_source(source: dict[str, object]) -> dict[str, object]:
+        return {
+            "source_id": str(source["source_id"]),
+            "source_sha256": str(source["source_sha256"]),
+            "source_version": int(source["source_version"]),
+            "name": str(source["source_name"]),
+            "source_type": str(source["source_type"]),
+            "license": str(source["license"]),
+            "rights_status": str(source["rights_status"]),
+            "language": str(source["language"]),
+            "domain": str(source["domain"]),
+            "lineage_ref": str(source["lineage_ref"]),
+            "byte_size": int(source["byte_size"]) if source["byte_size"] is not None else None,
+            "line_count": int(source["line_count"]) if source["line_count"] is not None else None,
+            "media_type": str(source["media_type"]) if source["media_type"] is not None else None,
+        }
+
+    def _fail_or_retry(
+        self,
+        connection: psycopg.Connection,
+        job: Job,
+        error: Exception,
+        *,
+        permanent: bool = False,
+    ) -> None:
+        next_status = "failed" if permanent or job.attempts >= job.max_attempts else "queued"
         retry_delay = min(300, 5 * (2 ** max(0, job.attempts - 1)))
         connection.execute(
             """
@@ -732,5 +1056,39 @@ class Worker:
                 WHERE id = %s AND document_sampling_status = 'not_sampled'
                 """,
                 (str(job.payload.get("source_id", "")),),
+            )
+        if next_status == "failed" and job.job_type == "freeze_release":
+            release_id = str(job.payload.get("release_id", ""))
+            gate_results = (
+                error.gate_results
+                if isinstance(error, ReleaseGateError)
+                else {"freeze": {"status": "failed", "reason": "worker_error"}}
+            )
+            connection.execute(
+                """
+                UPDATE releases
+                SET gate_results = %s::jsonb
+                WHERE id = %s AND status = 'draft'
+                """,
+                (json.dumps(gate_results, ensure_ascii=False), release_id),
+            )
+            connection.execute(
+                """
+                INSERT INTO audit_events(actor_type, action, entity_type, entity_id, details)
+                VALUES (
+                    'system', 'release.freeze_blocked', 'release', %s,
+                    jsonb_build_object(
+                        'job_id', %s::text,
+                        'error', %s::text,
+                        'gate_results', %s::jsonb
+                    )
+                )
+                """,
+                (
+                    release_id,
+                    str(job.id),
+                    str(error)[:4000],
+                    json.dumps(gate_results, ensure_ascii=False),
+                ),
             )
         connection.commit()

@@ -78,8 +78,24 @@ Tam corpus clean candidate komutu:
 .\.venv\Scripts\python.exe -m derlem_worker.clean_candidate --source-id 06ac330e-350f-45f0-b596-3dd4aa1dbc57 --output-dir .\var\derived
 ```
 
-Bu komut 13.6 GB dosyayi bastan sona okuyacagi icin uzun surebilir. Cikti
-dosyasi ve manifest `var\derived` altinda kalir; Git'e eklenmez.
+Tam corpus clean candidate uretildi:
+
+| Alan | Deger |
+|---|---|
+| Clean candidate source id | `f63352dd-fdd1-4e4b-a8d2-b167b3c856cf` |
+| Cikti dosyasi | `C:\TURKCE-VERI-ATOLYESI\var\derived\gardash_faz2_tr_dedup_20260621_06ac330e_clean_candidate.txt` |
+| Manifest | `C:\TURKCE-VERI-ATOLYESI\var\derived\gardash_faz2_tr_dedup_20260621_06ac330e_clean_candidate.txt.manifest.json` |
+| Okunan satir | `6,027,968` |
+| Yazilan satir | `5,922,891` |
+| Cikarilan PII satiri | `104,853` |
+| Cikarilan duplicate satiri | `221` |
+| Cikarilan oversized satir | `3` |
+| Cikti SHA256 | `ebe292793d87ec067076bbb86f39801e6ed5fae18761dfcfa3506c4503c0d989` |
+| Cikti boyutu | `12,850,383,067` byte |
+
+Clean candidate Derlem'e ayri kaynak olarak kaydedildi ve immutable store'a
+ingest edildi. Son bilinen gate durumu: ingest `succeeded`, exact file dedup
+`unique`; PII scan ve normalized document dedup tekrar calisiyor.
 
 ## Karar
 

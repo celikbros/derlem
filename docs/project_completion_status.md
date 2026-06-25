@@ -1,0 +1,120 @@
+# Derlem Proje Tamamlanma Durumu
+
+**Tarih:** 2026-06-26  
+**Kapsam:** Derlem veri atölyesinin mevcut gerçek durumu, kalan işler ve tamamlanma yorumu.
+
+## Kısa Cevap
+
+Derlem'in **çekirdek MVP'si tamamlandı**. Yani sistem artık yerel makinede kaynak
+kaydedebiliyor, dosyayı immutable store'a alıyor, PII/dedup kapılarını çalıştırıyor,
+örnek çıkarıyor, insan review zinciri tutuyor ve frozen release üretebiliyor.
+
+Ancak Derlem'in **gerçek büyük corpus üretim aracı** olarak tamamlanması için hâlâ
+v0.2 ve v0.3 işlerinin bitmesi gerekiyor. En pratik ifadeyle:
+
+| Hedef | Durum | Kalan |
+|---|---:|---|
+| Yerel Core MVP | %100 | Bitti |
+| Gardas temiz adayını onaylı kaynak yapmak | %70-75 | Hak/lisans kanıtı + 200 örnek review |
+| Model ekiplerine düzenli JSONL/TXT export vermek | %55-60 | Export Builder + export manifest |
+| Büyük corpus pilotu | %65-70 | Progress raporları + review/export akışı |
+| Üretim-ready v1.0 | %40-45 | v0.4-v0.6 + hukuk/KVKK + prod altyapı |
+
+Bu yüzden "proje bitti mi?" sorusunun cevabı hedefe göre değişir:
+
+- **MVP olarak:** bitti.
+- **Gardas temiz verisini onaylı release yapmak için:** az kaldı, ama insan/hak kapıları bekliyor.
+- **LLM/tokenizer ekiplerinin rahatça kullanacağı veri fabrikası için:** Export Builder ve toplu review bitmeli.
+- **Milyonlarca kullanıcı/üretim sistemi için:** daha erken aşamadayız; mimari doğru ama prod işleri bitmedi.
+
+## Veritabanındaki Güncel Durum
+
+Öne çıkan kaynak:
+
+| Alan | Değer |
+|---|---|
+| Kaynak | `gardash_faz2_tr_dedup_20260621_clean_candidate_20260625` |
+| Source ID | `f63352dd-fdd1-4e4b-a8d2-b167b3c856cf` |
+| Durum | `sampled_for_review` |
+| Doküman/satır | `5,922,891` |
+| PII | `clear` |
+| Exact dedup | `unique` |
+| Normalize dedup | `unique` |
+| Örnekleme | `sampled` |
+| Örnek sayısı | `200` |
+| İncelenen/onaylanan örnek | `0 / 200` |
+| Hak durumu | `unknown` |
+| Lisans | `unknown` |
+| Lisans kanıtı | eksik |
+
+Bu kaynak teknik temizlik açısından iyi bir noktada. Release'e girmesini engelleyen
+ana kapılar artık teknik değil:
+
+1. Hak/lisans kararı girilmeli.
+2. Lisans kanıt referansı kaydedilmeli.
+3. 200 örnek insan tarafından incelenip onaylanmalı.
+4. Sonra kaynak onayı verilmeli.
+5. Ardından release/export üretilebilir.
+
+## Şu Ana Kadar Biten Ana Parçalar
+
+- Go API, JWT auth, roller ve RBAC.
+- PostgreSQL metadata, job queue ve append-only audit.
+- Content-addressed immutable local object storage.
+- Browser upload ve local ingest.
+- PII taraması: TCKN checksum, IBAN, telefon, e-posta, kart.
+- Source artifact exact duplicate.
+- Normalize document exact dedup.
+- Bounded deterministic document sampling.
+- Belge edit/version/review akışı.
+- Kaynak approval gates.
+- Release Builder ve frozen manifest.
+- Pretrain exact decontamination.
+- Web UI: kaynak katalogu, inceleme, işler, sürümler.
+- Gardas ham seed import + triage.
+- Gardas temiz aday üretimi ve ingest.
+- Review kuyruğu önceliklendirme.
+- Corpus özet paneli.
+
+## Kalan Teknik İşler
+
+### v0.2 İçin Kalanlar
+
+- Büyük job'larda progress/result raporlarını güçlendirmek.
+- Full corpus index işlerinde okunmuş byte/satır/doküman ilerlemesini UI'a taşımak.
+- Risk bazlı örnekleme stratejisini hazırlamak.
+- Gardas temiz adayının hak/lisans ve örnek review kapılarını kapatmak.
+
+### v0.3 İçin Kalanlar
+
+- Export Builder: frozen release'ten JSONL/TXT üretmek.
+- Export manifest: release id, kaynak sha256, satır/doküman sayısı, checksum.
+- Export tekrar üretildiğinde aynı checksum'u garanti etmek.
+- Toplu belge review ekranını daha hızlı karar akışıyla genişletmek.
+
+### v1.0 İçin Kalanlar
+
+- Hukuk/KVKK/telif sürecinin resmi karara bağlanması.
+- Takedown/delete policy.
+- S3/MinIO veya production object storage.
+- Backup/restore.
+- Gözlemlenebilirlik ve rate limit.
+- Üretim kullanıcı/rol yönetimi.
+- Operasyon runbook'u.
+- Model ekipleriyle ilk resmi tüketim sözleşmesi.
+
+## Pratik Kapanış Tahmini
+
+Kod tarafında yakın hedef şudur:
+
+1. **Gardas clean candidate onayı:** hak/lisans + 200 örnek review tamamlanırsa aynı gün içinde kaynak onaylanabilir.
+2. **İlk gerçek export:** Export Builder eklenirse Derlem, model ekiplerine gerçek JSONL/TXT paket verebilir.
+3. **Pilot tamam:** v0.2 + v0.3 bittiğinde Derlem pratik veri fabrikası olur.
+
+Benim mühendislik değerlendirmem:
+
+- **Yerel güvenli veri atölyesi:** tamam.
+- **Büyük corpus pilotu:** yarıdan fazla bitti.
+- **Model ekiplerine üretilebilir veri teslimi:** bir ana parça kaldı: export.
+- **Tam üretim platformu:** ayrıca altyapı, hukuk ve operasyon gerekir.
+

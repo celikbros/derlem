@@ -11,6 +11,9 @@ adaptörleriyle kullanır.
 
 ## Neredeyiz?
 
+Güncel tamamlanma değerlendirmesi için ayrıca
+[Derlem Proje Tamamlanma Durumu](project_completion_status.md) belgesi tutulur.
+
 Şu an pratik olarak **v0.1 Core MVP** tamamlandı ve yerel makinede çalışıyor.
 Sistem artık tek dosya/tek kaynak ölçeğinde güvenli bir uçtan uca akış üretiyor:
 

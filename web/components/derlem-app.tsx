@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  AlertTriangle,
   CheckCircle2,
   ClipboardCheck,
   Database,
@@ -97,7 +98,8 @@ export function DerlemApp() {
 
   const filteredSources = useMemo(() => {
     const viewSources = activeView === "review"
-      ? sources.filter((source) => reviewStatuses.includes(source.approval_status))
+      ? [...sources.filter((source) => reviewStatuses.includes(source.approval_status))]
+        .sort((left, right) => reviewPriority(left) - reviewPriority(right) || Date.parse(right.created_at) - Date.parse(left.created_at))
       : sources;
     const normalized = query.trim().toLocaleLowerCase("tr-TR");
     if (!normalized) return viewSources;
@@ -124,6 +126,10 @@ export function DerlemApp() {
 
   const clearedCount = sources.filter((source) => source.rights_status === "cleared").length;
   const ingestedCount = sources.filter((source) => source.object_sha256).length;
+  const reviewQueueSources = sources.filter((source) => reviewStatuses.includes(source.approval_status));
+  const pendingSampleCount = sources.reduce((total, source) => total + Math.max(source.sampled_document_count - source.reviewed_document_count, 0), 0);
+  const flaggedSampleCount = sources.reduce((total, source) => total + source.flagged_document_count, 0);
+  const approvalReadyCount = sources.filter((source) => nextStepFor(source).key === "source_approval").length;
 
   async function logout() {
     await fetch("/api/session/logout", { method: "POST" });
@@ -206,10 +212,21 @@ export function DerlemApp() {
           )}
         </header>
 
-        <section className="summary-strip" aria-label="Kaynak özeti">
-          <Summary icon={<FileText />} label="Toplam" value={sources.length} />
-          <Summary icon={<ShieldCheck />} label="Hakları temiz" value={clearedCount} tone="green" />
-          <Summary icon={<CheckCircle2 />} label="Dosyası alınan" value={ingestedCount} tone="blue" />
+        <section className="summary-strip" aria-label={activeView === "review" ? "İnceleme özeti" : "Kaynak özeti"}>
+          {activeView === "review" ? (
+            <>
+              <Summary icon={<ClipboardCheck />} label="Kuyruktaki kaynak" value={reviewQueueSources.length} tone="blue" />
+              <Summary icon={<FileText />} label="Bekleyen örnek" value={pendingSampleCount} />
+              <Summary icon={<AlertTriangle />} label="İşaretli örnek" value={flaggedSampleCount} tone="red" />
+              <Summary icon={<CheckCircle2 />} label="Onaya hazır" value={approvalReadyCount} tone="green" />
+            </>
+          ) : (
+            <>
+              <Summary icon={<FileText />} label="Toplam" value={sources.length} />
+              <Summary icon={<ShieldCheck />} label="Hakları temiz" value={clearedCount} tone="green" />
+              <Summary icon={<CheckCircle2 />} label="Dosyası alınan" value={ingestedCount} tone="blue" />
+            </>
+          )}
         </section>
 
         {notice && (
@@ -391,24 +408,43 @@ function NextStep({ source }: { source: Source }) {
 }
 
 function nextStepFor(source: Source) {
-  if (!source.object_sha256) return { label: "Dosya bekliyor", tone: "neutral" };
-  if (source.rights_status !== "cleared") return { label: "Hak incelemesi", tone: "warning" };
-  if (!source.license_evidence_ref) return { label: "Lisans kanıtı", tone: "warning" };
-  if (source.pii_status !== "clear") return { label: "PII kapısı", tone: "danger" };
-  if (source.duplicate_status !== "unique") return { label: "Exact dedup", tone: "danger" };
-  if (source.normalized_dedup_status !== "unique") return { label: "Normalize dedup", tone: "danger" };
-  if (source.document_sampling_status !== "sampled") return { label: "Örnekleme", tone: "warning" };
-  if (source.flagged_document_count > 0) return { label: "İşaretli örnek", tone: "danger" };
+  if (!source.object_sha256) return { key: "file", label: "Dosya bekliyor", tone: "neutral" };
+  if (source.rights_status !== "cleared") return { key: "rights", label: "Hak incelemesi", tone: "warning" };
+  if (!source.license_evidence_ref) return { key: "license", label: "Lisans kanıtı", tone: "warning" };
+  if (source.pii_status !== "clear") return { key: "pii", label: "PII kapısı", tone: "danger" };
+  if (source.duplicate_status !== "unique") return { key: "exact_dedup", label: "Exact dedup", tone: "danger" };
+  if (source.normalized_dedup_status !== "unique") return { key: "normalized_dedup", label: "Normalize dedup", tone: "danger" };
+  if (source.document_sampling_status !== "sampled") return { key: "sampling", label: "Örnekleme", tone: "warning" };
+  if (source.flagged_document_count > 0) return { key: "flagged_sample", label: "İşaretli örnek", tone: "danger" };
   if (
     source.sampled_document_count === 0
     || source.reviewed_document_count !== source.sampled_document_count
     || source.approved_document_count !== source.sampled_document_count
   ) {
     return {
+      key: "sample_review",
       label: `Örnek ${source.approved_document_count.toLocaleString("tr-TR")}/${source.sampled_document_count.toLocaleString("tr-TR")}`,
       tone: "warning",
     };
   }
-  if (source.approval_status !== "approved_source") return { label: "Kaynak onayı", tone: "ready" };
-  return { label: "Onaylı", tone: "ready" };
+  if (source.approval_status !== "approved_source") return { key: "source_approval", label: "Kaynak onayı", tone: "ready" };
+  return { key: "approved", label: "Onaylı", tone: "ready" };
+}
+
+function reviewPriority(source: Source) {
+  const step = nextStepFor(source);
+  const priorities: Record<string, number> = {
+    sample_review: 0,
+    source_approval: 1,
+    flagged_sample: 2,
+    rights: 3,
+    license: 3,
+    pii: 4,
+    exact_dedup: 4,
+    normalized_dedup: 4,
+    sampling: 5,
+    file: 6,
+    approved: 7,
+  };
+  return priorities[step.key] ?? 8;
 }

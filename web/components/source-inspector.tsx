@@ -3,6 +3,7 @@
 import {
   Check,
   CheckCircle2,
+  ClipboardCheck,
   Edit3,
   FileText,
   History,
@@ -57,6 +58,7 @@ export function SourceInspector({
   const [scans, setScans] = useState<PIIScan[]>([]);
   const [jobs, setJobs] = useState<BackgroundJob[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
+  const [documentStatusFilter, setDocumentStatusFilter] = useState<"pending" | "approved" | "flagged" | "all">("pending");
   const [activeDocument, setActiveDocument] = useState<Document | null>(null);
   const [documentReviews, setDocumentReviews] = useState<DocumentReview[]>([]);
   const [documentContent, setDocumentContent] = useState("");
@@ -126,6 +128,19 @@ export function SourceInspector({
   ];
   const approvalReady = gateChecks.every((gate) => gate.passed) && source.approval_status !== "approved_source";
   const latestScan = scans[0];
+  const pendingDocuments = documents.filter((document) => document.status === "sampled" || document.status === "edited");
+  const approvedDocuments = documents.filter((document) => document.status === "approved");
+  const flaggedDocuments = documents.filter((document) => document.status === "rejected" || document.status === "sensitive_review");
+  const filteredDocuments = documentStatusFilter === "pending"
+    ? pendingDocuments
+    : documentStatusFilter === "approved"
+      ? approvedDocuments
+      : documentStatusFilter === "flagged"
+        ? flaggedDocuments
+        : documents;
+  const reviewedCount = source.reviewed_document_count;
+  const sampleCount = source.sampled_document_count;
+  const reviewPercent = sampleCount > 0 ? Math.round((reviewedCount / sampleCount) * 100) : 0;
 
   async function updateSource(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -190,6 +205,15 @@ export function SourceInspector({
     }
   }
 
+  async function openNextPendingDocument() {
+    const nextDocument = pendingDocuments[0];
+    if (!nextDocument) {
+      onNotice("İncelenecek bekleyen örnek kalmadı.");
+      return;
+    }
+    await openDocument(nextDocument);
+  }
+
   async function updateDocument(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!activeDocument) return;
@@ -248,11 +272,21 @@ export function SourceInspector({
         },
       );
       setActiveDocument(payload.document);
-      setDocuments((current) => current.map((document) => document.id === payload.document.id ? payload.document : document));
+      const updatedDocuments = documents.map((document) => document.id === payload.document.id ? payload.document : document);
+      setDocuments(updatedDocuments);
       setDocumentReviews((current) => [payload.review, ...current]);
       onChanged(payload.source);
       form.reset();
-      onNotice("Belge inceleme kararı kaydedildi.");
+      const nextPending = updatedDocuments.find((document) =>
+        document.id !== payload.document.id && (document.status === "sampled" || document.status === "edited")
+      );
+      if (nextPending) {
+        onNotice("Belge inceleme kararı kaydedildi. Sıradaki örnek açılıyor.");
+        await openDocument(nextPending);
+      } else {
+        documentDialog.current?.close();
+        onNotice("Belge inceleme kararı kaydedildi. Bekleyen örnek kalmadı.");
+      }
     } catch (error) {
       onNotice(messageFrom(error));
     }
@@ -349,18 +383,44 @@ export function SourceInspector({
       </section>
 
       <section className="inspector-section">
-        <h3><FileText size={16} /> Belge örnekleri</h3>
+        <div className="section-heading">
+          <h3><FileText size={16} /> Belge örnekleri</h3>
+          <button className="icon-button compact" type="button" title="Sıradaki bekleyen örneği aç" onClick={() => void openNextPendingDocument()}>
+            <ClipboardCheck size={15} />
+          </button>
+        </div>
+        <div className="document-progress">
+          <div>
+            <strong>{reviewedCount.toLocaleString("tr-TR")} / {sampleCount.toLocaleString("tr-TR")}</strong>
+            <span>İncelenen örnek</span>
+          </div>
+          <div>
+            <strong>{source.approved_document_count.toLocaleString("tr-TR")}</strong>
+            <span>Onaylı</span>
+          </div>
+          <div>
+            <strong>{source.flagged_document_count.toLocaleString("tr-TR")}</strong>
+            <span>İşaretli</span>
+          </div>
+          <progress max={sampleCount || 1} value={reviewedCount} aria-label={`Örnek inceleme ilerlemesi yüzde ${reviewPercent}`} />
+        </div>
+        <div className="document-filter-tabs" role="tablist" aria-label="Belge örneği filtresi">
+          <button type="button" aria-pressed={documentStatusFilter === "pending"} onClick={() => setDocumentStatusFilter("pending")}>Bekleyen {pendingDocuments.length}</button>
+          <button type="button" aria-pressed={documentStatusFilter === "approved"} onClick={() => setDocumentStatusFilter("approved")}>Onaylı {approvedDocuments.length}</button>
+          <button type="button" aria-pressed={documentStatusFilter === "flagged"} onClick={() => setDocumentStatusFilter("flagged")}>İşaretli {flaggedDocuments.length}</button>
+          <button type="button" aria-pressed={documentStatusFilter === "all"} onClick={() => setDocumentStatusFilter("all")}>Tümü {documents.length}</button>
+        </div>
         <div className="document-list">
-          {documents.map((document) => (
-            <button key={document.id} type="button" onClick={() => void openDocument(document)}>
+          {filteredDocuments.map((document) => (
+            <button key={document.id} className={`document-card ${document.status}`} type="button" onClick={() => void openDocument(document)}>
               <span>#{document.source_ordinal}</span>
               <strong>{document.text_preview}</strong>
-              <small>{document.status} · v{document.current_version} · {document.char_count.toLocaleString("tr-TR")} karakter</small>
+              <small><b>{documentStatusLabel(document.status)}</b> · v{document.current_version} · {document.char_count.toLocaleString("tr-TR")} karakter</small>
             </button>
           ))}
-          {!loading && documents.length === 0 && (
+          {!loading && filteredDocuments.length === 0 && (
             <p className="muted-copy">
-              {source.document_sampling_status === "failed" ? "Belge örnekleme işi başarısız." : "Henüz belge örneği oluşturulmadı."}
+              {source.document_sampling_status === "failed" ? "Belge örnekleme işi başarısız." : documents.length === 0 ? "Henüz belge örneği oluşturulmadı." : "Bu filtrede örnek yok."}
             </p>
           )}
         </div>
@@ -472,6 +532,17 @@ function findingSummary(scan: PIIScan) {
   const findings = Object.entries(scan.findings).filter(([, count]) => count > 0);
   if (findings.length === 0) return "Bulgu yok";
   return findings.map(([type, count]) => `${findingLabels[type] ?? type}: ${count}`).join(" · ");
+}
+
+function documentStatusLabel(status: Document["status"]) {
+  const labels: Record<Document["status"], string> = {
+    sampled: "Bekliyor",
+    edited: "Düzenlendi",
+    approved: "Onaylandı",
+    rejected: "Reddedildi",
+    sensitive_review: "Hassas",
+  };
+  return labels[status];
 }
 
 function formatDate(value: string) {

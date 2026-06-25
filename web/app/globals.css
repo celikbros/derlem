@@ -1081,6 +1081,79 @@ textarea:focus {
   border-top: 1px solid var(--line);
 }
 
+.document-progress {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.document-progress > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #ffffff;
+}
+
+.document-progress strong {
+  font-size: 13px;
+}
+
+.document-progress span {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.document-progress progress {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  background: #e5ebe8;
+}
+
+.document-progress progress::-webkit-progress-bar {
+  background: #e5ebe8;
+}
+
+.document-progress progress::-webkit-progress-value {
+  background: var(--green);
+}
+
+.document-progress progress::-moz-progress-bar {
+  background: var(--green);
+}
+
+.document-filter-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.document-filter-tabs button {
+  min-width: 0;
+  min-height: 30px;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #ffffff;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.document-filter-tabs button[aria-pressed="true"] {
+  border-color: #9bcbb8;
+  background: #e8f5ef;
+  color: var(--green-dark);
+}
+
 .document-list > button {
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr);
@@ -1094,6 +1167,19 @@ textarea:focus {
   color: var(--ink);
   text-align: left;
   cursor: pointer;
+}
+
+.document-list > button.approved {
+  border-left: 3px solid var(--green);
+}
+
+.document-list > button.rejected,
+.document-list > button.sensitive_review {
+  border-left: 3px solid var(--red);
+}
+
+.document-list > button.edited {
+  border-left: 3px solid var(--blue);
 }
 
 .document-list > button:hover {
@@ -1119,6 +1205,10 @@ textarea:focus {
 .document-list > button > small {
   color: var(--muted);
   font-size: 10px;
+}
+
+.document-list > button > small b {
+  color: #42514c;
 }
 
 .document-list > .muted-copy {

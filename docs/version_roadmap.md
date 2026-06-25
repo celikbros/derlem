@@ -46,7 +46,7 @@ akışları kurmak, export/shard üretmek, kalite skorlarını derinleştirmek v
 | Sürüm | Durum | Ana hedef | Çıktı |
 |---|---|---|---|
 | v0.1 | Tamamlandı | Güvenli çekirdek veri atölyesi | Kaynak -> kalite kapıları -> review -> frozen release |
-| v0.2 | Sıradaki | Büyük corpus ingest ve tam document indeks | Gardas/Faz 2 seed'i gerçek operasyon kaynağı olur |
+| v0.2 | Aktif | Büyük corpus ingest ve tam document indeks | Gardas/Faz 2 seed'i gerçek operasyon kaynağı olur |
 | v0.3 | Planlandı | Toplu review, kalite skorları, export/shard | Eğitim ekiplerine kanonik JSONL/TXT paketleri |
 | v0.4 | Planlandı | Gelişmiş dedup/decontam ve veri karışımı | MinHash/SimHash, mixture raporu, risk bazlı örneklem |
 | v0.5 | Planlandı | Katkı, ajan ve servis hesabı pilotu | Açık/kapalı katkı kuyruğu ve ajan audit modeli |
@@ -84,16 +84,23 @@ Kapanış kriteri:
 
 ## v0.2 - Büyük Corpus Ingest ve Tam Document İndeks
 
-**Durum:** Sıradaki aktif hedef.
+**Durum:** Aktif.
 
 Amaç, Derlem'i örnek kaynak akışından büyük corpus operasyonuna taşımak. İlk büyük
 hedef Gardas/Faz 2 verisinin immutable store'a kontrollü alınması ve tam corpus
 document indeksinin çıkarılmasıdır.
 
+Güncel operasyon notu:
+
+- Gardas/Faz 2 seed import kaydı: [Gardas Seed Import](gardash_seed_import.md).
+- Seed dosyası immutable local object store'a kopyalandı ve SHA256 doğrulandı.
+- Exact file dedup kapısı `unique` sonucu verdi.
+- PII scan ve tam normalized document fingerprint indeksleme işleri arka planda çalışıyor.
+
 Yapılacaklar:
 
 - Gardas/Faz 2 seed manifestini güncelle: path, sha256, byte size, line count, doküman sayısı.
-- Seed dosyasını sadece path ile değil, immutable object store'a kopyalayarak kanonikleştir.
+- Seed dosyasını sadece path ile değil, immutable object store'a kopyalayarak kanonikleştir. **Tamamlandı.**
 - Büyük dosya ingest için resume edilebilir job raporu ekle.
 - Tam corpus document fingerprint indeksini source bazında çıkar.
 - Index job'larında ilerleme metrikleri ekle: okunan byte, satır, indexed document, skipped oversized.

@@ -59,6 +59,8 @@ The first seed is the existing Turkish corpus under `C:\CELIK-GARDASH`. This
 local path is provenance only; a source is not approved until its file is
 copied into immutable storage.
 
+For the current Gardas/Faz 2 seed import record, see [Gardas Seed Import](docs/gardash_seed_import.md).
+
 ## Scope
 
 ### What Derlem does

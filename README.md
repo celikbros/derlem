@@ -61,6 +61,8 @@ Derlem şu sorunları çözmek için tasarlanır:
 yerel yol yalnızca lineage bilgisidir; bir kaynak, dosyası değişmez depoya
 alınmadan onaylanmış veri sayılmaz.
 
+Güncel Gardas/Faz 2 seed import kaydı için bkz. [Gardas Seed Import](docs/gardash_seed_import.md).
+
 ## Kapsam
 
 ### Derlem ne yapar?

@@ -51,6 +51,18 @@ def classify_exact_duplicate(source_id: str, canonical_source_id: str) -> tuple[
     return "duplicate", canonical_source_id
 
 
+def lineage_excluded_source_id(source_metadata: object) -> str | None:
+    if not isinstance(source_metadata, dict):
+        return None
+    candidate = str(source_metadata.get("derived_from_source_id") or "").strip()
+    if not candidate:
+        return None
+    try:
+        return str(UUID(candidate))
+    except ValueError:
+        return None
+
+
 class Worker:
     def __init__(self, config: Config, worker_id: str | None = None) -> None:
         self.config = config
@@ -675,7 +687,7 @@ class Worker:
         with connection.transaction():
             source = connection.execute(
                 """
-                SELECT source.object_sha256, source.duplicate_status, object.storage_key
+                SELECT source.object_sha256, source.duplicate_status, object.storage_key, source.source_metadata
                 FROM sources AS source
                 JOIN storage_objects AS object ON object.sha256 = source.object_sha256
                 WHERE source.id = %s
@@ -690,6 +702,7 @@ class Worker:
                 raise RuntimeError("Source object changed before document fingerprinting")
             if source[1] != "unique":
                 raise RuntimeError("Only canonical unique sources can be fingerprinted")
+            excluded_source_id = lineage_excluded_source_id(source[3])
 
             connection.execute(
                 """
@@ -770,6 +783,7 @@ class Worker:
                       ON other.fingerprint_version = %s
                      AND other.normalized_sha256 = current_fingerprints.normalized_sha256
                      AND other.source_id <> %s
+                     AND (%s::uuid IS NULL OR other.source_id <> %s::uuid)
                 )
                 SELECT
                     internal_duplicates.duplicate_count,
@@ -777,7 +791,15 @@ class Worker:
                     external_duplicates.duplicate_source_count
                 FROM internal_duplicates, external_duplicates
                 """,
-                (source_id, object_sha256, FINGERPRINT_VERSION, FINGERPRINT_VERSION, source_id),
+                (
+                    source_id,
+                    object_sha256,
+                    FINGERPRINT_VERSION,
+                    FINGERPRINT_VERSION,
+                    source_id,
+                    excluded_source_id,
+                    excluded_source_id,
+                ),
             ).fetchone()
             internal_duplicate_count = int(duplicate_counts[0] or 0)
             external_duplicate_count = int(duplicate_counts[1] or 0)
@@ -835,6 +857,7 @@ class Worker:
                     "internal_duplicate_count": internal_duplicate_count,
                     "external_duplicate_count": external_duplicate_count,
                     "duplicate_source_count": duplicate_source_count,
+                    "lineage_excluded_source_id": excluded_source_id,
                 }
             )
             connection.execute(

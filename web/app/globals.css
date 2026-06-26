@@ -1562,57 +1562,63 @@ textarea:focus {
   text-transform: uppercase;
 }
 
-.local-account-grid {
+.local-account-list {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
-  padding: 0 10px 10px;
+  gap: 7px;
+  max-height: 280px;
+  padding: 0 10px;
+  overflow: auto;
 }
 
-.local-account-grid button {
+.local-account-card {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  gap: 3px 9px;
+  align-items: center;
+  width: 100%;
   min-width: 0;
-  min-height: 28px;
-  padding: 0 7px;
+  min-height: 48px;
+  padding: 8px 9px;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: #ffffff;
-  color: #43524d;
-  font-size: 11px;
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: var(--ink);
+  text-align: left;
 }
 
-.local-account-grid button[aria-pressed="true"] {
+.local-account-card[aria-pressed="true"] {
   border-color: #9bcbb8;
   background: #e8f5ef;
   color: var(--green-dark);
 }
 
-.local-credentials dl {
-  display: grid;
-  gap: 7px;
-  margin: 0;
-  padding: 0 10px;
-}
-
-.local-credentials dl > div {
-  display: grid;
-  grid-template-columns: 58px minmax(0, 1fr);
-  gap: 8px;
-}
-
-.local-credentials dt {
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.local-credentials dd {
+.local-account-card strong {
+  grid-row: span 2;
   min-width: 0;
   margin: 0;
+  overflow: hidden;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.local-account-card span,
+.local-account-card code {
+  min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.local-account-card span {
+  margin: 0;
   font: 12px/1.45 var(--mono);
+}
+
+.local-account-card code {
+  color: #5d6c66;
+  font: 11px/1.35 var(--mono);
 }
 
 .login-panel form {

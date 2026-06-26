@@ -380,22 +380,21 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
         {accounts.length > 0 && (
           <div className="local-credentials" aria-label="Yerel giriş bilgileri">
             <span>Yerel test hesapları</span>
-            <div className="local-account-grid">
+            <div className="local-account-list">
               {accounts.map((account) => (
                 <button
                   key={account.email}
+                  className="local-account-card"
                   type="button"
                   aria-pressed={email === account.email}
                   onClick={() => { setEmail(account.email); setPassword(account.password); setError(null); }}
                 >
-                  {account.label}
+                  <strong>{account.label}</strong>
+                  <span>{account.email}</span>
+                  <code>{account.password}</code>
                 </button>
               ))}
             </div>
-            <dl>
-              <div><dt>E-posta</dt><dd>{email}</dd></div>
-              <div><dt>Parola</dt><dd>{password}</dd></div>
-            </dl>
           </div>
         )}
         <form onSubmit={submit}>

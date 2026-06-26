@@ -37,7 +37,7 @@ Local rol test hesapları:
 ## Tarayıcıdan Test Sırası
 
 1. Sol alttan çıkış yap.
-2. Yukarıdaki e-posta/parola ile yeniden giriş yap.
+2. Login ekranındaki yerel test hesabı butonlarından birini seç veya yukarıdaki e-posta/parola ile yeniden giriş yap.
 3. Sol altta görünen e-posta ve rol bilgisinin doğru olduğunu kontrol et.
 4. `Kaynaklar`, `İnceleme`, `Sürümler`, `İşler` ekranlarını dolaş.
 5. Rolüne göre beklenen butonların görünüp görünmediğini kontrol et.
@@ -49,4 +49,3 @@ Local rol test hesapları:
 $body = @{ email = "manager@derlem.local"; password = "DerlemTest123!" } | ConvertTo-Json
 Invoke-RestMethod -Method Post -Uri "http://localhost:8080/api/v1/auth/login" -ContentType "application/json" -Body $body
 ```
-

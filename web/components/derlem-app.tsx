@@ -346,17 +346,23 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
   const [submitting, setSubmitting] = useState(false);
   const localEmail = process.env.NEXT_PUBLIC_LOCAL_LOGIN_EMAIL?.trim();
   const localPassword = process.env.NEXT_PUBLIC_LOCAL_LOGIN_PASSWORD;
+  const localAccounts = parseLocalAccounts(process.env.NEXT_PUBLIC_LOCAL_TEST_ACCOUNTS);
+  const fallbackAccounts = localEmail && localPassword
+    ? [{ label: "admin", email: localEmail, password: localPassword }]
+    : [];
+  const accounts = localAccounts.length > 0 ? localAccounts : fallbackAccounts;
+  const [email, setEmail] = useState(accounts[0]?.email ?? "");
+  const [password, setPassword] = useState(accounts[0]?.password ?? "");
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
-    const data = new FormData(event.currentTarget);
     try {
       const payload = await requestJSON<{ user: User }>("/api/session/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: data.get("email"), password: data.get("password") }),
+        body: JSON.stringify({ email, password }),
       });
       onLogin(payload.user);
     } catch (requestError) {
@@ -371,18 +377,30 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
       <section className="login-panel">
         <div className="login-brand"><Database size={28} aria-hidden="true" /><span>Derlem</span></div>
         <h1>Veri atölyesine giriş</h1>
-        {localEmail && localPassword && (
+        {accounts.length > 0 && (
           <div className="local-credentials" aria-label="Yerel giriş bilgileri">
-            <span>Yerel hesap</span>
+            <span>Yerel test hesapları</span>
+            <div className="local-account-grid">
+              {accounts.map((account) => (
+                <button
+                  key={account.email}
+                  type="button"
+                  aria-pressed={email === account.email}
+                  onClick={() => { setEmail(account.email); setPassword(account.password); setError(null); }}
+                >
+                  {account.label}
+                </button>
+              ))}
+            </div>
             <dl>
-              <div><dt>E-posta</dt><dd>{localEmail}</dd></div>
-              <div><dt>Parola</dt><dd>{localPassword}</dd></div>
+              <div><dt>E-posta</dt><dd>{email}</dd></div>
+              <div><dt>Parola</dt><dd>{password}</dd></div>
             </dl>
           </div>
         )}
         <form onSubmit={submit}>
-          <label>E-posta<input name="email" type="email" autoComplete="username" defaultValue={localEmail} required autoFocus /></label>
-          <label>Parola<input name="password" type="password" autoComplete="current-password" defaultValue={localPassword} required /></label>
+          <label>E-posta<input name="email" type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} required autoFocus /></label>
+          <label>Parola<input name="password" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>
           {error && <p className="form-error" role="alert">{error}</p>}
           <button className="primary-button login-button" type="submit" disabled={submitting}>
             {submitting ? <LoaderCircle className="spin" size={18} /> : <LogIn size={18} />}
@@ -392,6 +410,18 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
       </section>
     </main>
   );
+}
+
+function parseLocalAccounts(value: string | undefined) {
+  return (value ?? "")
+    .split(";")
+    .map((record) => record.trim())
+    .filter(Boolean)
+    .map((record) => {
+      const [label = "", email = "", password = ""] = record.split("|").map((part) => part.trim());
+      return { label, email, password };
+    })
+    .filter((account) => account.label && account.email && account.password);
 }
 
 function Summary({ icon, label, value, tone = "neutral" }: { icon: React.ReactElement; label: string; value: number; tone?: string }) {

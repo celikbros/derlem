@@ -465,7 +465,9 @@ ve Tam Document İndeks sıradaki aktif hedef.**
 
 - [MVP planı](docs/web_data_atolyesi_mvp_plan.md)
 - [Versiyon yol haritası](docs/version_roadmap.md)
+- [Proje tamamlanma durumu](docs/project_completion_status.md)
 - [Yerel geliştirme](docs/local_development.md)
+- [Production deployment](docs/production_deployment.md)
 - [API ve iş akışları](docs/api_workflows.md)
 - [Pretraining data factory](docs/pretraining_data_factory.md)
 - [Model prompt format soyutlaması](docs/model_prompt_format_abstraction.md)

@@ -461,7 +461,9 @@ Document Index is the next active target.**
 
 - [MVP plan](docs/web_data_atolyesi_mvp_plan.md)
 - [Version roadmap](docs/version_roadmap.md)
+- [Project completion status](docs/project_completion_status.md)
 - [Local development](docs/local_development.md)
+- [Production deployment](docs/production_deployment.md)
 - [API and workflows](docs/api_workflows.md)
 - [Pretraining data factory](docs/pretraining_data_factory.md)
 - [Model prompt format abstraction](docs/model_prompt_format_abstraction.md)

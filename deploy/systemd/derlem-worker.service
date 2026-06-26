@@ -1,0 +1,21 @@
+[Unit]
+Description=Derlem Python worker
+After=network.target postgresql.service derlem-api.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=derlem
+Group=derlem
+WorkingDirectory=/opt/derlem/current
+EnvironmentFile=/etc/derlem/derlem.env
+ExecStart=/opt/derlem/current/.venv/bin/python -m derlem_worker
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ReadWritePaths=/var/lib/derlem
+
+[Install]
+WantedBy=multi-user.target

@@ -13,6 +13,8 @@ adaptörleriyle kullanır.
 
 Güncel tamamlanma değerlendirmesi için ayrıca
 [Derlem Proje Tamamlanma Durumu](project_completion_status.md) belgesi tutulur.
+Canlı sunucu kurulumu için [Production Deployment](production_deployment.md)
+runbook'u kullanılacaktır.
 
 Şu an pratik olarak **v0.1 Core MVP** tamamlandı ve yerel makinede çalışıyor.
 Sistem artık tek dosya/tek kaynak ölçeğinde güvenli bir uçtan uca akış üretiyor:

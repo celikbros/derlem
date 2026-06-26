@@ -1,0 +1,21 @@
+[Unit]
+Description=Derlem Next.js web
+After=network.target derlem-api.service
+Wants=derlem-api.service
+
+[Service]
+Type=simple
+User=derlem
+Group=derlem
+WorkingDirectory=/opt/derlem/current/web
+EnvironmentFile=/etc/derlem/derlem.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/npm run start -- -H 127.0.0.1 -p 3000
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

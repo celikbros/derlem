@@ -111,6 +111,8 @@ export function SourceInspector({
 
   const canReview = user.roles.some((role) => ["admin", "moderator", "expert_reviewer"].includes(role));
   const canEditDocument = user.roles.some((role) => ["admin", "editor"].includes(role));
+  const canManageSource = user.roles.some((role) => ["admin", "data_manager", "editor"].includes(role));
+  const canIngestSource = user.roles.some((role) => ["admin", "data_manager"].includes(role));
   const gateChecks = [
     { label: "Dosya alındı", passed: Boolean(source.object_sha256) },
     { label: "Haklar temiz", passed: source.rights_status === "cleared" },
@@ -338,7 +340,7 @@ export function SourceInspector({
       <div className="inspector-header">
         <div><span>Kaynak ayrıntısı</span><h2>{source.name}</h2></div>
         <div className="header-actions">
-          <button className="icon-button" type="button" title="Metadata düzenle" onClick={() => editDialog.current?.showModal()}><Edit3 size={17} /></button>
+          {canManageSource && <button className="icon-button" type="button" title="Metadata düzenle" onClick={() => editDialog.current?.showModal()}><Edit3 size={17} /></button>}
           <button className="icon-button" type="button" title="Ayrıntıyı kapat" onClick={onClose}><X size={18} /></button>
         </div>
       </div>
@@ -384,7 +386,7 @@ export function SourceInspector({
         )}
       </section>
 
-      {!source.object_sha256 && (
+      {canIngestSource && !source.object_sha256 && (
         <section className="inspector-section">
           <h3><Upload size={16} /> Dosya</h3>
           <form className="ingest-form" onSubmit={uploadFile}>
@@ -400,9 +402,11 @@ export function SourceInspector({
       <section className="inspector-section">
         <div className="section-heading">
           <h3><Scale size={16} /> Hak ve lisans</h3>
-          <button className="icon-button compact" type="button" title="Hak bilgisini düzenle" onClick={() => editDialog.current?.showModal()}>
-            <Edit3 size={15} />
-          </button>
+          {canManageSource && (
+            <button className="icon-button compact" type="button" title="Hak bilgisini düzenle" onClick={() => editDialog.current?.showModal()}>
+              <Edit3 size={15} />
+            </button>
+          )}
         </div>
         <div className={`rights-evidence-card ${rightsTone}`}>
           <div>

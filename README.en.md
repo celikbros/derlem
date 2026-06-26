@@ -463,6 +463,7 @@ Document Index is the next active target.**
 - [Version roadmap](docs/version_roadmap.md)
 - [Project completion status](docs/project_completion_status.md)
 - [Local development](docs/local_development.md)
+- [Local role test users](docs/local_role_testing.md)
 - [Production deployment](docs/production_deployment.md)
 - [API and workflows](docs/api_workflows.md)
 - [Pretraining data factory](docs/pretraining_data_factory.md)

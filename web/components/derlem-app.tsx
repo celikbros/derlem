@@ -130,6 +130,7 @@ export function DerlemApp() {
   const pendingSampleCount = sources.reduce((total, source) => total + Math.max(source.sampled_document_count - source.reviewed_document_count, 0), 0);
   const flaggedSampleCount = sources.reduce((total, source) => total + source.flagged_document_count, 0);
   const approvalReadyCount = sources.filter((source) => nextStepFor(source).key === "source_approval").length;
+  const canCreateSource = user.roles.some((role) => ["admin", "data_manager"].includes(role));
 
   async function logout() {
     await fetch("/api/session/logout", { method: "POST" });
@@ -205,7 +206,7 @@ export function DerlemApp() {
             <p className="eyebrow">{activeView === "review" ? "Moderasyon" : activeView === "releases" ? "Release Builder" : activeView === "jobs" ? "Worker kuyruğu" : "Kaynak kataloğu"}</p>
             <h1>{activeView === "review" ? "İnceleme kuyruğu" : activeView === "releases" ? "Sürümler" : activeView === "jobs" ? "Arka plan işleri" : "Veri kaynakları"}</h1>
           </div>
-          {(activeView === "sources" || activeView === "review") && (
+          {canCreateSource && (activeView === "sources" || activeView === "review") && (
             <button className="primary-button" type="button" onClick={() => createDialog.current?.showModal()}>
               <Plus size={18} aria-hidden="true" />Yeni kaynak
             </button>

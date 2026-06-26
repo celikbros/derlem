@@ -1,0 +1,52 @@
+# Local Rol Test Kullanıcıları
+
+Bu belge yalnızca local geliştirme/test ortamı içindir. Production ortamında bu
+hesaplar ve ortak parola kullanılmamalıdır.
+
+## Hazır Local Hesaplar
+
+Admin bootstrap hesabı:
+
+| Rol | E-posta | Parola |
+|---|---|---|
+| admin | `admin@derlem.local` | `xRPCEKSW8WplQNuxKXy1` |
+
+Local rol test hesapları:
+
+| Rol | E-posta | Parola |
+|---|---|---|
+| data_manager | `manager@derlem.local` | `DerlemTest123!` |
+| editor | `editor@derlem.local` | `DerlemTest123!` |
+| moderator | `moderator@derlem.local` | `DerlemTest123!` |
+| expert_reviewer | `expert@derlem.local` | `DerlemTest123!` |
+| contributor | `contributor@derlem.local` | `DerlemTest123!` |
+| consumer_team | `consumer@derlem.local` | `DerlemTest123!` |
+
+## Test Matrisi
+
+| Rol | Görmesi / yapabilmesi gerekenler |
+|---|---|
+| admin | Tüm kaynakları görür, kaynak oluşturur, metadata düzenler, dosya yükler, belge inceler, release oluşturur, release freeze eder, artifact indirir. |
+| data_manager | Kaynak oluşturur, metadata düzenler, dosya yükler, release oluşturur ve artifact indirir; release freeze edemez. |
+| editor | Kaynak metadata'sı ve belge içeriği düzenler; yeni kaynak oluşturamaz, release freeze edemez. |
+| moderator | Kaynak/belge onay-ret-hassas kararlarını verir; metadata düzenleyemez, kaynak oluşturamaz. |
+| expert_reviewer | Moderator gibi review kararı verir; özellikle hassas alan incelemesi için kullanılır. |
+| contributor | Kaynakları görüntüler; yönetim/onay/write butonları görünmemelidir. |
+| consumer_team | Frozen release ve artifact indirme akışını test eder; kaynak/review yönetimi yapamaz. |
+
+## Tarayıcıdan Test Sırası
+
+1. Sol alttan çıkış yap.
+2. Yukarıdaki e-posta/parola ile yeniden giriş yap.
+3. Sol altta görünen e-posta ve rol bilgisinin doğru olduğunu kontrol et.
+4. `Kaynaklar`, `İnceleme`, `Sürümler`, `İşler` ekranlarını dolaş.
+5. Rolüne göre beklenen butonların görünüp görünmediğini kontrol et.
+6. Yetkisiz kullanıcıda write butonu görünmemeli; doğrudan API çağrısı yapılırsa backend `403` dönmelidir.
+
+## Hızlı API Login Kontrolü
+
+```powershell
+$body = @{ email = "manager@derlem.local"; password = "DerlemTest123!" } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri "http://localhost:8080/api/v1/auth/login" -ContentType "application/json" -Body $body
+```
+

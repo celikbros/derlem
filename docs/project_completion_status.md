@@ -24,7 +24,7 @@ Bu yüzden "proje bitti mi?" sorusunun cevabı hedefe göre değişir:
 
 - **MVP olarak:** bitti.
 - **Gardas temiz verisini onaylı release yapmak için:** az kaldı, ama insan/hak kapıları bekliyor.
-- **LLM/tokenizer ekiplerinin rahatça kullanacağı veri fabrikası için:** Export Builder ve toplu review bitmeli.
+- **LLM/tokenizer ekiplerinin rahatça kullanacağı temel veri fabrikası için:** Export Builder ve toplu review hazır; Gardas kapılarının kapanması ve risk bazlı kalite katmanı sırada.
 - **Milyonlarca kullanıcı/üretim sistemi için:** daha erken aşamadayız; mimari doğru ama prod işleri bitmedi.
 
 ## Veritabanındaki Güncel Durum
@@ -77,6 +77,7 @@ ana kapılar artık teknik değil:
 - Corpus özet paneli.
 - Deterministik JSONL/TXT Export Builder.
 - Export manifesti, artifact checksum'u, job progress'i ve rol kontrollü indirme.
+- En fazla 200 bekleyen belge için atomik toplu review ve ortak kalite puanı.
 
 ## Kalan Teknik İşler
 
@@ -89,7 +90,6 @@ ana kapılar artık teknik değil:
 
 ### v0.3 İçin Kalanlar
 
-- Toplu belge review ekranını daha hızlı karar akışıyla genişletmek.
 - Risk bazlı örnek yoğunlaştırma ve çok boyutlu kalite skoru.
 - Export manifestine token tahmini eklemek.
 - Conversation/tool veri tipleri için geniş canonical export şeması.

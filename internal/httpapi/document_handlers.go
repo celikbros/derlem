@@ -191,6 +191,50 @@ func (s *Server) reviewDocument(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) bulkReviewDocuments(w http.ResponseWriter, r *http.Request) {
+	var input domain.BulkReviewDocumentsInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	principal, _ := principalFrom(r.Context())
+	result, err := s.documents.BulkReview(
+		r.Context(),
+		r.PathValue("id"),
+		input,
+		principal.Subject,
+		slices.Contains(principal.Roles, "admin"),
+	)
+	if errors.Is(err, repository.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "bulk_review_document_not_found", "Kaynak veya seçilen belgelerden biri bulunamadı.")
+		return
+	}
+	if errors.Is(err, repository.ErrSelfReview) {
+		writeError(w, http.StatusForbidden, "self_review_forbidden", "Kendi kaynağınızdaki belge örneklerini onaylayamazsınız.")
+		return
+	}
+	if errors.Is(err, repository.ErrConflict) {
+		writeError(w, http.StatusConflict, "bulk_review_conflict", "Belgelerden biri değişti veya daha önce tarafınızdan incelendi. Listeyi yenileyin.")
+		return
+	}
+	var gateError *repository.GateError
+	if errors.As(err, &gateError) {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
+			"error": map[string]any{
+				"code":    "bulk_document_review_gate_blocked",
+				"message": "Toplu belge inceleme girdileri geçerli değil.",
+				"reasons": gateError.Reasons,
+			},
+		})
+		return
+	}
+	if err != nil {
+		s.logger.Error("bulk review documents failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "Toplu belge incelemesi kaydedilemedi.")
+		return
+	}
+	writeJSON(w, http.StatusCreated, result)
+}
+
 func (s *Server) readDocumentObject(r *http.Request, digest string) (string, error) {
 	reader, err := s.objectStore.Open(r.Context(), digest)
 	if err != nil {

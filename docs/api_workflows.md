@@ -94,6 +94,30 @@ Ret ve hassas inceleme kararlarinda gerekce zorunludur. Karar, kaynak surumu,
 reviewer, kapilarin snapshot'i ve zaman bilgisiyle saklanir. Admin disindaki
 kullanicilar kendi kaynagini inceleyemez.
 
+## Toplu Belge Inceleme
+
+`POST /sources/{id}/documents/bulk-reviews`, moderator ve uzmanlarin en fazla
+200 bekleyen belgeyi tek kararla incelemesini saglar. Istek her belge icin
+`document_id` ve reviewer'in ekranda gordugu `document_version` degerini tasir.
+
+Tum belgeler tek PostgreSQL transaction'i icinde kilitlenir. Belgelerden biri
+degismis, daha once ayni reviewer tarafindan incelenmis veya artik beklemede
+degilse islem tamamen geri alinir; kismi onay birakilmaz. Ret ve hassas kararda
+ortak gerekce zorunludur. Basarili istekte her belge icin ayri append-only
+`document.reviewed` olayi, kaynak icin de `documents.bulk_reviewed` ozet olayi
+yazilir.
+
+```json
+{
+  "documents": [
+    {"document_id": "...", "document_version": 1}
+  ],
+  "decision": "approved",
+  "quality_score": 4,
+  "reason": null
+}
+```
+
 ## Release Builder
 
 `POST /releases`, ayni `content_purpose` degerindeki `approved_source`

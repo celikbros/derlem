@@ -34,6 +34,24 @@ type ReviewDocumentInput struct {
 	DocumentVersion int64   `json:"document_version"`
 }
 
+type BulkReviewDocumentItem struct {
+	DocumentID      string `json:"document_id"`
+	DocumentVersion int64  `json:"document_version"`
+}
+
+type BulkReviewDocumentsInput struct {
+	Documents    []BulkReviewDocumentItem `json:"documents"`
+	Decision     string                   `json:"decision"`
+	Reason       *string                  `json:"reason"`
+	QualityScore int16                    `json:"quality_score"`
+}
+
+type BulkDocumentReviewResult struct {
+	Source    Source           `json:"source"`
+	Documents []Document       `json:"documents"`
+	Reviews   []DocumentReview `json:"reviews"`
+}
+
 type DocumentReview struct {
 	ID              string          `json:"id"`
 	DocumentID      string          `json:"document_id"`

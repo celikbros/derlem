@@ -368,6 +368,7 @@ Ayrıntılı yönergeler: [docs/local_development.md](docs/local_development.md)
 | `GET/POST` | `/api/v1/sources/{id}/reviews` | İnceleme geçmişi ve karar |
 | `GET` | `/api/v1/sources/{id}/pii-scans` | PII tarama sonuçları |
 | `GET` | `/api/v1/sources/{id}/documents` | Bounded belge örnekleri |
+| `POST` | `/api/v1/sources/{id}/documents/bulk-reviews` | En fazla 200 bekleyen belgeyi atomik toplu inceleme |
 | `GET/PATCH` | `/api/v1/documents/{id}` | Immutable içerik okuma veya yeni sürüm |
 | `GET/POST` | `/api/v1/documents/{id}/reviews` | Belge kalite puanı ve moderasyon geçmişi |
 | `GET` | `/api/v1/jobs` | Background job görünümü |
@@ -447,6 +448,7 @@ ve Tam Document İndeks sıradaki aktif hedef.**
 - [x] Deterministik ve bounded belge örnekleme
 - [x] Object store tabanlı immutable belge sürümleri ve editor diyaloğu
 - [x] Belge kalite puanı, immutable review geçmişi ve tam örnek kapsama kapısı
+- [x] Sürüm kontrollü ve atomik toplu belge inceleme
 - [x] Moderasyon, ret gerekçesi ve self-review engeli
 - [x] Aynı amaçtaki onaylı kaynaklardan draft/frozen Release Builder
 - [x] Deterministik manifest, kaynak sürümü ve SHA256 snapshot'ı
@@ -459,7 +461,7 @@ ve Tam Document İndeks sıradaki aktif hedef.**
 
 ### Sıradaki işler
 
-- [ ] Tam corpus document indeksleme ve toplu review iş akışı
+- [ ] Tam corpus document indeksleme ve risk bazlı review sıralaması
 - [ ] Çok boyutlu kalite skorları ve risk bazlı örneklem
 - [ ] Çoklu shard/Parquet paketleme ve token tahmini
 - [ ] Near-dedup ve yaklaşık decontamination

@@ -364,6 +364,7 @@ See [docs/local_development.md](docs/local_development.md) for details.
 | `GET/POST` | `/api/v1/sources/{id}/reviews` | Review history and decision |
 | `GET` | `/api/v1/sources/{id}/pii-scans` | PII scan results |
 | `GET` | `/api/v1/sources/{id}/documents` | Bounded document samples |
+| `POST` | `/api/v1/sources/{id}/documents/bulk-reviews` | Atomically review up to 200 pending documents |
 | `GET/PATCH` | `/api/v1/documents/{id}` | Read immutable content or create a version |
 | `GET/POST` | `/api/v1/documents/{id}/reviews` | Document quality score and moderation history |
 | `GET` | `/api/v1/jobs` | Background job status |
@@ -445,6 +446,7 @@ Document Index is the next active target.**
 - [x] Export artifact/manifest checksums, progress reporting, and role-gated downloads
 - [x] Object-store-backed immutable document versions and editor dialog
 - [x] Document quality scores, immutable review history, and full-sample gate
+- [x] Version-checked atomic bulk document review
 - [x] Moderation, rejection reasons, and self-review prevention
 - [x] Draft/frozen Release Builder for approved sources of one purpose
 - [x] Deterministic manifest, source-version snapshot, and SHA256 snapshot
@@ -455,7 +457,7 @@ Document Index is the next active target.**
 
 ### Next
 
-- [ ] Full-corpus document indexing and bulk review workflow
+- [ ] Full-corpus document indexing and risk-based review ordering
 - [ ] Multidimensional quality scores and risk-based sampling
 - [ ] Multi-shard/Parquet packaging and token estimates
 - [ ] Near-dedup and approximate decontamination

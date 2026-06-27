@@ -63,6 +63,8 @@ export function SourceInspector({
   const [activeDocument, setActiveDocument] = useState<Document | null>(null);
   const [documentReviews, setDocumentReviews] = useState<DocumentReview[]>([]);
   const [documentContent, setDocumentContent] = useState("");
+  const [selectedDocumentIDs, setSelectedDocumentIDs] = useState<Set<string>>(new Set());
+  const [bulkReviewing, setBulkReviewing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const editDialog = useRef<HTMLDialogElement>(null);
@@ -81,6 +83,10 @@ export function SourceInspector({
       setScans(scanPayload.items);
       setJobs(jobPayload.items);
       setDocuments(documentPayload.items);
+      const pendingIDs = new Set(documentPayload.items
+        .filter((document) => document.status === "sampled" || document.status === "edited")
+        .map((document) => document.id));
+      setSelectedDocumentIDs((current) => new Set([...current].filter((id) => pendingIDs.has(id))));
       const ingestFinished = jobPayload.items.some((job) => ["ingest_local_file", "ingest_staged_file"].includes(job.job_type) && job.status === "succeeded");
       const scanFinished = jobPayload.items.some((job) => job.job_type === "scan_pii" && job.status === "succeeded");
       const duplicateCheckFinished = jobPayload.items.some((job) => job.job_type === "check_exact_duplicate" && job.status === "succeeded");
@@ -103,6 +109,7 @@ export function SourceInspector({
   }, [onNotice, onRefresh, source.document_sampling_status, source.duplicate_status, source.id, source.normalized_dedup_status, source.object_sha256, source.pii_status]);
 
   useEffect(() => { void loadActivity(); }, [loadActivity, source.version]);
+  useEffect(() => { setSelectedDocumentIDs(new Set()); }, [source.id]);
   useEffect(() => {
     if (!jobs.some((job) => job.status === "queued" || job.status === "running")) return;
     const timer = window.setTimeout(() => { void loadActivity(); }, 1500);
@@ -291,6 +298,11 @@ export function SourceInspector({
       setActiveDocument(payload.document);
       const updatedDocuments = documents.map((document) => document.id === payload.document.id ? payload.document : document);
       setDocuments(updatedDocuments);
+      setSelectedDocumentIDs((current) => {
+        const next = new Set(current);
+        next.delete(payload.document.id);
+        return next;
+      });
       setDocumentReviews((current) => [payload.review, ...current]);
       onChanged(payload.source);
       form.reset();
@@ -306,6 +318,74 @@ export function SourceInspector({
       }
     } catch (error) {
       onNotice(messageFrom(error));
+    }
+  }
+
+  function toggleDocumentSelection(documentID: string, checked: boolean) {
+    setSelectedDocumentIDs((current) => {
+      const next = new Set(current);
+      if (checked) next.add(documentID);
+      else next.delete(documentID);
+      return next;
+    });
+  }
+
+  function toggleAllPendingDocuments(checked: boolean) {
+    setSelectedDocumentIDs(checked ? new Set(pendingDocuments.map((document) => document.id)) : new Set());
+  }
+
+  async function submitBulkDocumentReview(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+    const decision = submitter?.value;
+    if (!decision || selectedDocumentIDs.size === 0) return;
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const reason = String(data.get("reason") ?? "").trim();
+    const qualityScore = Number(data.get("quality_score"));
+    if (!Number.isInteger(qualityScore) || qualityScore < 1 || qualityScore > 5) {
+      onNotice("Kalite puanı 1 ile 5 arasında olmalıdır.");
+      return;
+    }
+    if (decision !== "approved" && !reason) {
+      onNotice("Toplu ret veya hassas inceleme kararında gerekçe zorunludur.");
+      return;
+    }
+    const selectedDocuments = pendingDocuments.filter((document) => selectedDocumentIDs.has(document.id));
+    if (selectedDocuments.length !== selectedDocumentIDs.size) {
+      onNotice("Seçimlerden biri artık beklemede değil. Listeyi yenileyin.");
+      return;
+    }
+
+    setBulkReviewing(true);
+    try {
+      const payload = await requestJSON<{
+        source: Source;
+        documents: Document[];
+        reviews: DocumentReview[];
+      }>(`/api/sources/${source.id}/documents/bulk-reviews`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          documents: selectedDocuments.map((document) => ({
+            document_id: document.id,
+            document_version: document.current_version,
+          })),
+          decision,
+          reason: reason || null,
+          quality_score: qualityScore,
+        }),
+      });
+      const updatedByID = new Map(payload.documents.map((document) => [document.id, document]));
+      setDocuments((current) => current.map((document) => updatedByID.get(document.id) ?? document));
+      setSelectedDocumentIDs(new Set());
+      onChanged(payload.source);
+      form.reset();
+      onNotice(`${payload.documents.length.toLocaleString("tr-TR")} belge için toplu karar kaydedildi.`);
+    } catch (error) {
+      onNotice(messageFrom(error));
+    } finally {
+      setBulkReviewing(false);
     }
   }
 
@@ -469,14 +549,51 @@ export function SourceInspector({
           <button type="button" aria-pressed={documentStatusFilter === "flagged"} onClick={() => setDocumentStatusFilter("flagged")}>İşaretli {flaggedDocuments.length}</button>
           <button type="button" aria-pressed={documentStatusFilter === "all"} onClick={() => setDocumentStatusFilter("all")}>Tümü {documents.length}</button>
         </div>
+        {canReview && pendingDocuments.length > 0 && (
+          <form className="bulk-review-form" onSubmit={submitBulkDocumentReview}>
+            <div className="bulk-selection-row">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={selectedDocumentIDs.size === pendingDocuments.length}
+                  onChange={(event) => toggleAllPendingDocuments(event.target.checked)}
+                />
+                Tüm bekleyenleri seç
+              </label>
+              <strong>{selectedDocumentIDs.size.toLocaleString("tr-TR")} seçili</strong>
+            </div>
+            <div className="bulk-review-fields">
+              <label>Kalite<input name="quality_score" type="number" min="1" max="5" step="1" defaultValue="3" required /></label>
+              <label>Ortak gerekçe<input name="reason" placeholder="Ret ve hassas kararda zorunlu" /></label>
+            </div>
+            <div className="review-actions">
+              <button className="approve-button" type="submit" name="decision" value="approved" disabled={bulkReviewing || selectedDocumentIDs.size === 0}><Check size={16} />Onayla</button>
+              <button className="warning-button" type="submit" name="decision" value="sensitive_review" disabled={bulkReviewing || selectedDocumentIDs.size === 0}><ShieldAlert size={16} />Hassas</button>
+              <button className="danger-button" type="submit" name="decision" value="rejected" disabled={bulkReviewing || selectedDocumentIDs.size === 0}>{bulkReviewing ? <LoaderCircle className="spin" size={16} /> : <XCircle size={16} />}Reddet</button>
+            </div>
+          </form>
+        )}
         <div className="document-list">
-          {filteredDocuments.map((document) => (
-            <button key={document.id} className={`document-card ${document.status}`} type="button" onClick={() => void openDocument(document)}>
-              <span>#{document.source_ordinal}</span>
-              <strong>{document.text_preview}</strong>
-              <small><b>{documentStatusLabel(document.status)}</b> · v{document.current_version} · {document.char_count.toLocaleString("tr-TR")} karakter</small>
-            </button>
-          ))}
+          {filteredDocuments.map((document) => {
+            const canSelect = canReview && (document.status === "sampled" || document.status === "edited");
+            return (
+              <div key={document.id} className={`document-list-row${canSelect ? " selectable" : ""}`}>
+                {canSelect && (
+                  <input
+                    type="checkbox"
+                    aria-label={`Satır ${document.source_ordinal} seç`}
+                    checked={selectedDocumentIDs.has(document.id)}
+                    onChange={(event) => toggleDocumentSelection(document.id, event.target.checked)}
+                  />
+                )}
+                <button className={`document-card ${document.status}`} type="button" onClick={() => void openDocument(document)}>
+                  <span>#{document.source_ordinal}</span>
+                  <strong>{document.text_preview}</strong>
+                  <small><b>{documentStatusLabel(document.status)}</b> · v{document.current_version} · {document.char_count.toLocaleString("tr-TR")} karakter</small>
+                </button>
+              </div>
+            );
+          })}
           {!loading && filteredDocuments.length === 0 && (
             <p className="muted-copy">
               {source.document_sampling_status === "failed" ? "Belge örnekleme işi başarısız." : documents.length === 0 ? "Henüz belge örneği oluşturulmadı." : "Bu filtrede örnek yok."}

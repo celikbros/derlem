@@ -1379,7 +1379,84 @@ textarea:focus {
   color: var(--green-dark);
 }
 
-.document-list > button {
+.bulk-review-form {
+  display: grid;
+  gap: 9px;
+  margin-bottom: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--green);
+  border-radius: var(--radius);
+  background: #ffffff;
+}
+
+.bulk-selection-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.bulk-selection-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.bulk-selection-row input,
+.document-list-row > input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--green);
+}
+
+.bulk-selection-row strong {
+  color: var(--green-dark);
+  font-size: 11px;
+}
+
+.bulk-review-fields {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.bulk-review-fields label {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.bulk-review-fields input {
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+}
+
+.bulk-review-form .review-actions {
+  margin-top: 0;
+}
+
+.document-list-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+}
+
+.document-list-row.selectable {
+  grid-template-columns: 28px minmax(0, 1fr);
+}
+
+.document-list-row > input {
+  justify-self: center;
+}
+
+.document-card {
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr);
   gap: 4px 8px;
@@ -1387,37 +1464,37 @@ textarea:focus {
   min-width: 0;
   padding: 10px 2px;
   border: 0;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 0;
   background: transparent;
   color: var(--ink);
   text-align: left;
   cursor: pointer;
 }
 
-.document-list > button.approved {
+.document-card.approved {
   border-left: 3px solid var(--green);
 }
 
-.document-list > button.rejected,
-.document-list > button.sensitive_review {
+.document-card.rejected,
+.document-card.sensitive_review {
   border-left: 3px solid var(--red);
 }
 
-.document-list > button.edited {
+.document-card.edited {
   border-left: 3px solid var(--blue);
 }
 
-.document-list > button:hover {
+.document-card:hover {
   background: #f4f7f5;
 }
 
-.document-list > button > span {
+.document-card > span {
   grid-row: 1 / 3;
   color: var(--muted);
   font: 11px/1.4 var(--mono);
 }
 
-.document-list > button > strong {
+.document-card > strong {
   min-width: 0;
   overflow: hidden;
   font-size: 12px;
@@ -1427,12 +1504,12 @@ textarea:focus {
   white-space: nowrap;
 }
 
-.document-list > button > small {
+.document-card > small {
   color: var(--muted);
   font-size: 10px;
 }
 
-.document-list > button > small b {
+.document-card > small b {
   color: #42514c;
 }
 

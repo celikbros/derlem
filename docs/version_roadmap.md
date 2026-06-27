@@ -52,7 +52,7 @@ akışları kurmak, export/shard üretmek, kalite skorlarını derinleştirmek v
 |---|---|---|---|
 | v0.1 | Tamamlandı | Güvenli çekirdek veri atölyesi | Kaynak -> kalite kapıları -> review -> frozen release |
 | v0.2 | Aktif | Büyük corpus ingest ve tam document indeks | Gardas/Faz 2 seed'i gerçek operasyon kaynağı olur |
-| v0.3 | Planlandı | Toplu review, kalite skorları, export/shard | Eğitim ekiplerine kanonik JSONL/TXT paketleri |
+| v0.3 | Aktif | Toplu review, kalite skorları, export/shard | Eğitim ekiplerine kanonik JSONL/TXT paketleri |
 | v0.4 | Planlandı | Gelişmiş dedup/decontam ve veri karışımı | MinHash/SimHash, mixture raporu, risk bazlı örneklem |
 | v0.5 | Planlandı | Katkı, ajan ve servis hesabı pilotu | Açık/kapalı katkı kuyruğu ve ajan audit modeli |
 | v0.6 | Planlandı | Üretim altyapısı ve ölçek hazırlığı | S3/MinIO, Redis/NATS ölçümü, backup/restore, gözlemlenebilirlik |
@@ -132,7 +132,7 @@ alabilmesidir.
 
 Yapılacaklar:
 
-- Toplu belge review ekranı: filtre, sıra, hızlı karar, kalite puanı.
+- Toplu belge review ekranı: filtre, seçim, ortak kalite puanı ve atomik hızlı karar. **Tamamlandı.**
 - Risk bazlı sample yoğunlaştırma: PII riski, domain, kaynak tipi, dedup bulgusu.
 - Çok boyutlu kalite skoru: dil, format, uzunluk, tekrar, kalite, özel nitelikli veri riski.
 - Export Builder: frozen release'ten JSONL/TXT üret. **Tamamlandı.**
@@ -141,7 +141,7 @@ Yapılacaklar:
 
 Kapanış kriteri:
 
-- Reviewer UI toplu çalışır.
+- Reviewer UI toplu çalışır. **200 belgeye kadar sürüm kontrollü transaction ile doğrulandı.**
 - Frozen release'ten indirilebilir JSONL/TXT export üretilir. **Doğrulandı.**
 - Export tekrar üretildiğinde checksum aynı çıkar. **Deterministik üretici testiyle doğrulandı.**
 

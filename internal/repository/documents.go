@@ -181,33 +181,206 @@ func (r *Documents) Review(
 		return domain.Source{}, domain.Document{}, domain.DocumentReview{}, ErrSelfReview
 	}
 
-	reason := trimReason(input.Reason)
-	if input.QualityScore < 1 || input.QualityScore > 5 {
-		return domain.Source{}, domain.Document{}, domain.DocumentReview{}, &GateError{Reasons: []string{"quality_score_required"}}
+	nextStatus, reason, err := normalizeDocumentReview(input.Decision, input.Reason, input.QualityScore)
+	if err != nil {
+		return domain.Source{}, domain.Document{}, domain.DocumentReview{}, err
 	}
-	if input.Decision != "approved" && reason == nil {
-		return domain.Source{}, domain.Document{}, domain.DocumentReview{}, &GateError{Reasons: []string{"reason_required"}}
+	updated, review, err := reviewDocumentTx(ctx, tx, document, input, nextStatus, reason, actorID)
+	if err != nil {
+		return domain.Source{}, domain.Document{}, domain.DocumentReview{}, err
+	}
+
+	if err := refreshSourceDocumentReviewCounts(ctx, tx, document.SourceID, true); err != nil {
+		return domain.Source{}, domain.Document{}, domain.DocumentReview{}, err
+	}
+	source, err := scanSource(tx.QueryRow(ctx,
+		"SELECT "+sourceColumns+" FROM sources WHERE id = $1", document.SourceID,
+	))
+	if err != nil {
+		return domain.Source{}, domain.Document{}, domain.DocumentReview{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return domain.Source{}, domain.Document{}, domain.DocumentReview{}, err
+	}
+	return source, updated, review, nil
+}
+
+func (r *Documents) BulkReview(
+	ctx context.Context,
+	sourceID string,
+	input domain.BulkReviewDocumentsInput,
+	actorID string,
+	allowSelfReview bool,
+) (domain.BulkDocumentReviewResult, error) {
+	if len(input.Documents) == 0 || len(input.Documents) > 200 {
+		return domain.BulkDocumentReviewResult{}, &GateError{Reasons: []string{"invalid_document_count"}}
+	}
+	nextStatus, reason, err := normalizeDocumentReview(input.Decision, input.Reason, input.QualityScore)
+	if err != nil {
+		return domain.BulkDocumentReviewResult{}, err
+	}
+
+	versions := make(map[string]int64, len(input.Documents))
+	documentIDs := make([]string, 0, len(input.Documents))
+	for _, item := range input.Documents {
+		id := strings.TrimSpace(item.DocumentID)
+		if id == "" || item.DocumentVersion <= 0 {
+			return domain.BulkDocumentReviewResult{}, &GateError{Reasons: []string{"invalid_document_reference"}}
+		}
+		if _, exists := versions[id]; exists {
+			return domain.BulkDocumentReviewResult{}, &GateError{Reasons: []string{"duplicate_document_reference"}}
+		}
+		versions[id] = item.DocumentVersion
+		documentIDs = append(documentIDs, id)
+	}
+
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return domain.BulkDocumentReviewResult{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	var sourceCreator string
+	if err := tx.QueryRow(ctx,
+		"SELECT created_by::text FROM sources WHERE id = $1", sourceID,
+	).Scan(&sourceCreator); errors.Is(err, pgx.ErrNoRows) {
+		return domain.BulkDocumentReviewResult{}, ErrNotFound
+	} else if err != nil {
+		return domain.BulkDocumentReviewResult{}, err
+	}
+	if sourceCreator == actorID && !allowSelfReview {
+		return domain.BulkDocumentReviewResult{}, ErrSelfReview
+	}
+
+	rows, err := tx.Query(ctx, `
+		SELECT `+documentColumns+`
+		FROM documents
+		WHERE source_id = $1 AND id = ANY($2::uuid[])
+		ORDER BY source_ordinal
+		FOR UPDATE
+	`, sourceID, documentIDs)
+	if err != nil {
+		return domain.BulkDocumentReviewResult{}, err
+	}
+	documents := make([]domain.Document, 0, len(documentIDs))
+	for rows.Next() {
+		document, err := scanDocument(rows)
+		if err != nil {
+			rows.Close()
+			return domain.BulkDocumentReviewResult{}, err
+		}
+		documents = append(documents, document)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return domain.BulkDocumentReviewResult{}, err
+	}
+	rows.Close()
+	if len(documents) != len(documentIDs) {
+		return domain.BulkDocumentReviewResult{}, ErrNotFound
+	}
+	var lockedSourceID string
+	if err := tx.QueryRow(ctx,
+		"SELECT id::text FROM sources WHERE id = $1 FOR UPDATE", sourceID,
+	).Scan(&lockedSourceID); err != nil {
+		return domain.BulkDocumentReviewResult{}, err
+	}
+
+	updatedDocuments := make([]domain.Document, 0, len(documents))
+	reviews := make([]domain.DocumentReview, 0, len(documents))
+	for _, document := range documents {
+		if document.CurrentVersion != versions[document.ID] {
+			return domain.BulkDocumentReviewResult{}, ErrConflict
+		}
+		if document.Status != "sampled" && document.Status != "edited" {
+			return domain.BulkDocumentReviewResult{}, &GateError{Reasons: []string{"document_not_pending"}}
+		}
+		reviewInput := domain.ReviewDocumentInput{
+			Decision: input.Decision, Reason: reason, QualityScore: input.QualityScore,
+			DocumentVersion: document.CurrentVersion,
+		}
+		updated, review, err := reviewDocumentTx(
+			ctx, tx, document, reviewInput, nextStatus, reason, actorID,
+		)
+		if err != nil {
+			return domain.BulkDocumentReviewResult{}, err
+		}
+		updatedDocuments = append(updatedDocuments, updated)
+		reviews = append(reviews, review)
+	}
+
+	if err := refreshSourceDocumentReviewCounts(ctx, tx, sourceID, true); err != nil {
+		return domain.BulkDocumentReviewResult{}, err
+	}
+	source, err := scanSource(tx.QueryRow(ctx,
+		"SELECT "+sourceColumns+" FROM sources WHERE id = $1", sourceID,
+	))
+	if err != nil {
+		return domain.BulkDocumentReviewResult{}, err
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO audit_events(actor_id, action, entity_type, entity_id, details)
+		VALUES (
+			$1, 'documents.bulk_reviewed', 'source', $2,
+			jsonb_build_object(
+				'decision', $3::text, 'quality_score', $4::smallint,
+				'document_count', $5::integer, 'document_ids', to_jsonb($6::text[]),
+				'reason', $7::text
+			)
+		)
+	`, actorID, sourceID, input.Decision, input.QualityScore,
+		len(updatedDocuments), documentIDs, reason); err != nil {
+		return domain.BulkDocumentReviewResult{}, fmt.Errorf("audit bulk document review: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return domain.BulkDocumentReviewResult{}, err
+	}
+	return domain.BulkDocumentReviewResult{
+		Source: source, Documents: updatedDocuments, Reviews: reviews,
+	}, nil
+}
+
+func normalizeDocumentReview(decision string, inputReason *string, qualityScore int16) (string, *string, error) {
+	reason := trimReason(inputReason)
+	if qualityScore < 1 || qualityScore > 5 {
+		return "", nil, &GateError{Reasons: []string{"quality_score_required"}}
+	}
+	if decision != "approved" && reason == nil {
+		return "", nil, &GateError{Reasons: []string{"reason_required"}}
 	}
 	nextStatus, valid := map[string]string{
 		"approved":         "approved",
 		"rejected":         "rejected",
 		"sensitive_review": "sensitive_review",
-	}[input.Decision]
+	}[decision]
 	if !valid {
-		return domain.Source{}, domain.Document{}, domain.DocumentReview{}, &GateError{Reasons: []string{"invalid_decision"}}
+		return "", nil, &GateError{Reasons: []string{"invalid_decision"}}
 	}
+	return nextStatus, reason, nil
+}
 
+func reviewDocumentTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	document domain.Document,
+	input domain.ReviewDocumentInput,
+	nextStatus string,
+	reason *string,
+	actorID string,
+) (domain.Document, domain.DocumentReview, error) {
 	var alreadyReviewed bool
 	if err := tx.QueryRow(ctx, `
 		SELECT EXISTS (
 			SELECT 1 FROM document_reviews
 			WHERE document_id = $1 AND document_version = $2 AND reviewer_id = $3
 		)
-	`, id, input.DocumentVersion, actorID).Scan(&alreadyReviewed); err != nil {
-		return domain.Source{}, domain.Document{}, domain.DocumentReview{}, err
+	`, document.ID, input.DocumentVersion, actorID).Scan(&alreadyReviewed); err != nil {
+		return domain.Document{}, domain.DocumentReview{}, err
 	}
 	if alreadyReviewed {
-		return domain.Source{}, domain.Document{}, domain.DocumentReview{}, ErrConflict
+		return domain.Document{}, domain.DocumentReview{}, ErrConflict
 	}
 
 	updated, err := scanDocument(tx.QueryRow(ctx, `
@@ -215,13 +388,13 @@ func (r *Documents) Review(
 		SET status = $1
 		WHERE id = $2 AND current_version = $3
 		RETURNING `+documentColumns,
-		nextStatus, id, input.DocumentVersion,
+		nextStatus, document.ID, input.DocumentVersion,
 	))
 	if errors.Is(err, pgx.ErrNoRows) {
-		return domain.Source{}, domain.Document{}, domain.DocumentReview{}, ErrConflict
+		return domain.Document{}, domain.DocumentReview{}, ErrConflict
 	}
 	if err != nil {
-		return domain.Source{}, domain.Document{}, domain.DocumentReview{}, err
+		return domain.Document{}, domain.DocumentReview{}, err
 	}
 
 	contextJSON, _ := json.Marshal(map[string]any{
@@ -238,24 +411,14 @@ func (r *Documents) Review(
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
 		RETURNING id::text, document_id::text, reviewer_id::text, decision, reason,
 			quality_score, document_version, object_sha256, review_context, created_at
-	`, id, actorID, input.Decision, reason, input.QualityScore,
+	`, document.ID, actorID, input.Decision, reason, input.QualityScore,
 		input.DocumentVersion, document.CurrentObjectSHA256, contextJSON,
 	).Scan(
 		&review.ID, &review.DocumentID, &review.ReviewerID, &review.Decision,
 		&review.Reason, &review.QualityScore, &review.DocumentVersion,
 		&review.ObjectSHA256, &review.Context, &review.CreatedAt,
 	); err != nil {
-		return domain.Source{}, domain.Document{}, domain.DocumentReview{}, fmt.Errorf("insert document review: %w", err)
-	}
-
-	if err := refreshSourceDocumentReviewCounts(ctx, tx, document.SourceID, true); err != nil {
-		return domain.Source{}, domain.Document{}, domain.DocumentReview{}, err
-	}
-	source, err := scanSource(tx.QueryRow(ctx,
-		"SELECT "+sourceColumns+" FROM sources WHERE id = $1", document.SourceID,
-	))
-	if err != nil {
-		return domain.Source{}, domain.Document{}, domain.DocumentReview{}, err
+		return domain.Document{}, domain.DocumentReview{}, fmt.Errorf("insert document review: %w", err)
 	}
 
 	if _, err := tx.Exec(ctx, `
@@ -263,23 +426,16 @@ func (r *Documents) Review(
 		VALUES (
 			$1, 'document.reviewed', 'document', $2,
 			jsonb_build_object(
-				'review_id', $3::text,
-				'decision', $4::text,
-				'quality_score', $5::smallint,
-				'document_version', $6::bigint,
-				'object_sha256', $7::text,
-				'reason', $8::text
+				'review_id', $3::text, 'decision', $4::text,
+				'quality_score', $5::smallint, 'document_version', $6::bigint,
+				'object_sha256', $7::text, 'reason', $8::text
 			)
 		)
-	`, actorID, id, review.ID, input.Decision, input.QualityScore,
+	`, actorID, document.ID, review.ID, input.Decision, input.QualityScore,
 		input.DocumentVersion, document.CurrentObjectSHA256, reason); err != nil {
-		return domain.Source{}, domain.Document{}, domain.DocumentReview{}, fmt.Errorf("audit document review: %w", err)
+		return domain.Document{}, domain.DocumentReview{}, fmt.Errorf("audit document review: %w", err)
 	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return domain.Source{}, domain.Document{}, domain.DocumentReview{}, err
-	}
-	return source, updated, review, nil
+	return updated, review, nil
 }
 
 func (r *Documents) ListReviews(ctx context.Context, documentID string) ([]domain.DocumentReview, error) {

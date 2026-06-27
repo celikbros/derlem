@@ -92,6 +92,11 @@ function resultSummary(job: BackgroundJob) {
   if (job.status === "running") return "İşleniyor";
   if (job.job_type === "scan_pii" && typeof job.result?.status === "string") return `PII: ${job.result.status}`;
   if (job.job_type === "index_document_fingerprints" && typeof job.result?.status === "string") return `Dedup: ${job.result.status}`;
+  if (job.job_type === "sample_documents" && job.status === "succeeded") {
+    const samples = Number(job.result?.sample_size ?? 0).toLocaleString("tr-TR");
+    const risky = Number(job.result?.selected_risk_documents ?? 0).toLocaleString("tr-TR");
+    return `${samples} örnek · ${risky} riskli`;
+  }
   if (job.job_type === "export_release" && job.status === "succeeded") {
     const records = Number(job.result?.record_count ?? 0).toLocaleString("tr-TR");
     return `${String(job.result?.format ?? "").toUpperCase()} · ${records} kayıt`;

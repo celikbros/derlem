@@ -442,6 +442,7 @@ Document Index is the next active target.**
 - [x] Source-artifact SHA256 exact-duplicate gate
 - [x] Normalized document exact-dedup fingerprint gate
 - [x] Deterministic bounded document sampling
+- [x] Explainable risk scoring with combined representative and risk quotas
 - [x] Deterministic model-independent JSONL/TXT exports from frozen releases
 - [x] Export artifact/manifest checksums, progress reporting, and role-gated downloads
 - [x] Object-store-backed immutable document versions and editor dialog
@@ -457,8 +458,8 @@ Document Index is the next active target.**
 
 ### Next
 
-- [ ] Full-corpus document indexing and risk-based review ordering
-- [ ] Multidimensional quality scores and risk-based sampling
+- [ ] Full-corpus document indexing and progress metrics
+- [ ] Multidimensional quality scores and controlled Gardas resampling
 - [ ] Multi-shard/Parquet packaging and token estimates
 - [ ] Near-dedup and approximate decontamination
 - [ ] S3/MinIO storage implementation
@@ -473,6 +474,7 @@ Document Index is the next active target.**
 - [Local role test users](docs/local_role_testing.md)
 - [Production deployment](docs/production_deployment.md)
 - [API and workflows](docs/api_workflows.md)
+- [Risk-based sampling](docs/risk_sampling.en.md)
 - [Canonical export contract](docs/canonical_exports.en.md)
 - [Pretraining data factory](docs/pretraining_data_factory.md)
 - [Model prompt format abstraction](docs/model_prompt_format_abstraction.md)

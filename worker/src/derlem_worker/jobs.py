@@ -963,9 +963,10 @@ class Worker:
                     """
                     INSERT INTO documents(
                         source_id, source_ordinal, external_id, current_object_sha256,
-                        text_preview, byte_size, char_count
+                        text_preview, byte_size, char_count, sampling_method,
+                        risk_score, risk_reasons
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (source_id, source_ordinal) DO NOTHING
                     RETURNING id
                     """,
@@ -977,6 +978,9 @@ class Worker:
                         preview,
                         stored.byte_size,
                         len(sample.text),
+                        report.sampling_method,
+                        sample.risk_score,
+                        list(sample.risk_reasons),
                     ),
                 ).fetchone()
                 if document is None:
@@ -988,9 +992,15 @@ class Worker:
                         document_id, version, object_sha256, byte_size, char_count,
                         actor_type, reason
                     )
-                    VALUES (%s, 1, %s, %s, %s, 'system', 'reservoir-sha256-v1')
+                    VALUES (%s, 1, %s, %s, %s, 'system', %s)
                     """,
-                    (document[0], stored.sha256, stored.byte_size, len(sample.text)),
+                    (
+                        document[0],
+                        stored.sha256,
+                        stored.byte_size,
+                        len(sample.text),
+                        report.sampling_method,
+                    ),
                 )
 
             updated = connection.execute(
@@ -1018,12 +1028,15 @@ class Worker:
 
             result_json = json.dumps(
                 {
-                    "sampling_method": "reservoir-sha256-v1",
+                    "sampling_method": report.sampling_method,
                     "sample_size": len(report.samples),
                     "inserted_count": inserted_count,
                     "total_documents": report.total_documents,
                     "eligible_documents": report.eligible_documents,
                     "skipped_oversized": report.skipped_oversized,
+                    "risk_candidate_documents": report.risk_candidate_documents,
+                    "selected_risk_documents": report.selected_risk_documents,
+                    "risk_reason_counts": report.risk_reason_counts,
                 }
             )
             connection.execute(

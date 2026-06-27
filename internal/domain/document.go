@@ -17,6 +17,8 @@ type Document struct {
 	Status              string    `json:"status"`
 	CurrentVersion      int64     `json:"current_version"`
 	SamplingMethod      string    `json:"sampling_method"`
+	RiskScore           int16     `json:"risk_score"`
+	RiskReasons         []string  `json:"risk_reasons"`
 	CreatedAt           time.Time `json:"created_at"`
 	UpdatedAt           time.Time `json:"updated_at"`
 }

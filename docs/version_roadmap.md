@@ -112,7 +112,7 @@ Yapılacaklar:
 - Index job'larında ilerleme metrikleri ekle: okunan byte, satır, indexed document, skipped oversized.
 - `documents` tablosunu sadece sample için tutmaya devam et; tam indeks ham metin saklamasın.
 - Review UI'da büyük kaynaklar için "tam corpus özet kartı" göster. **Tamamlandı.**
-- Büyük kaynaklarda bounded sample stratejisini risk bazlı hale getirmek için hazırlık yap.
+- Büyük kaynaklarda bounded sample stratejisini risk bazlı hale getir. **Yeni sample işleri için tamamlandı. Gardas eski örneklemi kontrollü yeniden üretilecek.**
 
 Kapanış kriteri:
 
@@ -124,7 +124,7 @@ Kapanış kriteri:
 
 ## v0.3 - Toplu Review, Kalite Skoru ve Export
 
-**Durum:** Kısmen tamamlandı; Export Builder dilimi çalışıyor.
+**Durum:** Aktif; Export Builder, toplu review ve risk-stratified sampling çalışıyor.
 
 Amaç, veri yöneticisinin ve reviewer ekibinin tek tek örnek açmadan yüzlerce/binlerce
 örneği verimli inceleyebilmesi ve model ekiplerinin Derlem çıktısını doğrudan
@@ -133,7 +133,7 @@ alabilmesidir.
 Yapılacaklar:
 
 - Toplu belge review ekranı: filtre, seçim, ortak kalite puanı ve atomik hızlı karar. **Tamamlandı.**
-- Risk bazlı sample yoğunlaştırma: PII riski, domain, kaynak tipi, dedup bulgusu.
+- Risk bazlı sample yoğunlaştırma: uzunluk, format, tekrar, kontrol karakteri ve kimlik/iletişim kalıbı. **Tamamlandı.** Cross-source domain/source-type mixture sonraki dilimde.
 - Çok boyutlu kalite skoru: dil, format, uzunluk, tekrar, kalite, özel nitelikli veri riski.
 - Export Builder: frozen release'ten JSONL/TXT üret. **Tamamlandı.**
 - Export manifest: release id, source sha256, document count ve checksum. **Tamamlandı.** Token tahmini sonraki dilimde.

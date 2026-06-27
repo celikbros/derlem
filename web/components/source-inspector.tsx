@@ -40,6 +40,18 @@ const findingLabels: Record<string, string> = {
   payment_card: "Ödeme kartı",
 };
 
+const riskReasonLabels: Record<string, string> = {
+  short_text: "Çok kısa",
+  long_text: "Çok uzun",
+  control_characters: "Kontrol karakteri",
+  high_symbol_ratio: "Aşırı sembol",
+  repeated_character_run: "Karakter tekrarı",
+  low_lexical_diversity: "Düşük kelime çeşitliliği",
+  identifier_pattern: "Kimlik/iletişim kalıbı",
+  malformed_json: "Bozuk JSON",
+  missing_text_field: "Metin alanı eksik",
+};
+
 export function SourceInspector({
   source,
   user,
@@ -59,7 +71,7 @@ export function SourceInspector({
   const [scans, setScans] = useState<PIIScan[]>([]);
   const [jobs, setJobs] = useState<BackgroundJob[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
-  const [documentStatusFilter, setDocumentStatusFilter] = useState<"pending" | "approved" | "flagged" | "all">("pending");
+  const [documentStatusFilter, setDocumentStatusFilter] = useState<"pending" | "risk" | "approved" | "flagged" | "all">("pending");
   const [activeDocument, setActiveDocument] = useState<Document | null>(null);
   const [documentReviews, setDocumentReviews] = useState<DocumentReview[]>([]);
   const [documentContent, setDocumentContent] = useState("");
@@ -138,16 +150,23 @@ export function SourceInspector({
   ];
   const approvalReady = gateChecks.every((gate) => gate.passed) && source.approval_status !== "approved_source";
   const latestScan = scans[0];
-  const pendingDocuments = documents.filter((document) => document.status === "sampled" || document.status === "edited");
+  const pendingDocuments = documents
+    .filter((document) => document.status === "sampled" || document.status === "edited")
+    .sort((left, right) => right.risk_score - left.risk_score || left.source_ordinal - right.source_ordinal);
+  const riskyDocuments = pendingDocuments.filter((document) => document.risk_score > 0);
   const approvedDocuments = documents.filter((document) => document.status === "approved");
   const flaggedDocuments = documents.filter((document) => document.status === "rejected" || document.status === "sensitive_review");
   const filteredDocuments = documentStatusFilter === "pending"
     ? pendingDocuments
+    : documentStatusFilter === "risk"
+      ? riskyDocuments
     : documentStatusFilter === "approved"
       ? approvedDocuments
       : documentStatusFilter === "flagged"
         ? flaggedDocuments
         : documents;
+  const selectableDocuments = documentStatusFilter === "risk" ? riskyDocuments : pendingDocuments;
+  const riskSampleCount = documents.filter((document) => document.risk_score > 0).length;
   const reviewedCount = source.reviewed_document_count;
   const sampleCount = source.sampled_document_count;
   const reviewPercent = sampleCount > 0 ? Math.round((reviewedCount / sampleCount) * 100) : 0;
@@ -331,7 +350,7 @@ export function SourceInspector({
   }
 
   function toggleAllPendingDocuments(checked: boolean) {
-    setSelectedDocumentIDs(checked ? new Set(pendingDocuments.map((document) => document.id)) : new Set());
+    setSelectedDocumentIDs(checked ? new Set(selectableDocuments.map((document) => document.id)) : new Set());
   }
 
   async function submitBulkDocumentReview(event: FormEvent<HTMLFormElement>) {
@@ -455,6 +474,7 @@ export function SourceInspector({
           <CorpusMetric label="Satır" value={corpusLineCount !== undefined ? corpusLineCount.toLocaleString("tr-TR") : "Bilinmiyor"} />
           <CorpusMetric label="Doküman" value={corpusDocumentCount !== undefined ? corpusDocumentCount.toLocaleString("tr-TR") : "Bilinmiyor"} />
           <CorpusMetric label="Örnek" value={`${reviewedCount.toLocaleString("tr-TR")} / ${sampleCount.toLocaleString("tr-TR")}`} tone={reviewPercent === 100 ? "good" : "watch"} />
+          <CorpusMetric label="Riskli örnek" value={riskSampleCount.toLocaleString("tr-TR")} tone={riskSampleCount > 0 ? "watch" : "good"} />
           <CorpusMetric label="PII" value={source.pii_status} tone={source.pii_status === "clear" ? "good" : "risk"} />
           <CorpusMetric label="Normalize tekrar" value={normalizedDuplicateText} tone={source.normalized_dedup_status === "unique" ? "good" : "risk"} />
         </div>
@@ -545,20 +565,21 @@ export function SourceInspector({
         </div>
         <div className="document-filter-tabs" role="tablist" aria-label="Belge örneği filtresi">
           <button type="button" aria-pressed={documentStatusFilter === "pending"} onClick={() => setDocumentStatusFilter("pending")}>Bekleyen {pendingDocuments.length}</button>
+          <button type="button" aria-pressed={documentStatusFilter === "risk"} onClick={() => setDocumentStatusFilter("risk")}>Riskli {riskyDocuments.length}</button>
           <button type="button" aria-pressed={documentStatusFilter === "approved"} onClick={() => setDocumentStatusFilter("approved")}>Onaylı {approvedDocuments.length}</button>
           <button type="button" aria-pressed={documentStatusFilter === "flagged"} onClick={() => setDocumentStatusFilter("flagged")}>İşaretli {flaggedDocuments.length}</button>
           <button type="button" aria-pressed={documentStatusFilter === "all"} onClick={() => setDocumentStatusFilter("all")}>Tümü {documents.length}</button>
         </div>
-        {canReview && pendingDocuments.length > 0 && (
+        {canReview && selectableDocuments.length > 0 && !["approved", "flagged"].includes(documentStatusFilter) && (
           <form className="bulk-review-form" onSubmit={submitBulkDocumentReview}>
             <div className="bulk-selection-row">
               <label>
                 <input
                   type="checkbox"
-                  checked={selectedDocumentIDs.size === pendingDocuments.length}
+                  checked={selectableDocuments.length > 0 && selectableDocuments.every((document) => selectedDocumentIDs.has(document.id))}
                   onChange={(event) => toggleAllPendingDocuments(event.target.checked)}
                 />
-                Tüm bekleyenleri seç
+                {documentStatusFilter === "risk" ? "Riskli örnekleri seç" : "Tüm bekleyenleri seç"}
               </label>
               <strong>{selectedDocumentIDs.size.toLocaleString("tr-TR")} seçili</strong>
             </div>
@@ -589,7 +610,8 @@ export function SourceInspector({
                 <button className={`document-card ${document.status}`} type="button" onClick={() => void openDocument(document)}>
                   <span>#{document.source_ordinal}</span>
                   <strong>{document.text_preview}</strong>
-                  <small><b>{documentStatusLabel(document.status)}</b> · v{document.current_version} · {document.char_count.toLocaleString("tr-TR")} karakter</small>
+                  <small><b>{documentStatusLabel(document.status)}</b> · v{document.current_version} · {document.char_count.toLocaleString("tr-TR")} karakter{document.risk_score > 0 && <span className="document-risk-score">Risk {document.risk_score}</span>}</small>
+                  {document.risk_reasons.length > 0 && <small className="document-risk-reasons">{document.risk_reasons.map((reason) => riskReasonLabels[reason] ?? reason).join(" · ")}</small>}
                 </button>
               </div>
             );

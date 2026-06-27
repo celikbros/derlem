@@ -446,6 +446,7 @@ ve Tam Document İndeks sıradaki aktif hedef.**
 - [x] Source artifact SHA256 exact-duplicate kapısı
 - [x] Normalize edilmiş document exact-dedup fingerprint kapısı
 - [x] Deterministik ve bounded belge örnekleme
+- [x] Açıklanabilir risk puanlı, temsil + risk kotasını birleştiren örnekleme
 - [x] Object store tabanlı immutable belge sürümleri ve editor diyaloğu
 - [x] Belge kalite puanı, immutable review geçmişi ve tam örnek kapsama kapısı
 - [x] Sürüm kontrollü ve atomik toplu belge inceleme
@@ -461,8 +462,8 @@ ve Tam Document İndeks sıradaki aktif hedef.**
 
 ### Sıradaki işler
 
-- [ ] Tam corpus document indeksleme ve risk bazlı review sıralaması
-- [ ] Çok boyutlu kalite skorları ve risk bazlı örneklem
+- [ ] Tam corpus document indeksleme ve progress metrikleri
+- [ ] Çok boyutlu kalite skorları ve Gardas kontrollü yeniden örnekleme
 - [ ] Çoklu shard/Parquet paketleme ve token tahmini
 - [ ] Near-dedup ve yaklaşık decontamination
 - [ ] S3/MinIO object store implementasyonu
@@ -477,6 +478,7 @@ ve Tam Document İndeks sıradaki aktif hedef.**
 - [Local rol test kullanıcıları](docs/local_role_testing.md)
 - [Production deployment](docs/production_deployment.md)
 - [API ve iş akışları](docs/api_workflows.md)
+- [Risk bazlı örnekleme](docs/risk_sampling.md)
 - [Kanonik export sözleşmesi](docs/canonical_exports.md)
 - [Pretraining data factory](docs/pretraining_data_factory.md)
 - [Model prompt format soyutlaması](docs/model_prompt_format_abstraction.md)

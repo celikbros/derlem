@@ -15,6 +15,7 @@ POST  /sources/{id}/ingest
 POST  /sources/{id}/upload
 GET   /sources/{id}/pii-scans
 GET   /sources/{id}/documents
+POST  /sources/{id}/documents/bulk-reviews
 GET   /documents/{id}
 PATCH /documents/{id}
 GET   /documents/{id}/reviews
@@ -26,7 +27,10 @@ GET   /releases
 POST  /releases
 GET   /releases/{id}
 POST  /releases/{id}/freeze
+POST  /releases/{id}/exports
 GET   /releases/{id}/manifest
+GET   /releases/{id}/exports/{format}/artifact
+GET   /releases/{id}/exports/{format}/manifest
 GET   /releases/{id}/sources/{source_id}/artifact
 ```
 
@@ -57,11 +61,14 @@ document exact-dedup ise duz satir veya JSONL `text`, `content`, `body` alanini
 NFKC + casefold + whitespace collapse ile fingerprint'e cevirir. DB'ye ham metin
 degil, hash/ordinal/sayac yazilir. Near-dedup kontrolleri sonraki fazdadir.
 
-`sample_documents`, kaynak dosyasini bounded satir okuyucuyla tarar ve SHA256
-seed'li deterministik reservoir sample uretir. Varsayilan olarak en fazla 200
-ornek secilir; tam ornek icerigi immutable object store'a, ordinal/preview/surum
-metadata'si PostgreSQL'e yazilir. Bu tablo tum corpus'un document indeksi degil,
-insan incelemesi icin bounded sample katmanidir.
+`sample_documents`, kaynak dosyasini bounded satir okuyucuyla tarar ve
+`risk-stratified-sha256-v1` orneklemini uretir. Ornek kotasinin en fazla yarisi
+yuksek riskli belgelerden, kalani SHA256 seed'li temsil reservoir'undan gelir.
+Varsayilan olarak en fazla 200 ornek secilir; tam ornek icerigi immutable object
+store'a, ordinal/preview/surum/risk metadata'si PostgreSQL'e yazilir. Job sonucu
+yalniz risk neden sayaclarini tasir, eslesen metni veya kimlik degerini tasimaz.
+Bu tablo tum corpus'un document indeksi degil, insan incelemesi icin bounded
+sample katmanidir. Ayrintili sozlesme: [Risk Bazli Ornekleme](risk_sampling.md).
 
 ## Onay Kapisi
 

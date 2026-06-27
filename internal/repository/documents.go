@@ -100,7 +100,9 @@ func (r *Documents) UpdateContent(
 			byte_size = $3,
 			char_count = $4,
 			status = 'edited',
-			current_version = $5
+			current_version = $5,
+			risk_score = 0,
+			risk_reasons = '{}'::text[]
 		WHERE id = $6 AND current_version = $7
 		RETURNING `+documentColumns,
 		object.SHA256, textPreview, object.ByteSize, charCount, nextVersion, id, expectedVersion,
@@ -401,6 +403,8 @@ func reviewDocumentTx(
 		"source_id":       document.SourceID,
 		"previous_status": document.Status,
 		"sampling_method": document.SamplingMethod,
+		"risk_score":      document.RiskScore,
+		"risk_reasons":    document.RiskReasons,
 	})
 	var review domain.DocumentReview
 	if err := tx.QueryRow(ctx, `
@@ -497,7 +501,8 @@ func refreshSourceDocumentReviewCounts(ctx context.Context, tx pgx.Tx, sourceID 
 const documentColumns = `
 	id::text, source_id::text, source_ordinal, external_id,
 	current_object_sha256, text_preview, byte_size, char_count,
-	status, current_version, sampling_method, created_at, updated_at`
+	status, current_version, sampling_method, risk_score, risk_reasons,
+	created_at, updated_at`
 
 func scanDocument(row scanner) (domain.Document, error) {
 	var document domain.Document
@@ -505,7 +510,8 @@ func scanDocument(row scanner) (domain.Document, error) {
 		&document.ID, &document.SourceID, &document.SourceOrdinal, &document.ExternalID,
 		&document.CurrentObjectSHA256, &document.TextPreview, &document.ByteSize,
 		&document.CharCount, &document.Status, &document.CurrentVersion,
-		&document.SamplingMethod, &document.CreatedAt, &document.UpdatedAt,
+		&document.SamplingMethod, &document.RiskScore, &document.RiskReasons,
+		&document.CreatedAt, &document.UpdatedAt,
 	)
 	return document, err
 }

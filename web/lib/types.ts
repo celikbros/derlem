@@ -56,6 +56,8 @@ export type Document = {
   status: "sampled" | "edited" | "approved" | "rejected" | "sensitive_review";
   current_version: number;
   sampling_method: string;
+  risk_score: number;
+  risk_reasons: string[];
   created_at: string;
   updated_at: string;
 };

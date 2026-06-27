@@ -124,7 +124,7 @@ Kapanış kriteri:
 
 ## v0.3 - Toplu Review, Kalite Skoru ve Export
 
-**Durum:** Planlandı.
+**Durum:** Kısmen tamamlandı; Export Builder dilimi çalışıyor.
 
 Amaç, veri yöneticisinin ve reviewer ekibinin tek tek örnek açmadan yüzlerce/binlerce
 örneği verimli inceleyebilmesi ve model ekiplerinin Derlem çıktısını doğrudan
@@ -135,15 +135,15 @@ Yapılacaklar:
 - Toplu belge review ekranı: filtre, sıra, hızlı karar, kalite puanı.
 - Risk bazlı sample yoğunlaştırma: PII riski, domain, kaynak tipi, dedup bulgusu.
 - Çok boyutlu kalite skoru: dil, format, uzunluk, tekrar, kalite, özel nitelikli veri riski.
-- Export Builder: frozen release'ten JSONL/TXT üret.
-- Export manifest: release id, source sha256, document count, token tahmini, kalite gate sonuçları.
-- Modelden bağımsız canonical format ve model ekibi adaptör sözleşmesi.
+- Export Builder: frozen release'ten JSONL/TXT üret. **Tamamlandı.**
+- Export manifest: release id, source sha256, document count ve checksum. **Tamamlandı.** Token tahmini sonraki dilimde.
+- Modelden bağımsız canonical text formatı. **Tamamlandı.** Conversation/tool kayıtlarının geniş canonical şeması sonraki dilimde.
 
 Kapanış kriteri:
 
 - Reviewer UI toplu çalışır.
-- Frozen release'ten indirilebilir JSONL/TXT export üretilir.
-- Export tekrar üretildiğinde checksum aynı çıkar.
+- Frozen release'ten indirilebilir JSONL/TXT export üretilir. **Doğrulandı.**
+- Export tekrar üretildiğinde checksum aynı çıkar. **Deterministik üretici testiyle doğrulandı.**
 
 ## v0.4 - Gelişmiş Dedup, Decontamination ve Mixture
 

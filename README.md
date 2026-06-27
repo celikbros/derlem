@@ -374,7 +374,10 @@ Ayrıntılı yönergeler: [docs/local_development.md](docs/local_development.md)
 | `GET/POST` | `/api/v1/releases` | Release listesi veya onaylı kaynaklardan draft oluşturma |
 | `GET` | `/api/v1/releases/{id}` | Release, kaynak snapshot'ları ve gate sonuçları |
 | `POST` | `/api/v1/releases/{id}/freeze` | Admin kontrollü freeze işini kuyruğa alma |
+| `POST` | `/api/v1/releases/{id}/exports` | Frozen release için deterministik JSONL/TXT export kuyruğa alma |
 | `GET` | `/api/v1/releases/{id}/manifest` | Frozen manifest indirme |
+| `GET` | `/api/v1/releases/{id}/exports/{format}/artifact` | Hazır kanonik export'u indirme |
+| `GET` | `/api/v1/releases/{id}/exports/{format}/manifest` | Export manifestini indirme |
 | `GET` | `/api/v1/releases/{id}/sources/{source_id}/artifact` | Frozen kaynak artifact'i indirme |
 
 Listeleme cursor pagination kullanır. Metadata güncellemesi mevcut `version`
@@ -448,6 +451,8 @@ ve Tam Document İndeks sıradaki aktif hedef.**
 - [x] Aynı amaçtaki onaylı kaynaklardan draft/frozen Release Builder
 - [x] Deterministik manifest, kaynak sürümü ve SHA256 snapshot'ı
 - [x] Eval/holdout ile pretrain document exact decontamination
+- [x] Frozen release'ten deterministik, modelden bağımsız JSONL/TXT Export Builder
+- [x] Export artifact ve manifest SHA256 doğrulaması, ilerleme metrikleri ve rol kontrollü indirme
 - [x] Frozen manifest ve kaynak artifact indirme
 - [x] Next.js yönetim arayüzü
 - [x] GitHub Actions CI
@@ -456,7 +461,7 @@ ve Tam Document İndeks sıradaki aktif hedef.**
 
 - [ ] Tam corpus document indeksleme ve toplu review iş akışı
 - [ ] Çok boyutlu kalite skorları ve risk bazlı örneklem
-- [ ] Birleşik JSONL/TXT export ve shard üretimi
+- [ ] Çoklu shard/Parquet paketleme ve token tahmini
 - [ ] Near-dedup ve yaklaşık decontamination
 - [ ] S3/MinIO object store implementasyonu
 - [ ] Keycloak/OAuth ve servis hesapları
@@ -470,6 +475,7 @@ ve Tam Document İndeks sıradaki aktif hedef.**
 - [Local rol test kullanıcıları](docs/local_role_testing.md)
 - [Production deployment](docs/production_deployment.md)
 - [API ve iş akışları](docs/api_workflows.md)
+- [Kanonik export sözleşmesi](docs/canonical_exports.md)
 - [Pretraining data factory](docs/pretraining_data_factory.md)
 - [Model prompt format soyutlaması](docs/model_prompt_format_abstraction.md)
 - [Ölçeklenebilirlik mimarisi](docs/scalability_architecture.md)

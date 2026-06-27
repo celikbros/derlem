@@ -75,6 +75,8 @@ ana kapılar artık teknik değil:
 - Gardas temiz aday üretimi ve ingest.
 - Review kuyruğu önceliklendirme.
 - Corpus özet paneli.
+- Deterministik JSONL/TXT Export Builder.
+- Export manifesti, artifact checksum'u, job progress'i ve rol kontrollü indirme.
 
 ## Kalan Teknik İşler
 
@@ -87,10 +89,10 @@ ana kapılar artık teknik değil:
 
 ### v0.3 İçin Kalanlar
 
-- Export Builder: frozen release'ten JSONL/TXT üretmek.
-- Export manifest: release id, kaynak sha256, satır/doküman sayısı, checksum.
-- Export tekrar üretildiğinde aynı checksum'u garanti etmek.
 - Toplu belge review ekranını daha hızlı karar akışıyla genişletmek.
+- Risk bazlı örnek yoğunlaştırma ve çok boyutlu kalite skoru.
+- Export manifestine token tahmini eklemek.
+- Conversation/tool veri tipleri için geniş canonical export şeması.
 
 ### v1.0 İçin Kalanlar
 
@@ -108,13 +110,12 @@ ana kapılar artık teknik değil:
 Kod tarafında yakın hedef şudur:
 
 1. **Gardas clean candidate onayı:** hak/lisans + 200 örnek review tamamlanırsa aynı gün içinde kaynak onaylanabilir.
-2. **İlk gerçek export:** Export Builder eklenirse Derlem, model ekiplerine gerçek JSONL/TXT paket verebilir.
+2. **İlk gerçek export:** Tamamlandı; küçük frozen release ile JSONL/TXT artifact ve manifest checksum zinciri doğrulandı.
 3. **Pilot tamam:** v0.2 + v0.3 bittiğinde Derlem pratik veri fabrikası olur.
 
 Benim mühendislik değerlendirmem:
 
 - **Yerel güvenli veri atölyesi:** tamam.
 - **Büyük corpus pilotu:** yarıdan fazla bitti.
-- **Model ekiplerine üretilebilir veri teslimi:** bir ana parça kaldı: export.
+- **Model ekiplerine üretilebilir veri teslimi:** temel JSONL/TXT teslim hattı hazır; Gardas temiz adayının kapıları kapanınca büyük gerçek corpus export edilebilir.
 - **Tam üretim platformu:** ayrıca altyapı, hukuk ve operasyon gerekir.
-

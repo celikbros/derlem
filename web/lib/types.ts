@@ -115,6 +115,22 @@ export type Release = {
   created_at: string;
   frozen_at?: string;
   sources: ReleaseSource[];
+  exports: ReleaseExport[];
+};
+
+export type ReleaseExport = {
+  id: string;
+  release_id: string;
+  format: "jsonl" | "txt";
+  status: "queued" | "building" | "ready" | "failed";
+  object_sha256?: string;
+  manifest_object_sha256?: string;
+  record_count?: number;
+  byte_size?: number;
+  last_error?: string;
+  created_by: string;
+  created_at: string;
+  completed_at?: string;
 };
 
 export type PIIScan = {

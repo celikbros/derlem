@@ -114,10 +114,41 @@ Frozen release ve release-source satirlari veritabani trigger'lariyla
 degistirilemez. Manifest ve kaynak artifact'leri consumer endpointlerinden
 salt-okunur indirilir.
 
+## Kanonik Export
+
+`POST /releases/{id}/exports`, yalnizca `frozen` durumundaki release icin
+`jsonl` veya `txt` formatinda `export_release` isi olusturur. Admin ve data
+manager export baslatabilir; admin, data manager ve consumer team hazir
+artifact'leri indirebilir.
+
+Worker kaynak snapshot'larini `source_id` sirasinda, her kaynagi da satir
+sirasinda okur. Tum cikti bellekte tutulmaz; gecici dosyaya akis halinde
+yazilir. Her 50.000 kayitta `background_jobs.result.progress` icine okunan
+girdi byte'i, yazilan kayit, tamamlanan kaynak ve cikti byte'i kaydedilir.
+
+JSONL kaydi modelden bagimsizdir:
+
+```json
+{"id":"...","metadata":{"content_purpose":"instruction","document_sha256":"...","domain":"general","external_id":null,"language":"tr","license":"internal","source_id":"...","source_ordinal":1,"source_sha256":"..."},"text":"Ornek metin"}
+```
+
+`id`, `source_sha256 + source_ordinal + document_sha256` birlesiminin SHA256
+degeridir. Model adi, tokenizer adi veya chat template etiketi saklanmaz.
+Egitim katmani kanonik JSONL'i hedef modelin adapter'i ile donusturur. TXT
+ciktisi kolay tuketim icin belge basina tek UTF-8 satir uretir.
+
+Hazir artifact ve `derlem.export-manifest.v1` manifesti content-addressed
+immutable store'a yazilir. Manifest; release kimligi ve manifest SHA256'si,
+format, medya tipi, kayit sayisi, byte boyutu, export SHA256'si ve kaynak
+dagilimini sabitler. Ayni frozen snapshot ve format icin siralama, JSON
+serilestirme ve belge kimligi deterministik oldugundan cikti checksum'i da
+deterministiktir.
+
 ## Denetim
 
 Her create, metadata update, ingest queue, ingest completion, PII scan, exact
 duplicate kontrolu, normalized dedup kontrolu, login, belge review, kaynak
-review, release create, freeze queue, freeze ve freeze-block islemi
+review, release create, freeze queue, freeze, export queue, export ready/fail
+ve freeze-block islemi
 `audit_events` tablosuna eklenir.
 Tablo update, delete ve truncate islemlerini trigger ile reddeder.

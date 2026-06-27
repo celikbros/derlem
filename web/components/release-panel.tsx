@@ -5,7 +5,10 @@ import {
   Check,
   Download,
   FileArchive,
+  FileJson,
+  FileText,
   LockKeyhole,
+  LoaderCircle,
   Plus,
   RefreshCw,
   ShieldCheck,
@@ -33,6 +36,7 @@ export function ReleasePanel({
   const [selectedSourceIDs, setSelectedSourceIDs] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [freezing, setFreezing] = useState<string | null>(null);
+  const [exporting, setExporting] = useState<string | null>(null);
   const createDialog = useRef<HTMLDialogElement>(null);
   const canManage = user.roles.some((role) => ["admin", "data_manager"].includes(role));
   const canFreeze = user.roles.includes("admin");
@@ -117,6 +121,38 @@ export function ReleasePanel({
       onNotice(messageFrom(error));
     } finally {
       setFreezing(null);
+    }
+  }
+
+  async function createExport(release: Release, format: "jsonl" | "txt") {
+    setExporting(format);
+    try {
+      await requestJSON<{ job_id: string }>(`/api/releases/${release.id}/exports`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ format }),
+      });
+      onNotice(`${format.toUpperCase()} export işi kuyruğa alındı.`);
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        await delay(1000);
+        const updated = await requestJSON<Release>(`/api/releases/${release.id}`);
+        setReleases((current) => current.map((item) => item.id === updated.id ? updated : item));
+        setSelected(updated);
+        const currentExport = updated.exports.find((item) => item.format === format);
+        if (currentExport?.status === "ready") {
+          onNotice(`${format.toUpperCase()} export hazır.`);
+          return;
+        }
+        if (currentExport?.status === "failed") {
+          onNotice(currentExport.last_error ?? "Export işi başarısız oldu.");
+          return;
+        }
+      }
+      onNotice("Export arka planda çalışıyor; İşler görünümünden ilerlemeyi izleyebilirsiniz.");
+    } catch (error) {
+      onNotice(messageFrom(error));
+    } finally {
+      setExporting(null);
     }
   }
 
@@ -209,6 +245,42 @@ export function ReleasePanel({
             </div>
           </section>
 
+          {selected.status === "frozen" && (
+            <section className="release-section">
+              <h3><FileArchive size={16} /> Kanonik exportlar</h3>
+              <div className="release-export-list">
+                {(["jsonl", "txt"] as const).map((format) => {
+                  const currentExport = selected.exports.find((item) => item.format === format);
+                  const Icon = format === "jsonl" ? FileJson : FileText;
+                  const busy = exporting === format || currentExport?.status === "queued" || currentExport?.status === "building";
+                  return (
+                    <div key={format} className="release-export-row">
+                      <Icon size={18} aria-hidden="true" />
+                      <div>
+                        <strong>{format.toUpperCase()}</strong>
+                        <span>{exportStatusText(currentExport)}</span>
+                        {currentExport?.object_sha256 && <code>{currentExport.object_sha256}</code>}
+                      </div>
+                      <div className="release-export-actions">
+                        {currentExport?.status === "ready" && canDownload && (
+                          <>
+                            <a className="icon-button" title={`${format.toUpperCase()} indir`} href={`/api/releases/${selected.id}/exports/${format}/artifact`} download><Download size={16} /></a>
+                            <a className="icon-button" title="Export manifestini indir" href={`/api/releases/${selected.id}/exports/${format}/manifest`} download><ShieldCheck size={16} /></a>
+                          </>
+                        )}
+                        {currentExport?.status !== "ready" && canManage && (
+                          <button className="icon-button" type="button" disabled={busy} title={`${format.toUpperCase()} export üret`} onClick={() => void createExport(selected, format)}>
+                            {busy ? <LoaderCircle className="spin" size={16} /> : <Plus size={16} />}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
           {selected.status === "frozen" && selected.manifest_sha256 && (
             <section className="release-section manifest-section">
               <h3><Check size={16} /> Manifest</h3>
@@ -279,6 +351,23 @@ function gateRows(release: Release) {
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("tr-TR", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
+}
+
+function exportStatusText(value: Release["exports"][number] | undefined) {
+  if (!value) return "Henüz üretilmedi";
+  if (value.status === "ready") {
+    const records = value.record_count?.toLocaleString("tr-TR") ?? "0";
+    return `${records} kayıt · ${formatBytes(value.byte_size ?? 0)}`;
+  }
+  if (value.status === "failed") return "Başarısız · yeniden denenebilir";
+  return value.status === "building" ? "Üretiliyor" : "Kuyrukta";
+}
+
+function formatBytes(value: number) {
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 ** 2) return `${(value / 1024).toFixed(1)} KB`;
+  if (value < 1024 ** 3) return `${(value / 1024 ** 2).toFixed(1)} MB`;
+  return `${(value / 1024 ** 3).toFixed(1)} GB`;
 }
 
 function delay(milliseconds: number) {

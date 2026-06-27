@@ -14,6 +14,7 @@ const jobLabels: Record<string, string> = {
   index_document_fingerprints: "Normalize dedup",
   sample_documents: "Belge örnekleme",
   freeze_release: "Release freeze",
+  export_release: "Release export",
 };
 
 export function JobsPanel({ onNotice }: { onNotice: (message: string) => void }) {
@@ -80,10 +81,26 @@ export function JobStatus({ status }: { status: BackgroundJob["status"] }) {
 
 function resultSummary(job: BackgroundJob) {
   if (job.status === "queued") return "Bekliyor";
+  if (job.status === "running" && job.job_type === "export_release") {
+    const progress = job.result?.progress;
+    if (progress && typeof progress === "object" && "records_written" in progress) {
+      const records = Number(progress.records_written).toLocaleString("tr-TR");
+      const bytes = "output_bytes_written" in progress ? Number(progress.output_bytes_written) : 0;
+      return `${records} kayıt · ${formatMegabytes(bytes)} MB`;
+    }
+  }
   if (job.status === "running") return "İşleniyor";
   if (job.job_type === "scan_pii" && typeof job.result?.status === "string") return `PII: ${job.result.status}`;
   if (job.job_type === "index_document_fingerprints" && typeof job.result?.status === "string") return `Dedup: ${job.result.status}`;
+  if (job.job_type === "export_release" && job.status === "succeeded") {
+    const records = Number(job.result?.record_count ?? 0).toLocaleString("tr-TR");
+    return `${String(job.result?.format ?? "").toUpperCase()} · ${records} kayıt`;
+  }
   return job.status === "succeeded" ? "Başarılı" : "-";
+}
+
+function formatMegabytes(bytes: number) {
+  return (bytes / 1024 / 1024).toLocaleString("tr-TR", { maximumFractionDigits: 1 });
 }
 
 function formatDate(value: string) {

@@ -370,7 +370,10 @@ See [docs/local_development.md](docs/local_development.md) for details.
 | `GET/POST` | `/api/v1/releases` | List releases or create a draft from approved sources |
 | `GET` | `/api/v1/releases/{id}` | Release, source snapshots, and gate results |
 | `POST` | `/api/v1/releases/{id}/freeze` | Queue an admin-controlled freeze job |
+| `POST` | `/api/v1/releases/{id}/exports` | Queue a deterministic JSONL/TXT export for a frozen release |
 | `GET` | `/api/v1/releases/{id}/manifest` | Download a frozen manifest |
+| `GET` | `/api/v1/releases/{id}/exports/{format}/artifact` | Download a ready canonical export |
+| `GET` | `/api/v1/releases/{id}/exports/{format}/manifest` | Download an export manifest |
 | `GET` | `/api/v1/releases/{id}/sources/{source_id}/artifact` | Download a frozen source artifact |
 
 Lists use cursor pagination. Metadata updates require the current `version` and
@@ -438,6 +441,8 @@ Document Index is the next active target.**
 - [x] Source-artifact SHA256 exact-duplicate gate
 - [x] Normalized document exact-dedup fingerprint gate
 - [x] Deterministic bounded document sampling
+- [x] Deterministic model-independent JSONL/TXT exports from frozen releases
+- [x] Export artifact/manifest checksums, progress reporting, and role-gated downloads
 - [x] Object-store-backed immutable document versions and editor dialog
 - [x] Document quality scores, immutable review history, and full-sample gate
 - [x] Moderation, rejection reasons, and self-review prevention
@@ -452,7 +457,7 @@ Document Index is the next active target.**
 
 - [ ] Full-corpus document indexing and bulk review workflow
 - [ ] Multidimensional quality scores and risk-based sampling
-- [ ] Consolidated JSONL/TXT exports and shard generation
+- [ ] Multi-shard/Parquet packaging and token estimates
 - [ ] Near-dedup and approximate decontamination
 - [ ] S3/MinIO storage implementation
 - [ ] Keycloak/OAuth and service accounts
@@ -466,6 +471,7 @@ Document Index is the next active target.**
 - [Local role test users](docs/local_role_testing.md)
 - [Production deployment](docs/production_deployment.md)
 - [API and workflows](docs/api_workflows.md)
+- [Canonical export contract](docs/canonical_exports.en.md)
 - [Pretraining data factory](docs/pretraining_data_factory.md)
 - [Model prompt format abstraction](docs/model_prompt_format_abstraction.md)
 - [Scalability architecture](docs/scalability_architecture.md)

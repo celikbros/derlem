@@ -97,6 +97,47 @@ func (s *Server) freezeRelease(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, map[string]string{"job_id": jobID, "status": "queued"})
 }
 
+func (s *Server) createReleaseExport(w http.ResponseWriter, r *http.Request) {
+	var input domain.CreateReleaseExportInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	input.Format = strings.ToLower(strings.TrimSpace(input.Format))
+	if input.Format != "jsonl" && input.Format != "txt" {
+		writeError(w, http.StatusBadRequest, "invalid_export_format", "Export formatı jsonl veya txt olmalıdır.")
+		return
+	}
+	principal, _ := principalFrom(r.Context())
+	export, jobID, err := s.releases.QueueExport(
+		r.Context(),
+		r.PathValue("id"),
+		input.Format,
+		principal.Subject,
+	)
+	if errors.Is(err, repository.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "release_not_found", "Sürüm bulunamadı.")
+		return
+	}
+	if errors.Is(err, repository.ErrConflict) {
+		writeError(w, http.StatusConflict, "release_export_conflict", "Bu format için hazır veya devam eden bir export var.")
+		return
+	}
+	var gateError *repository.GateError
+	if errors.As(err, &gateError) {
+		writeReleaseGateError(w, "release_export_gate_blocked", "Yalnız frozen release export edilebilir.", gateError.Reasons)
+		return
+	}
+	if err != nil {
+		s.logger.Error("queue release export failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "Export işi başlatılamadı.")
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{
+		"export": export,
+		"job_id": jobID,
+	})
+}
+
 func (s *Server) downloadReleaseManifest(w http.ResponseWriter, r *http.Request) {
 	artifact, err := s.releases.ManifestObject(r.Context(), r.PathValue("id"))
 	if errors.Is(err, repository.ErrNotFound) {
@@ -120,6 +161,33 @@ func (s *Server) downloadReleaseSource(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.logger.Error("get release source artifact failed", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal_error", "Kaynak artifact'i getirilemedi.")
+		return
+	}
+	s.streamReleaseArtifact(w, r, artifact)
+}
+
+func (s *Server) downloadReleaseExport(w http.ResponseWriter, r *http.Request) {
+	s.downloadExportArtifact(w, r, false)
+}
+
+func (s *Server) downloadReleaseExportManifest(w http.ResponseWriter, r *http.Request) {
+	s.downloadExportArtifact(w, r, true)
+}
+
+func (s *Server) downloadExportArtifact(w http.ResponseWriter, r *http.Request, manifest bool) {
+	exportFormat := strings.ToLower(strings.TrimSpace(r.PathValue("format")))
+	if exportFormat != "jsonl" && exportFormat != "txt" {
+		writeError(w, http.StatusBadRequest, "invalid_export_format", "Export formatı jsonl veya txt olmalıdır.")
+		return
+	}
+	artifact, err := s.releases.ExportArtifact(r.Context(), r.PathValue("id"), exportFormat, manifest)
+	if errors.Is(err, repository.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "release_export_not_found", "Hazır export artifact'i bulunamadı.")
+		return
+	}
+	if err != nil {
+		s.logger.Error("get release export failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "Export artifact'i getirilemedi.")
 		return
 	}
 	s.streamReleaseArtifact(w, r, artifact)

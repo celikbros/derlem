@@ -7,6 +7,8 @@ import pytest
 
 from derlem_worker.releases import (
     ReleaseGateError,
+    build_export_manifest,
+    build_release_export,
     build_release_manifest,
     exact_decontamination,
 )
@@ -70,3 +72,93 @@ def test_release_manifest_is_deterministic_and_sorted() -> None:
     assert first == second
     decoded = json.loads(first)
     assert [source["source_id"] for source in decoded["sources"]] == ["a", "b"]
+
+
+def test_jsonl_export_is_deterministic_model_independent_and_sorted(tmp_path: Path) -> None:
+    first_source = tmp_path / "first.jsonl"
+    second_source = tmp_path / "second.txt"
+    first_source.write_text('{"id":"doc-1","text":"Merhaba dünya"}\n', encoding="utf-8")
+    second_source.write_text("İkinci belge\n", encoding="utf-8")
+    release = {
+        "id": "release-id",
+        "name": "Derlem",
+        "version": "v1",
+        "content_purpose": "pretrain",
+        "frozen_at": "2026-06-27T00:00:00Z",
+        "manifest_sha256": "f" * 64,
+    }
+    sources = [
+        {
+            "source_id": "b",
+            "source_sha256": "2" * 64,
+            "path": second_source,
+            "language": "tr",
+            "domain": "general",
+            "license": "internal",
+        },
+        {
+            "source_id": "a",
+            "source_sha256": "1" * 64,
+            "path": first_source,
+            "language": "tr",
+            "domain": "general",
+            "license": "internal",
+        },
+    ]
+    first_output = tmp_path / "first-export.jsonl"
+    second_output = tmp_path / "second-export.jsonl"
+
+    first = build_release_export(
+        release,
+        sources,
+        "jsonl",
+        first_output,
+        max_document_bytes=1024,
+    )
+    second = build_release_export(
+        release,
+        list(reversed(sources)),
+        "jsonl",
+        second_output,
+        max_document_bytes=1024,
+    )
+
+    assert first == second
+    assert first_output.read_bytes() == second_output.read_bytes()
+    records = [json.loads(line) for line in first_output.read_text(encoding="utf-8").splitlines()]
+    assert [record["text"] for record in records] == ["Merhaba dünya", "İkinci belge"]
+    assert records[0]["metadata"]["external_id"] == "doc-1"
+    assert "model" not in records[0]["metadata"]
+
+    manifest = json.loads(build_export_manifest(release, sources, first))
+    assert manifest["export"]["sha256"] == first.sha256
+    assert manifest["export"]["record_count"] == 2
+    assert [source["source_id"] for source in manifest["sources"]] == ["a", "b"]
+
+
+def test_txt_export_flattens_embedded_newlines(tmp_path: Path) -> None:
+    source_path = tmp_path / "source.jsonl"
+    source_path.write_text('{"text":"birinci\\nikinci"}\n', encoding="utf-8")
+    output_path = tmp_path / "export.txt"
+    release = {"content_purpose": "instruction"}
+    sources = [
+        {
+            "source_id": "a",
+            "source_sha256": "1" * 64,
+            "path": source_path,
+            "language": "tr",
+            "domain": "general",
+            "license": "internal",
+        }
+    ]
+
+    result = build_release_export(
+        release,
+        sources,
+        "txt",
+        output_path,
+        max_document_bytes=1024,
+    )
+
+    assert output_path.read_text(encoding="utf-8") == "birinci ikinci\n"
+    assert result.record_count == 1

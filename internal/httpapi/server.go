@@ -66,7 +66,10 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/releases", s.authenticate(requireRoles("admin", "data_manager")(http.HandlerFunc(s.createRelease))))
 	mux.Handle("GET /api/v1/releases/{id}", s.authenticate(http.HandlerFunc(s.getRelease)))
 	mux.Handle("POST /api/v1/releases/{id}/freeze", s.authenticate(requireRoles("admin")(http.HandlerFunc(s.freezeRelease))))
+	mux.Handle("POST /api/v1/releases/{id}/exports", s.authenticate(requireRoles("admin", "data_manager")(http.HandlerFunc(s.createReleaseExport))))
 	mux.Handle("GET /api/v1/releases/{id}/manifest", s.authenticate(requireRoles("admin", "data_manager", "consumer_team")(http.HandlerFunc(s.downloadReleaseManifest))))
+	mux.Handle("GET /api/v1/releases/{id}/exports/{format}/artifact", s.authenticate(requireRoles("admin", "data_manager", "consumer_team")(http.HandlerFunc(s.downloadReleaseExport))))
+	mux.Handle("GET /api/v1/releases/{id}/exports/{format}/manifest", s.authenticate(requireRoles("admin", "data_manager", "consumer_team")(http.HandlerFunc(s.downloadReleaseExportManifest))))
 	mux.Handle("GET /api/v1/releases/{id}/sources/{source_id}/artifact", s.authenticate(requireRoles("admin", "data_manager", "consumer_team")(http.HandlerFunc(s.downloadReleaseSource))))
 	return s.middleware(mux)
 }

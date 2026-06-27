@@ -7,6 +7,7 @@ import logging
 import os
 from pathlib import Path
 import socket
+import tempfile
 import time
 import traceback
 from uuid import UUID
@@ -19,6 +20,8 @@ from derlem_worker.fingerprints import FINGERPRINT_VERSION, document_fingerprint
 from derlem_worker.pii import PIIReport, PIIScanner
 from derlem_worker.releases import (
     ReleaseGateError,
+    build_export_manifest,
+    build_release_export,
     build_release_manifest,
     exact_decontamination,
 )
@@ -220,6 +223,15 @@ class Worker:
                     job.id,
                     job.payload.get("release_id"),
                     manifest_sha256,
+                )
+            elif job.job_type == "export_release":
+                export_sha256 = self._export_release(job)
+                LOGGER.info(
+                    "job_succeeded job_id=%s release_id=%s format=%s export_sha256=%s",
+                    job.id,
+                    job.payload.get("release_id"),
+                    job.payload.get("format"),
+                    export_sha256,
                 )
             else:
                 raise ValueError(f"Unsupported job type: {job.job_type}")
@@ -1292,6 +1304,240 @@ class Worker:
                 )
         return stored_manifest.sha256
 
+    def _export_release(self, job: Job) -> str:
+        release_id = str(job.payload.get("release_id", "")).strip()
+        export_id = str(job.payload.get("export_id", "")).strip()
+        export_format = str(job.payload.get("format", "")).strip().lower()
+        if not release_id or not export_id or export_format not in {"jsonl", "txt"}:
+            raise ReleaseGateError(
+                "export_release requires release_id, export_id and a supported format",
+                {"export": {"status": "blocked", "reason": "invalid_job_payload"}},
+            )
+
+        with psycopg.connect(self.config.database_url, row_factory=dict_row) as connection:
+            release = connection.execute(
+                """
+                SELECT id::text, name, version, content_purpose, status,
+                    manifest_sha256, frozen_at
+                FROM releases
+                WHERE id = %s
+                """,
+                (release_id,),
+            ).fetchone()
+            export = connection.execute(
+                """
+                SELECT id::text, status, format
+                FROM release_exports
+                WHERE id = %s AND release_id = %s
+                """,
+                (export_id, release_id),
+            ).fetchone()
+            source_rows = connection.execute(
+                """
+                SELECT release_source.source_id::text, release_source.source_sha256,
+                    release_source.source_name, release_source.license,
+                    release_source.language, release_source.domain,
+                    object.storage_key
+                FROM release_sources AS release_source
+                JOIN storage_objects AS object ON object.sha256 = release_source.source_sha256
+                WHERE release_source.release_id = %s
+                ORDER BY release_source.source_id
+                """,
+                (release_id,),
+            ).fetchall()
+            if (
+                release is None
+                or release["status"] != "frozen"
+                or export is None
+                or export["format"] != export_format
+                or export["status"] not in {"queued", "building"}
+            ):
+                raise ReleaseGateError(
+                    "Release export is no longer eligible",
+                    {"export": {"status": "blocked", "reason": "export_not_eligible"}},
+                )
+            connection.execute(
+                """
+                UPDATE release_exports
+                SET status = 'building', last_error = NULL
+                WHERE id = %s AND status IN ('queued', 'building')
+                """,
+                (export_id,),
+            )
+            connection.commit()
+
+        export_sources: list[dict[str, object]] = []
+        for source in source_rows:
+            item = dict(source)
+            item["path"] = self._stored_object_path(str(source["storage_key"]))
+            export_sources.append(item)
+
+        temp_descriptor, temp_name = tempfile.mkstemp(
+            prefix=f"release-export-{export_format}-",
+            dir=self.store.temp_root,
+        )
+        os.close(temp_descriptor)
+        temp_path = Path(temp_name)
+        try:
+            with psycopg.connect(self.config.database_url) as progress_connection:
+                def update_progress(progress: dict[str, int]) -> None:
+                    progress_connection.execute(
+                        """
+                        UPDATE background_jobs
+                        SET result = jsonb_build_object(
+                            'phase', 'building',
+                            'release_id', %s::text,
+                            'export_id', %s::text,
+                            'format', %s::text,
+                            'progress', %s::jsonb
+                        ), updated_at = now()
+                        WHERE id = %s AND status = 'running'
+                        """,
+                        (
+                            release_id,
+                            export_id,
+                            export_format,
+                            json.dumps(progress, ensure_ascii=False),
+                            job.id,
+                        ),
+                    )
+                    progress_connection.commit()
+
+                result = build_release_export(
+                    dict(release),
+                    export_sources,
+                    export_format,
+                    temp_path,
+                    max_document_bytes=self.config.max_document_bytes,
+                    progress_callback=update_progress,
+                )
+            stored_export = self.store.ingest_file(temp_path)
+            if stored_export.sha256 != result.sha256 or stored_export.byte_size != result.byte_size:
+                raise RuntimeError("Export checksum changed while publishing")
+            manifest_bytes = build_export_manifest(dict(release), export_sources, result)
+            stored_manifest = self.store.ingest_bytes(manifest_bytes)
+        finally:
+            temp_path.unlink(missing_ok=True)
+
+        with psycopg.connect(self.config.database_url, row_factory=dict_row) as connection:
+            with connection.transaction():
+                locked_export = connection.execute(
+                    """
+                    SELECT status
+                    FROM release_exports
+                    WHERE id = %s AND release_id = %s
+                    FOR UPDATE
+                    """,
+                    (export_id, release_id),
+                ).fetchone()
+                if locked_export is None or locked_export["status"] != "building":
+                    raise ReleaseGateError(
+                        "Release export changed before publish",
+                        {"export": {"status": "blocked", "reason": "export_changed"}},
+                    )
+                connection.execute(
+                    """
+                    INSERT INTO storage_objects(sha256, storage_key, byte_size, media_type)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (sha256) DO NOTHING
+                    """,
+                    (
+                        stored_export.sha256,
+                        stored_export.storage_key,
+                        stored_export.byte_size,
+                        result.media_type,
+                    ),
+                )
+                connection.execute(
+                    """
+                    INSERT INTO storage_objects(sha256, storage_key, byte_size, media_type)
+                    VALUES (%s, %s, %s, 'application/vnd.derlem.export-manifest+json')
+                    ON CONFLICT (sha256) DO NOTHING
+                    """,
+                    (
+                        stored_manifest.sha256,
+                        stored_manifest.storage_key,
+                        stored_manifest.byte_size,
+                    ),
+                )
+                updated = connection.execute(
+                    """
+                    UPDATE release_exports
+                    SET status = 'ready', object_sha256 = %s,
+                        manifest_object_sha256 = %s, record_count = %s,
+                        byte_size = %s, completed_at = now(), last_error = NULL
+                    WHERE id = %s AND status = 'building'
+                    """,
+                    (
+                        stored_export.sha256,
+                        stored_manifest.sha256,
+                        result.record_count,
+                        result.byte_size,
+                        export_id,
+                    ),
+                )
+                if updated.rowcount != 1:
+                    raise ReleaseGateError(
+                        "Release export changed before commit",
+                        {"export": {"status": "blocked", "reason": "export_changed"}},
+                    )
+                connection.execute(
+                    """
+                    INSERT INTO audit_events(actor_type, action, entity_type, entity_id, details)
+                    VALUES (
+                        'system', 'release.export_ready', 'release', %s,
+                        jsonb_build_object(
+                            'job_id', %s::text,
+                            'export_id', %s::text,
+                            'format', %s::text,
+                            'object_sha256', %s::text,
+                            'manifest_object_sha256', %s::text,
+                            'record_count', %s::bigint,
+                            'byte_size', %s::bigint
+                        )
+                    )
+                    """,
+                    (
+                        release_id,
+                        str(job.id),
+                        export_id,
+                        export_format,
+                        stored_export.sha256,
+                        stored_manifest.sha256,
+                        result.record_count,
+                        result.byte_size,
+                    ),
+                )
+                connection.execute(
+                    """
+                    UPDATE background_jobs
+                    SET status = 'succeeded',
+                        result = jsonb_build_object(
+                            'phase', 'ready',
+                            'release_id', %s::text,
+                            'export_id', %s::text,
+                            'format', %s::text,
+                            'object_sha256', %s::text,
+                            'manifest_object_sha256', %s::text,
+                            'record_count', %s::bigint,
+                            'byte_size', %s::bigint
+                        ),
+                        completed_at = now(), updated_at = now()
+                    WHERE id = %s AND status = 'running'
+                    """,
+                    (
+                        release_id,
+                        export_id,
+                        export_format,
+                        stored_export.sha256,
+                        stored_manifest.sha256,
+                        result.record_count,
+                        result.byte_size,
+                        job.id,
+                    ),
+                )
+        return stored_export.sha256
+
     def _stored_object_path(self, storage_key: str) -> Path:
         path = (self.config.storage_root / storage_key).resolve(strict=True)
         path.relative_to(self.config.storage_root)
@@ -1407,6 +1653,37 @@ class Worker:
                     str(job.id),
                     str(error)[:4000],
                     json.dumps(gate_results, ensure_ascii=False),
+                ),
+            )
+        if next_status == "failed" and job.job_type == "export_release":
+            export_id = str(job.payload.get("export_id", ""))
+            connection.execute(
+                """
+                UPDATE release_exports
+                SET status = 'failed', last_error = %s, completed_at = now()
+                WHERE id = %s AND status IN ('queued', 'building')
+                """,
+                (str(error)[:4000], export_id),
+            )
+            connection.execute(
+                """
+                INSERT INTO audit_events(actor_type, action, entity_type, entity_id, details)
+                VALUES (
+                    'system', 'release.export_failed', 'release', %s,
+                    jsonb_build_object(
+                        'job_id', %s::text,
+                        'export_id', %s::text,
+                        'format', %s::text,
+                        'error', %s::text
+                    )
+                )
+                """,
+                (
+                    str(job.payload.get("release_id", "")),
+                    str(job.id),
+                    export_id,
+                    str(job.payload.get("format", "")),
+                    str(error)[:4000],
                 ),
             )
         connection.commit()

@@ -122,6 +122,7 @@ func (r *Releases) Create(ctx context.Context, input domain.CreateReleaseInput, 
 		return domain.Release{}, err
 	}
 	release.Sources = sources
+	release.Exports = []domain.ReleaseExport{}
 	return release, nil
 }
 
@@ -153,6 +154,10 @@ func (r *Releases) List(ctx context.Context, limit int) ([]domain.Release, error
 		if err != nil {
 			return nil, err
 		}
+		releases[index].Exports, err = listReleaseExports(ctx, r.pool, releases[index].ID)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return releases, nil
 }
@@ -168,7 +173,93 @@ func (r *Releases) Get(ctx context.Context, id string) (domain.Release, error) {
 		return domain.Release{}, err
 	}
 	release.Sources, err = listReleaseSources(ctx, r.pool, release.ID)
+	if err != nil {
+		return domain.Release{}, err
+	}
+	release.Exports, err = listReleaseExports(ctx, r.pool, release.ID)
 	return release, err
+}
+
+func (r *Releases) QueueExport(ctx context.Context, releaseID, exportFormat, actorID string) (domain.ReleaseExport, string, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return domain.ReleaseExport{}, "", err
+	}
+	defer tx.Rollback(ctx)
+
+	var releaseStatus string
+	if err := tx.QueryRow(ctx, "SELECT status FROM releases WHERE id = $1 FOR SHARE", releaseID).Scan(&releaseStatus); errors.Is(err, pgx.ErrNoRows) {
+		return domain.ReleaseExport{}, "", ErrNotFound
+	} else if err != nil {
+		return domain.ReleaseExport{}, "", err
+	}
+	if releaseStatus != "frozen" {
+		return domain.ReleaseExport{}, "", &GateError{Reasons: []string{"release_not_frozen"}}
+	}
+
+	export, err := scanReleaseExport(tx.QueryRow(ctx, `
+		SELECT `+releaseExportColumns+`
+		FROM release_exports
+		WHERE release_id = $1 AND format = $2
+		FOR UPDATE
+	`, releaseID, exportFormat))
+	if errors.Is(err, pgx.ErrNoRows) {
+		export, err = scanReleaseExport(tx.QueryRow(ctx, `
+			INSERT INTO release_exports(release_id, format, created_by)
+			VALUES ($1, $2, $3)
+			RETURNING `+releaseExportColumns,
+			releaseID, exportFormat, actorID,
+		))
+	} else if err == nil && export.Status == "failed" {
+		export, err = scanReleaseExport(tx.QueryRow(ctx, `
+			UPDATE release_exports
+			SET status = 'queued', last_error = NULL, created_by = $3,
+				created_at = now(), completed_at = NULL
+			WHERE id = $1 AND release_id = $2
+			RETURNING `+releaseExportColumns,
+			export.ID, releaseID, actorID,
+		))
+	} else if err == nil {
+		return domain.ReleaseExport{}, "", ErrConflict
+	}
+	if err != nil {
+		return domain.ReleaseExport{}, "", fmt.Errorf("queue release export record: %w", err)
+	}
+
+	var jobID string
+	err = tx.QueryRow(ctx, `
+		INSERT INTO background_jobs(job_type, priority, payload, created_by)
+		VALUES (
+			'export_release', 60,
+			jsonb_build_object(
+				'release_id', $1::text, 'export_id', $2::text,
+				'format', $3::text, 'requested_by', $4::text
+			),
+			$4::uuid
+		)
+		ON CONFLICT DO NOTHING
+		RETURNING id::text
+	`, releaseID, export.ID, exportFormat, actorID).Scan(&jobID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.ReleaseExport{}, "", ErrConflict
+	}
+	if err != nil {
+		return domain.ReleaseExport{}, "", err
+	}
+
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO audit_events(actor_id, action, entity_type, entity_id, details)
+		VALUES (
+			$1, 'release.export_queued', 'release', $2,
+			jsonb_build_object('export_id', $3::text, 'format', $4::text, 'job_id', $5::text)
+		)
+	`, actorID, releaseID, export.ID, exportFormat, jobID); err != nil {
+		return domain.ReleaseExport{}, "", fmt.Errorf("audit release export queue: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return domain.ReleaseExport{}, "", err
+	}
+	return export, jobID, nil
 }
 
 func (r *Releases) QueueFreeze(ctx context.Context, id, actorID string) (string, error) {
@@ -278,6 +369,31 @@ func (r *Releases) SourceArtifact(ctx context.Context, releaseID, sourceID strin
 	return artifact, err
 }
 
+func (r *Releases) ExportArtifact(ctx context.Context, releaseID, exportFormat string, manifest bool) (ReleaseArtifact, error) {
+	digestColumn := "export.object_sha256"
+	nameSuffix := "." + exportFormat
+	if manifest {
+		digestColumn = "export.manifest_object_sha256"
+		nameSuffix = "-" + exportFormat + "-manifest.json"
+	}
+	var artifact ReleaseArtifact
+	err := r.pool.QueryRow(ctx, `
+		SELECT `+digestColumn+`, release.name || '-' || release.version || $3::text,
+			object.media_type, object.byte_size
+		FROM release_exports AS export
+		JOIN releases AS release ON release.id = export.release_id
+		JOIN storage_objects AS object ON object.sha256 = `+digestColumn+`
+		WHERE export.release_id = $1 AND export.format = $2
+			AND export.status = 'ready' AND release.status = 'frozen'
+	`, releaseID, exportFormat, nameSuffix).Scan(
+		&artifact.SHA256, &artifact.Name, &artifact.MediaType, &artifact.ByteSize,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ReleaseArtifact{}, ErrNotFound
+	}
+	return artifact, err
+}
+
 const releaseColumns = `
 	id::text, name, version, content_purpose, status,
 	manifest_object_sha256, manifest_sha256, gate_results,
@@ -332,6 +448,45 @@ func listReleaseSources(ctx context.Context, queryer releaseSourceQueryer, relea
 		sources = append(sources, source)
 	}
 	return sources, rows.Err()
+}
+
+const releaseExportColumns = `
+	id::text, release_id::text, format, status, object_sha256,
+	manifest_object_sha256, record_count, byte_size, last_error,
+	created_by::text, created_at, completed_at`
+
+func scanReleaseExport(row scanner) (domain.ReleaseExport, error) {
+	var export domain.ReleaseExport
+	err := row.Scan(
+		&export.ID, &export.ReleaseID, &export.Format, &export.Status,
+		&export.ObjectSHA256, &export.ManifestObjectSHA256, &export.RecordCount,
+		&export.ByteSize, &export.LastError, &export.CreatedBy,
+		&export.CreatedAt, &export.CompletedAt,
+	)
+	return export, err
+}
+
+func listReleaseExports(ctx context.Context, queryer releaseSourceQueryer, releaseID string) ([]domain.ReleaseExport, error) {
+	rows, err := queryer.Query(ctx, `
+		SELECT `+releaseExportColumns+`
+		FROM release_exports
+		WHERE release_id = $1
+		ORDER BY format
+	`, releaseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	exports := []domain.ReleaseExport{}
+	for rows.Next() {
+		export, err := scanReleaseExport(rows)
+		if err != nil {
+			return nil, err
+		}
+		exports = append(exports, export)
+	}
+	return exports, rows.Err()
 }
 
 func isUniqueViolation(err error) bool {

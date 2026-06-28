@@ -454,6 +454,7 @@ indeks ve iş görünürlüğü çalışıyor, v0.3 kalite/paketleme aktif hedef
 - [x] Object store tabanlı immutable belge sürümleri ve editor diyaloğu
 - [x] Belge kalite puanı, immutable review geçmişi ve tam örnek kapsama kapısı
 - [x] Sürüm kontrollü ve atomik toplu belge inceleme
+- [x] Sürüm kontrollü beş boyutlu insan kalite rubric'i ve kaynak ortalamaları
 - [x] Moderasyon, ret gerekçesi ve self-review engeli
 - [x] Aynı amaçtaki onaylı kaynaklardan draft/frozen Release Builder
 - [x] Deterministik manifest, kaynak sürümü ve SHA256 snapshot'ı
@@ -466,7 +467,6 @@ indeks ve iş görünürlüğü çalışıyor, v0.3 kalite/paketleme aktif hedef
 
 ### Sıradaki işler
 
-- [ ] Çok boyutlu insan kalite skorları
 - [ ] Çoklu shard/Parquet paketleme ve token tahmini
 - [ ] Near-dedup ve yaklaşık decontamination
 - [ ] S3/MinIO object store implementasyonu
@@ -484,6 +484,7 @@ indeks ve iş görünürlüğü çalışıyor, v0.3 kalite/paketleme aktif hedef
 - [Risk bazlı örnekleme](docs/risk_sampling.md)
 - [Kontrollü yeniden örnekleme](docs/document_resampling.md)
 - [Arka plan işi ilerleme sözleşmesi](docs/job_progress.md)
+- [Çok boyutlu belge kalitesi](docs/multidimensional_quality.md)
 - [Kanonik export sözleşmesi](docs/canonical_exports.md)
 - [Pretraining data factory](docs/pretraining_data_factory.md)
 - [Model prompt format soyutlaması](docs/model_prompt_format_abstraction.md)

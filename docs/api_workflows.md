@@ -15,6 +15,7 @@ POST  /sources/{id}/ingest
 POST  /sources/{id}/upload
 GET   /sources/{id}/pii-scans
 GET   /sources/{id}/documents
+GET   /sources/{id}/document-quality-summary
 GET   /sources/{id}/document-sample-generations
 POST  /sources/{id}/documents/resample
 POST  /sources/{id}/documents/bulk-reviews
@@ -71,6 +72,12 @@ store'a, ordinal/preview/surum/risk metadata'si PostgreSQL'e yazilir. Job sonucu
 yalniz risk neden sayaclarini tasir, eslesen metni veya kimlik degerini tasimaz.
 Bu tablo tum corpus'un document indeksi degil, insan incelemesi icin bounded
 sample katmanidir. Ayrintili sozlesme: [Risk Bazli Ornekleme](risk_sampling.md).
+
+Yeni belge review'lari `multidimensional-v1` rubric'iyle genel, dil,
+tutarlilik, bilgi yogunlugu ve temizlik puanlarini `1..5` araliginda zorunlu
+tasir. Eski `overall-v1` review'lar degistirilmez. Aktif sample neslinin guncel
+surum ortalamalari `GET /sources/{id}/document-quality-summary` ile okunur.
+Ayrinti: [Cok Boyutlu Belge Kalitesi](multidimensional_quality.md).
 
 Ingest, PII, fingerprint ve sample/resample taramalari calisirken `GET /jobs`
 yanitindaki `result.phase` ve `result.progress` alanlari byte, satir ve

@@ -3,6 +3,8 @@ package repository
 import (
 	"errors"
 	"testing"
+
+	"github.com/celikbros/derlem/internal/domain"
 )
 
 func TestDocumentPreview(t *testing.T) {
@@ -23,20 +25,24 @@ func TestDocumentPreview(t *testing.T) {
 
 func TestNormalizeDocumentReview(t *testing.T) {
 	reason := "  ayrıntılı gerekçe  "
-	status, normalizedReason, err := normalizeDocumentReview("rejected", &reason, 4)
+	scores := domain.DocumentQualityScores{
+		QualityScore: 4, LanguageQualityScore: 5, CoherenceScore: 4,
+		InformationDensityScore: 3, CleanlinessScore: 5,
+	}
+	status, normalizedReason, err := normalizeDocumentReview("rejected", &reason, scores)
 	if err != nil || status != "rejected" || normalizedReason == nil || *normalizedReason != "ayrıntılı gerekçe" {
 		t.Fatalf("unexpected normalized review: status=%q reason=%v error=%v", status, normalizedReason, err)
 	}
 
-	if _, _, err := normalizeDocumentReview("approved", nil, 0); err == nil {
-		t.Fatal("missing quality score was accepted")
+	if _, _, err := normalizeDocumentReview("approved", nil, domain.DocumentQualityScores{}); err == nil {
+		t.Fatal("missing multidimensional scores were accepted")
 	} else {
 		var gateError *GateError
-		if !errors.As(err, &gateError) || gateError.Reasons[0] != "quality_score_required" {
-			t.Fatalf("unexpected quality score error: %v", err)
+		if !errors.As(err, &gateError) || len(gateError.Reasons) != 5 || gateError.Reasons[0] != "quality_score_required" {
+			t.Fatalf("unexpected multidimensional score error: %v", err)
 		}
 	}
-	if _, _, err := normalizeDocumentReview("sensitive_review", nil, 3); err == nil {
+	if _, _, err := normalizeDocumentReview("sensitive_review", nil, scores); err == nil {
 		t.Fatal("missing reason was accepted")
 	}
 }

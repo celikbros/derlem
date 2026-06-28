@@ -31,10 +31,20 @@ type UpdateDocumentInput struct {
 	Reason  *string `json:"reason"`
 }
 
+const MultidimensionalQualityRubric = "multidimensional-v1"
+
+type DocumentQualityScores struct {
+	QualityScore            int16 `json:"quality_score"`
+	LanguageQualityScore    int16 `json:"language_quality_score"`
+	CoherenceScore          int16 `json:"coherence_score"`
+	InformationDensityScore int16 `json:"information_density_score"`
+	CleanlinessScore        int16 `json:"cleanliness_score"`
+}
+
 type ReviewDocumentInput struct {
+	DocumentQualityScores
 	Decision        string  `json:"decision"`
 	Reason          *string `json:"reason"`
-	QualityScore    int16   `json:"quality_score"`
 	DocumentVersion int64   `json:"document_version"`
 }
 
@@ -44,10 +54,10 @@ type BulkReviewDocumentItem struct {
 }
 
 type BulkReviewDocumentsInput struct {
-	Documents    []BulkReviewDocumentItem `json:"documents"`
-	Decision     string                   `json:"decision"`
-	Reason       *string                  `json:"reason"`
-	QualityScore int16                    `json:"quality_score"`
+	DocumentQualityScores
+	Documents []BulkReviewDocumentItem `json:"documents"`
+	Decision  string                   `json:"decision"`
+	Reason    *string                  `json:"reason"`
 }
 
 type BulkDocumentReviewResult struct {
@@ -68,14 +78,32 @@ type DocumentSampleGeneration struct {
 }
 
 type DocumentReview struct {
-	ID              string          `json:"id"`
-	DocumentID      string          `json:"document_id"`
-	ReviewerID      string          `json:"reviewer_id"`
-	Decision        string          `json:"decision"`
-	Reason          *string         `json:"reason,omitempty"`
-	QualityScore    int16           `json:"quality_score"`
-	DocumentVersion int64           `json:"document_version"`
-	ObjectSHA256    string          `json:"object_sha256"`
-	Context         json.RawMessage `json:"context"`
-	CreatedAt       time.Time       `json:"created_at"`
+	ID                      string          `json:"id"`
+	DocumentID              string          `json:"document_id"`
+	ReviewerID              string          `json:"reviewer_id"`
+	Decision                string          `json:"decision"`
+	Reason                  *string         `json:"reason,omitempty"`
+	RubricVersion           string          `json:"rubric_version"`
+	QualityScore            int16           `json:"quality_score"`
+	LanguageQualityScore    *int16          `json:"language_quality_score,omitempty"`
+	CoherenceScore          *int16          `json:"coherence_score,omitempty"`
+	InformationDensityScore *int16          `json:"information_density_score,omitempty"`
+	CleanlinessScore        *int16          `json:"cleanliness_score,omitempty"`
+	DocumentVersion         int64           `json:"document_version"`
+	ObjectSHA256            string          `json:"object_sha256"`
+	Context                 json.RawMessage `json:"context"`
+	CreatedAt               time.Time       `json:"created_at"`
+}
+
+type DocumentQualitySummary struct {
+	SourceID                       string   `json:"source_id"`
+	RubricVersion                  string   `json:"rubric_version"`
+	ReviewCount                    int64    `json:"review_count"`
+	DocumentCount                  int64    `json:"document_count"`
+	LegacyReviewCount              int64    `json:"legacy_review_count"`
+	AverageQualityScore            *float64 `json:"average_quality_score,omitempty"`
+	AverageLanguageQualityScore    *float64 `json:"average_language_quality_score,omitempty"`
+	AverageCoherenceScore          *float64 `json:"average_coherence_score,omitempty"`
+	AverageInformationDensityScore *float64 `json:"average_information_density_score,omitempty"`
+	AverageCleanlinessScore        *float64 `json:"average_cleanliness_score,omitempty"`
 }

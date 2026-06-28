@@ -14,6 +14,7 @@ test("inspect sampled document content and quality review", async ({ page }, tes
   await source.click();
   await expect(page.getByRole("heading", { name: "Belge örnekleri" })).toBeVisible();
 
+  await page.getByRole("button", { name: /^Onaylı / }).click();
   const firstDocument = page.getByRole("button", { name: /^#1 / });
   await expect(firstDocument).toBeVisible();
   await firstDocument.click();
@@ -23,9 +24,12 @@ test("inspect sampled document content and quality review", async ({ page }, tes
   await expect(dialog.getByLabel("İçerik")).not.toHaveValue("");
   await expect(dialog.getByRole("button", { name: "Yeni sürümü kaydet" })).toBeVisible();
   await expect(dialog.getByRole("heading", { name: "Belge moderasyonu" })).toBeVisible();
-  await expect(dialog.getByLabel("Kalite puanı")).toHaveValue("3");
+  for (const label of ["Genel", "Dil", "Tutarlılık", "Bilgi", "Temizlik"]) {
+    await expect(dialog.getByLabel(`${label} kalite puanı`)).toHaveValue("3");
+  }
   await expect(dialog.getByText("approved", { exact: true })).toBeVisible();
-  await expect(dialog.getByText("5/5", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("Genel 5/5", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("Eski tek puanlı rubric", { exact: true })).toBeVisible();
 
   const screenshotDirectory = path.resolve("..", "var", "screenshots");
   await mkdir(screenshotDirectory, { recursive: true });

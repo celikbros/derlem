@@ -83,6 +83,7 @@ ana kapılar artık teknik değil:
 - Generation/membership snapshot'lı kontrollü yeniden örnekleme ve rollback.
 - Ingest, PII, fingerprint ve sample/resample işlerinde canlı byte/satır/doküman ilerlemesi.
 - Gardas clean candidate nesil 2 risk örneklemi: 5.922.891 belge tarandı, 200 örneğin 115'i risk kotasından seçildi.
+- `multidimensional-v1` insan kalite rubric'i, tekil/toplu review ve kaynak ortalamaları.
 
 ## Kalan Teknik İşler
 
@@ -93,7 +94,6 @@ ana kapılar artık teknik değil:
 
 ### v0.3 İçin Kalanlar
 
-- Çok boyutlu insan kalite skoru.
 - Export manifestine token tahmini eklemek.
 - Conversation/tool veri tipleri için geniş canonical export şeması.
 

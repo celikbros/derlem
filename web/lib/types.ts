@@ -72,11 +72,29 @@ export type DocumentReview = {
   reviewer_id: string;
   decision: "approved" | "rejected" | "sensitive_review";
   reason?: string;
+  rubric_version: "overall-v1" | "multidimensional-v1";
   quality_score: number;
+  language_quality_score?: number;
+  coherence_score?: number;
+  information_density_score?: number;
+  cleanliness_score?: number;
   document_version: number;
   object_sha256: string;
   context: Record<string, unknown>;
   created_at: string;
+};
+
+export type DocumentQualitySummary = {
+  source_id: string;
+  rubric_version: "multidimensional-v1";
+  review_count: number;
+  document_count: number;
+  legacy_review_count: number;
+  average_quality_score?: number;
+  average_language_quality_score?: number;
+  average_coherence_score?: number;
+  average_information_density_score?: number;
+  average_cleanliness_score?: number;
 };
 
 export type DocumentSampleGeneration = {

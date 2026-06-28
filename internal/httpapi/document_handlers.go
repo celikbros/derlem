@@ -40,6 +40,26 @@ func (s *Server) listSourceDocuments(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"items": documents})
 }
 
+func (s *Server) getDocumentQualitySummary(w http.ResponseWriter, r *http.Request) {
+	sourceID := r.PathValue("id")
+	if _, err := s.sources.Get(r.Context(), sourceID); errors.Is(err, repository.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "source_not_found", "Kaynak bulunamadı.")
+		return
+	} else if err != nil {
+		s.logger.Error("get source before quality summary failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "Kaynak doğrulanamadı.")
+		return
+	}
+
+	summary, err := s.documents.QualitySummary(r.Context(), sourceID)
+	if err != nil {
+		s.logger.Error("get document quality summary failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "Kalite özeti getirilemedi.")
+		return
+	}
+	writeJSON(w, http.StatusOK, summary)
+}
+
 func (s *Server) queueDocumentResample(w http.ResponseWriter, r *http.Request) {
 	principal, _ := principalFrom(r.Context())
 	jobID, err := s.documents.QueueResample(r.Context(), r.PathValue("id"), principal.Subject)

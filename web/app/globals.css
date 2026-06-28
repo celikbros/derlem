@@ -1401,6 +1401,50 @@ textarea:focus {
   background: var(--green);
 }
 
+.quality-summary {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 10px;
+  padding: 9px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.quality-summary-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.quality-summary-heading span {
+  color: var(--muted);
+}
+
+.quality-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.quality-summary-grid > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.quality-summary-grid span,
+.quality-summary > small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.quality-summary-grid strong {
+  font-size: 12px;
+}
+
 .sample-generation-list {
   display: grid;
   gap: 5px;
@@ -1504,7 +1548,7 @@ textarea:focus {
 
 .bulk-review-fields {
   display: grid;
-  grid-template-columns: 76px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
 }
 
@@ -1520,6 +1564,48 @@ textarea:focus {
   width: 100%;
   min-width: 0;
   height: 32px;
+}
+
+.quality-rubric-fields {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.quality-rubric-fields legend {
+  margin-bottom: 5px;
+  padding: 0;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.quality-rubric-fields > div {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.quality-rubric-fields label {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.quality-rubric-fields input {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0 5px;
+  text-align: center;
+}
+
+.bulk-review-reason {
+  grid-column: 1 / -1;
 }
 
 .bulk-review-form .review-actions {
@@ -1689,7 +1775,7 @@ textarea:focus {
 
 .document-review-fields {
   display: grid;
-  grid-template-columns: 130px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   align-items: start;
 }
@@ -1706,12 +1792,24 @@ textarea:focus {
 
 .document-review-history > div {
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   padding-bottom: 7px;
   border-bottom: 1px solid var(--line);
   font-size: 11px;
+}
+
+.review-quality-values {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.review-quality-values span {
+  color: var(--muted);
+  font-size: 10px;
+  overflow-wrap: anywhere;
 }
 
 .document-review-history small {

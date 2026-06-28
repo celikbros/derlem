@@ -126,7 +126,7 @@ Kapanış kriteri:
 
 ## v0.3 - Toplu Review, Kalite Skoru ve Export
 
-**Durum:** Aktif; Export Builder, toplu review ve risk-stratified sampling çalışıyor.
+**Durum:** Aktif; Export Builder, toplu review, beş boyutlu kalite rubric'i ve risk-stratified sampling çalışıyor.
 
 Amaç, veri yöneticisinin ve reviewer ekibinin tek tek örnek açmadan yüzlerce/binlerce
 örneği verimli inceleyebilmesi ve model ekiplerinin Derlem çıktısını doğrudan
@@ -136,7 +136,7 @@ Yapılacaklar:
 
 - Toplu belge review ekranı: filtre, seçim, ortak kalite puanı ve atomik hızlı karar. **Tamamlandı.**
 - Risk bazlı sample yoğunlaştırma: uzunluk, format, tekrar, kontrol karakteri ve kimlik/iletişim kalıbı. **Tamamlandı.** Cross-source domain/source-type mixture sonraki dilimde.
-- Çok boyutlu kalite skoru: dil, format, uzunluk, tekrar, kalite, özel nitelikli veri riski.
+- Çok boyutlu kalite rubric'i: genel, dil, tutarlılık, bilgi yoğunluğu ve temizlik; legacy review ayrımı ve kaynak ortalamaları. **Tamamlandı.**
 - Export Builder: frozen release'ten JSONL/TXT üret. **Tamamlandı.**
 - Export manifest: release id, source sha256, document count ve checksum. **Tamamlandı.** Token tahmini sonraki dilimde.
 - Modelden bağımsız canonical text formatı. **Tamamlandı.** Conversation/tool kayıtlarının geniş canonical şeması sonraki dilimde.
@@ -144,6 +144,7 @@ Yapılacaklar:
 Kapanış kriteri:
 
 - Reviewer UI toplu çalışır. **200 belgeye kadar sürüm kontrollü transaction ile doğrulandı.**
+- Yeni review'lar beş boyutlu rubric taşır; eski tek puanlı kayıtlar değiştirilmez. **Doğrulandı.**
 - Frozen release'ten indirilebilir JSONL/TXT export üretilir. **Doğrulandı.**
 - Export tekrar üretildiğinde checksum aynı çıkar. **Deterministik üretici testiyle doğrulandı.**
 

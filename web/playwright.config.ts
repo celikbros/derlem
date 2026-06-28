@@ -6,7 +6,7 @@ export default defineConfig({
   workers: 1,
   reporter: "line",
   use: {
-    baseURL: "http://127.0.0.1:3000",
+    baseURL: "http://localhost:3000",
     channel: "chrome",
     trace: "retain-on-failure",
   },

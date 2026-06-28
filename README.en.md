@@ -452,6 +452,7 @@ visibility are operational, and v0.3 quality/packaging is the active target.**
 - [x] Object-store-backed immutable document versions and editor dialog
 - [x] Document quality scores, immutable review history, and full-sample gate
 - [x] Version-checked atomic bulk document review
+- [x] Versioned five-dimension human quality rubric and source averages
 - [x] Moderation, rejection reasons, and self-review prevention
 - [x] Draft/frozen Release Builder for approved sources of one purpose
 - [x] Deterministic manifest, source-version snapshot, and SHA256 snapshot
@@ -462,7 +463,6 @@ visibility are operational, and v0.3 quality/packaging is the active target.**
 
 ### Next
 
-- [ ] Multidimensional human quality scores
 - [ ] Multi-shard/Parquet packaging and token estimates
 - [ ] Near-dedup and approximate decontamination
 - [ ] S3/MinIO storage implementation
@@ -480,6 +480,7 @@ visibility are operational, and v0.3 quality/packaging is the active target.**
 - [Risk-based sampling](docs/risk_sampling.en.md)
 - [Controlled document resampling](docs/document_resampling.en.md)
 - [Background job progress contract](docs/job_progress.en.md)
+- [Multidimensional document quality](docs/multidimensional_quality.en.md)
 - [Canonical export contract](docs/canonical_exports.en.md)
 - [Pretraining data factory](docs/pretraining_data_factory.md)
 - [Model prompt format abstraction](docs/model_prompt_format_abstraction.md)

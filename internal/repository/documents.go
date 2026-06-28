@@ -340,7 +340,9 @@ func (r *Documents) Review(
 		return domain.Source{}, domain.Document{}, domain.DocumentReview{}, ErrSelfReview
 	}
 
-	nextStatus, reason, err := normalizeDocumentReview(input.Decision, input.Reason, input.QualityScore)
+	nextStatus, reason, err := normalizeDocumentReview(
+		input.Decision, input.Reason, input.DocumentQualityScores,
+	)
 	if err != nil {
 		return domain.Source{}, domain.Document{}, domain.DocumentReview{}, err
 	}
@@ -375,7 +377,9 @@ func (r *Documents) BulkReview(
 	if len(input.Documents) == 0 || len(input.Documents) > 200 {
 		return domain.BulkDocumentReviewResult{}, &GateError{Reasons: []string{"invalid_document_count"}}
 	}
-	nextStatus, reason, err := normalizeDocumentReview(input.Decision, input.Reason, input.QualityScore)
+	nextStatus, reason, err := normalizeDocumentReview(
+		input.Decision, input.Reason, input.DocumentQualityScores,
+	)
 	if err != nil {
 		return domain.BulkDocumentReviewResult{}, err
 	}
@@ -456,8 +460,10 @@ func (r *Documents) BulkReview(
 			return domain.BulkDocumentReviewResult{}, &GateError{Reasons: []string{"document_not_pending"}}
 		}
 		reviewInput := domain.ReviewDocumentInput{
-			Decision: input.Decision, Reason: reason, QualityScore: input.QualityScore,
-			DocumentVersion: document.CurrentVersion,
+			DocumentQualityScores: input.DocumentQualityScores,
+			Decision:              input.Decision,
+			Reason:                reason,
+			DocumentVersion:       document.CurrentVersion,
 		}
 		updated, review, err := reviewDocumentTx(
 			ctx, tx, document, reviewInput, nextStatus, reason, actorID,
@@ -478,18 +484,22 @@ func (r *Documents) BulkReview(
 	if err != nil {
 		return domain.BulkDocumentReviewResult{}, err
 	}
+	bulkAuditDetails, _ := json.Marshal(map[string]any{
+		"decision":                  input.Decision,
+		"rubric_version":            domain.MultidimensionalQualityRubric,
+		"quality_score":             input.QualityScore,
+		"language_quality_score":    input.LanguageQualityScore,
+		"coherence_score":           input.CoherenceScore,
+		"information_density_score": input.InformationDensityScore,
+		"cleanliness_score":         input.CleanlinessScore,
+		"document_count":            len(updatedDocuments),
+		"document_ids":              documentIDs,
+		"reason":                    reason,
+	})
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO audit_events(actor_id, action, entity_type, entity_id, details)
-		VALUES (
-			$1, 'documents.bulk_reviewed', 'source', $2,
-			jsonb_build_object(
-				'decision', $3::text, 'quality_score', $4::smallint,
-				'document_count', $5::integer, 'document_ids', to_jsonb($6::text[]),
-				'reason', $7::text
-			)
-		)
-	`, actorID, sourceID, input.Decision, input.QualityScore,
-		len(updatedDocuments), documentIDs, reason); err != nil {
+		VALUES ($1, 'documents.bulk_reviewed', 'source', $2, $3::jsonb)
+	`, actorID, sourceID, bulkAuditDetails); err != nil {
 		return domain.BulkDocumentReviewResult{}, fmt.Errorf("audit bulk document review: %w", err)
 	}
 
@@ -501,10 +511,29 @@ func (r *Documents) BulkReview(
 	}, nil
 }
 
-func normalizeDocumentReview(decision string, inputReason *string, qualityScore int16) (string, *string, error) {
+func normalizeDocumentReview(
+	decision string,
+	inputReason *string,
+	scores domain.DocumentQualityScores,
+) (string, *string, error) {
 	reason := trimReason(inputReason)
-	if qualityScore < 1 || qualityScore > 5 {
-		return "", nil, &GateError{Reasons: []string{"quality_score_required"}}
+	invalidScores := []string{}
+	for _, score := range []struct {
+		value  int16
+		reason string
+	}{
+		{scores.QualityScore, "quality_score_required"},
+		{scores.LanguageQualityScore, "language_quality_score_required"},
+		{scores.CoherenceScore, "coherence_score_required"},
+		{scores.InformationDensityScore, "information_density_score_required"},
+		{scores.CleanlinessScore, "cleanliness_score_required"},
+	} {
+		if score.value < 1 || score.value > 5 {
+			invalidScores = append(invalidScores, score.reason)
+		}
+	}
+	if len(invalidScores) > 0 {
+		return "", nil, &GateError{Reasons: invalidScores}
 	}
 	if decision != "approved" && reason == nil {
 		return "", nil, &GateError{Reasons: []string{"reason_required"}}
@@ -557,43 +586,62 @@ func reviewDocumentTx(
 	}
 
 	contextJSON, _ := json.Marshal(map[string]any{
-		"source_id":       document.SourceID,
-		"previous_status": document.Status,
-		"sampling_method": document.SamplingMethod,
-		"risk_score":      document.RiskScore,
-		"risk_reasons":    document.RiskReasons,
+		"source_id":         document.SourceID,
+		"previous_status":   document.Status,
+		"sampling_method":   document.SamplingMethod,
+		"sample_generation": document.SampleGeneration,
+		"risk_score":        document.RiskScore,
+		"risk_reasons":      document.RiskReasons,
 	})
 	var review domain.DocumentReview
 	if err := tx.QueryRow(ctx, `
 		INSERT INTO document_reviews(
-			document_id, reviewer_id, decision, reason, quality_score,
+			document_id, reviewer_id, decision, reason, rubric_version,
+			quality_score, language_quality_score, coherence_score,
+			information_density_score, cleanliness_score,
 			document_version, object_sha256, review_context
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+		VALUES (
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+			$11, $12, $13::jsonb
+		)
 		RETURNING id::text, document_id::text, reviewer_id::text, decision, reason,
-			quality_score, document_version, object_sha256, review_context, created_at
-	`, document.ID, actorID, input.Decision, reason, input.QualityScore,
+			rubric_version, quality_score, language_quality_score, coherence_score,
+			information_density_score, cleanliness_score,
+			document_version, object_sha256, review_context, created_at
+	`, document.ID, actorID, input.Decision, reason,
+		domain.MultidimensionalQualityRubric, input.QualityScore,
+		input.LanguageQualityScore, input.CoherenceScore,
+		input.InformationDensityScore, input.CleanlinessScore,
 		input.DocumentVersion, document.CurrentObjectSHA256, contextJSON,
 	).Scan(
 		&review.ID, &review.DocumentID, &review.ReviewerID, &review.Decision,
-		&review.Reason, &review.QualityScore, &review.DocumentVersion,
-		&review.ObjectSHA256, &review.Context, &review.CreatedAt,
+		&review.Reason, &review.RubricVersion, &review.QualityScore,
+		&review.LanguageQualityScore, &review.CoherenceScore,
+		&review.InformationDensityScore, &review.CleanlinessScore,
+		&review.DocumentVersion, &review.ObjectSHA256, &review.Context, &review.CreatedAt,
 	); err != nil {
 		return domain.Document{}, domain.DocumentReview{}, fmt.Errorf("insert document review: %w", err)
 	}
 
+	reviewAuditDetails, _ := json.Marshal(map[string]any{
+		"review_id":                 review.ID,
+		"decision":                  input.Decision,
+		"rubric_version":            domain.MultidimensionalQualityRubric,
+		"quality_score":             input.QualityScore,
+		"language_quality_score":    input.LanguageQualityScore,
+		"coherence_score":           input.CoherenceScore,
+		"information_density_score": input.InformationDensityScore,
+		"cleanliness_score":         input.CleanlinessScore,
+		"document_version":          input.DocumentVersion,
+		"object_sha256":             document.CurrentObjectSHA256,
+		"sample_generation":         document.SampleGeneration,
+		"reason":                    reason,
+	})
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO audit_events(actor_id, action, entity_type, entity_id, details)
-		VALUES (
-			$1, 'document.reviewed', 'document', $2,
-			jsonb_build_object(
-				'review_id', $3::text, 'decision', $4::text,
-				'quality_score', $5::smallint, 'document_version', $6::bigint,
-				'object_sha256', $7::text, 'reason', $8::text
-			)
-		)
-	`, actorID, document.ID, review.ID, input.Decision, input.QualityScore,
-		input.DocumentVersion, document.CurrentObjectSHA256, reason); err != nil {
+		VALUES ($1, 'document.reviewed', 'document', $2, $3::jsonb)
+	`, actorID, document.ID, reviewAuditDetails); err != nil {
 		return domain.Document{}, domain.DocumentReview{}, fmt.Errorf("audit document review: %w", err)
 	}
 	return updated, review, nil
@@ -602,7 +650,9 @@ func reviewDocumentTx(
 func (r *Documents) ListReviews(ctx context.Context, documentID string) ([]domain.DocumentReview, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT id::text, document_id::text, reviewer_id::text, decision, reason,
-			quality_score, document_version, object_sha256, review_context, created_at
+			rubric_version, quality_score, language_quality_score, coherence_score,
+			information_density_score, cleanliness_score,
+			document_version, object_sha256, review_context, created_at
 		FROM document_reviews
 		WHERE document_id = $1
 		ORDER BY created_at DESC, id DESC
@@ -617,14 +667,62 @@ func (r *Documents) ListReviews(ctx context.Context, documentID string) ([]domai
 		var review domain.DocumentReview
 		if err := rows.Scan(
 			&review.ID, &review.DocumentID, &review.ReviewerID, &review.Decision,
-			&review.Reason, &review.QualityScore, &review.DocumentVersion,
-			&review.ObjectSHA256, &review.Context, &review.CreatedAt,
+			&review.Reason, &review.RubricVersion, &review.QualityScore,
+			&review.LanguageQualityScore, &review.CoherenceScore,
+			&review.InformationDensityScore, &review.CleanlinessScore,
+			&review.DocumentVersion, &review.ObjectSHA256, &review.Context, &review.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
 		reviews = append(reviews, review)
 	}
 	return reviews, rows.Err()
+}
+
+func (r *Documents) QualitySummary(ctx context.Context, sourceID string) (domain.DocumentQualitySummary, error) {
+	var summary domain.DocumentQualitySummary
+	err := r.pool.QueryRow(ctx, `
+		SELECT
+			$1::text,
+			$2::text,
+			count(review.id) FILTER (
+				WHERE review.rubric_version = $2
+			)::bigint,
+			count(DISTINCT review.document_id) FILTER (
+				WHERE review.rubric_version = $2
+			)::bigint,
+			count(review.id) FILTER (
+				WHERE review.rubric_version = 'overall-v1'
+			)::bigint,
+			avg(review.quality_score) FILTER (
+				WHERE review.rubric_version = $2
+			)::float8,
+			avg(review.language_quality_score) FILTER (
+				WHERE review.rubric_version = $2
+			)::float8,
+			avg(review.coherence_score) FILTER (
+				WHERE review.rubric_version = $2
+			)::float8,
+			avg(review.information_density_score) FILTER (
+				WHERE review.rubric_version = $2
+			)::float8,
+			avg(review.cleanliness_score) FILTER (
+				WHERE review.rubric_version = $2
+			)::float8
+		FROM documents AS document
+		LEFT JOIN document_reviews AS review
+		  ON review.document_id = document.id
+		 AND review.document_version = document.current_version
+		 AND review.object_sha256 = document.current_object_sha256
+		WHERE document.source_id = $1::uuid AND document.is_active
+	`, sourceID, domain.MultidimensionalQualityRubric).Scan(
+		&summary.SourceID, &summary.RubricVersion,
+		&summary.ReviewCount, &summary.DocumentCount, &summary.LegacyReviewCount,
+		&summary.AverageQualityScore, &summary.AverageLanguageQualityScore,
+		&summary.AverageCoherenceScore, &summary.AverageInformationDensityScore,
+		&summary.AverageCleanlinessScore,
+	)
+	return summary, err
 }
 
 func refreshSourceDocumentReviewCounts(ctx context.Context, tx pgx.Tx, sourceID string, demote bool) error {

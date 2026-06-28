@@ -21,7 +21,7 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import { JobStatus } from "@/components/jobs-panel";
 import { messageFrom, requestJSON } from "@/lib/client-api";
-import type { BackgroundJob, Document, DocumentReview, DocumentSampleGeneration, PIIScan, Review, Source, User } from "@/lib/types";
+import type { BackgroundJob, Document, DocumentQualitySummary, DocumentReview, DocumentSampleGeneration, PIIScan, Review, Source, User } from "@/lib/types";
 
 const purposeLabels: Record<string, string> = {
   pretrain: "Pretrain",
@@ -52,6 +52,17 @@ const riskReasonLabels: Record<string, string> = {
   missing_text_field: "Metin alanı eksik",
 };
 
+const qualityScoreFields = [
+  { name: "quality_score", label: "Genel", title: "Belgenin bütünsel eğitim değeri" },
+  { name: "language_quality_score", label: "Dil", title: "Dil doğruluğu ve doğallığı" },
+  { name: "coherence_score", label: "Tutarlılık", title: "Metnin kendi içindeki anlam ve akış tutarlılığı" },
+  { name: "information_density_score", label: "Bilgi", title: "Yararlı bilgi ve içerik yoğunluğu" },
+  { name: "cleanliness_score", label: "Temizlik", title: "Gürültüden ve biçim bozukluklarından arınmışlık" },
+] as const;
+
+type QualityScoreName = typeof qualityScoreFields[number]["name"];
+type QualityScores = Record<QualityScoreName, number>;
+
 export function SourceInspector({
   source,
   user,
@@ -74,6 +85,7 @@ export function SourceInspector({
   const [documentStatusFilter, setDocumentStatusFilter] = useState<"pending" | "risk" | "approved" | "flagged" | "all">("pending");
   const [activeDocument, setActiveDocument] = useState<Document | null>(null);
   const [documentReviews, setDocumentReviews] = useState<DocumentReview[]>([]);
+  const [qualitySummary, setQualitySummary] = useState<DocumentQualitySummary | null>(null);
   const [sampleGenerations, setSampleGenerations] = useState<DocumentSampleGeneration[]>([]);
   const [documentContent, setDocumentContent] = useState("");
   const [selectedDocumentIDs, setSelectedDocumentIDs] = useState<Set<string>>(new Set());
@@ -87,18 +99,20 @@ export function SourceInspector({
   const loadActivity = useCallback(async () => {
     setLoading(true);
     try {
-      const [reviewPayload, scanPayload, jobPayload, documentPayload, generationPayload] = await Promise.all([
+      const [reviewPayload, scanPayload, jobPayload, documentPayload, generationPayload, qualityPayload] = await Promise.all([
         requestJSON<{ items: Review[] }>(`/api/sources/${source.id}/reviews`),
         requestJSON<{ items: PIIScan[] }>(`/api/sources/${source.id}/pii-scans`),
         requestJSON<{ items: BackgroundJob[] }>(`/api/jobs?source_id=${source.id}&limit=20`),
         requestJSON<{ items: Document[] }>(`/api/sources/${source.id}/documents?limit=200`),
         requestJSON<{ items: DocumentSampleGeneration[] }>(`/api/sources/${source.id}/document-sample-generations`),
+        requestJSON<DocumentQualitySummary>(`/api/sources/${source.id}/document-quality-summary`),
       ]);
       setReviews(reviewPayload.items);
       setScans(scanPayload.items);
       setJobs(jobPayload.items);
       setDocuments(documentPayload.items);
       setSampleGenerations(generationPayload.items);
+      setQualitySummary(qualityPayload);
       const pendingIDs = new Set(documentPayload.items
         .filter((document) => document.status === "sampled" || document.status === "edited")
         .map((document) => document.id));
@@ -127,7 +141,10 @@ export function SourceInspector({
   }, [onNotice, onRefresh, source.document_sampling_status, source.duplicate_status, source.id, source.normalized_dedup_status, source.object_sha256, source.pii_status]);
 
   useEffect(() => { void loadActivity(); }, [loadActivity, source.version]);
-  useEffect(() => { setSelectedDocumentIDs(new Set()); }, [source.id]);
+  useEffect(() => {
+    setSelectedDocumentIDs(new Set());
+    setQualitySummary(null);
+  }, [source.id]);
   useEffect(() => {
     if (!jobs.some((job) => job.status === "queued" || job.status === "running")) return;
     const timer = window.setTimeout(() => { void loadActivity(); }, 1500);
@@ -301,9 +318,9 @@ export function SourceInspector({
     const form = event.currentTarget;
     const data = new FormData(form);
     const reason = String(data.get("reason") ?? "").trim();
-    const qualityScore = Number(data.get("quality_score"));
-    if (!Number.isInteger(qualityScore) || qualityScore < 1 || qualityScore > 5) {
-      onNotice("Kalite puanı 1 ile 5 arasında olmalıdır.");
+    const qualityScores = readQualityScores(data);
+    if (!qualityScores) {
+      onNotice("Tüm kalite boyutları 1 ile 5 arasında olmalıdır.");
       return;
     }
     if (decision !== "approved" && !reason) {
@@ -319,7 +336,7 @@ export function SourceInspector({
           body: JSON.stringify({
             decision,
             reason: reason || null,
-            quality_score: qualityScore,
+            ...qualityScores,
             document_version: activeDocument.current_version,
           }),
         },
@@ -371,9 +388,9 @@ export function SourceInspector({
     const form = event.currentTarget;
     const data = new FormData(form);
     const reason = String(data.get("reason") ?? "").trim();
-    const qualityScore = Number(data.get("quality_score"));
-    if (!Number.isInteger(qualityScore) || qualityScore < 1 || qualityScore > 5) {
-      onNotice("Kalite puanı 1 ile 5 arasında olmalıdır.");
+    const qualityScores = readQualityScores(data);
+    if (!qualityScores) {
+      onNotice("Tüm kalite boyutları 1 ile 5 arasında olmalıdır.");
       return;
     }
     if (decision !== "approved" && !reason) {
@@ -402,7 +419,7 @@ export function SourceInspector({
           })),
           decision,
           reason: reason || null,
-          quality_score: qualityScore,
+          ...qualityScores,
         }),
       });
       const updatedByID = new Map(payload.documents.map((document) => [document.id, document]));
@@ -598,6 +615,22 @@ export function SourceInspector({
           </div>
           <progress max={sampleCount || 1} value={reviewedCount} aria-label={`Örnek inceleme ilerlemesi yüzde ${reviewPercent}`} />
         </div>
+        {qualitySummary && qualitySummary.review_count > 0 && (
+          <div className="quality-summary">
+            <div className="quality-summary-heading">
+              <span>Çok boyutlu kalite</span>
+              <strong>{qualitySummary.document_count.toLocaleString("tr-TR")} belge</strong>
+            </div>
+            <div className="quality-summary-grid">
+              <QualityAverage label="Genel" value={qualitySummary.average_quality_score} />
+              <QualityAverage label="Dil" value={qualitySummary.average_language_quality_score} />
+              <QualityAverage label="Tutarlılık" value={qualitySummary.average_coherence_score} />
+              <QualityAverage label="Bilgi" value={qualitySummary.average_information_density_score} />
+              <QualityAverage label="Temizlik" value={qualitySummary.average_cleanliness_score} />
+            </div>
+            {qualitySummary.legacy_review_count > 0 && <small>{qualitySummary.legacy_review_count.toLocaleString("tr-TR")} eski tek puanlı kayıt özete katılmadı.</small>}
+          </div>
+        )}
         {sampleGenerations.length > 0 && (
           <div className="sample-generation-list" aria-label="Örnek nesilleri">
             {sampleGenerations.map((generation) => (
@@ -630,8 +663,8 @@ export function SourceInspector({
               <strong>{selectedDocumentIDs.size.toLocaleString("tr-TR")} seçili</strong>
             </div>
             <div className="bulk-review-fields">
-              <label>Kalite<input name="quality_score" type="number" min="1" max="5" step="1" defaultValue="3" required /></label>
-              <label>Ortak gerekçe<input name="reason" placeholder="Ret ve hassas kararda zorunlu" /></label>
+              <QualityRubricFields />
+              <label className="bulk-review-reason">Ortak gerekçe<input name="reason" placeholder="Ret ve hassas kararda zorunlu" /></label>
             </div>
             <div className="review-actions">
               <button className="approve-button" type="submit" name="decision" value="approved" disabled={bulkReviewing || selectedDocumentIDs.size === 0}><Check size={16} />Onayla</button>
@@ -741,7 +774,7 @@ export function SourceInspector({
               <form className="document-review-form" onSubmit={submitDocumentReview}>
                 <h3><CheckCircle2 size={16} /> Belge moderasyonu</h3>
                 <div className="document-review-fields">
-                  <label>Kalite puanı<input name="quality_score" type="number" min="1" max="5" step="1" defaultValue="3" required /></label>
+                  <QualityRubricFields />
                   <label>Karar gerekçesi<textarea name="reason" rows={2} placeholder="Ret ve hassas incelemede zorunlu" /></label>
                 </div>
                 <div className="review-actions">
@@ -755,7 +788,12 @@ export function SourceInspector({
               {documentReviews.map((review) => (
                 <div key={review.id}>
                   <span className={`review-decision ${review.decision}`}>{review.decision}</span>
-                  <strong>{review.quality_score}/5</strong>
+                  <div className="review-quality-values">
+                    <strong>Genel {review.quality_score}/5</strong>
+                    {review.rubric_version === "multidimensional-v1" ? (
+                      <span>Dil {review.language_quality_score}/5 · Tutarlılık {review.coherence_score}/5 · Bilgi {review.information_density_score}/5 · Temizlik {review.cleanliness_score}/5</span>
+                    ) : <span>Eski tek puanlı rubric</span>}
+                  </div>
                   <small>v{review.document_version} · {formatDate(review.created_at)}</small>
                 </div>
               ))}
@@ -774,6 +812,45 @@ function Detail({ label, value, mono = false }: { label: string; value: string; 
 
 function CorpusMetric({ label, value, tone = "neutral" }: { label: string; value: string; tone?: "neutral" | "good" | "watch" | "risk" }) {
   return <div className={`corpus-metric ${tone}`}><span>{label}</span><strong>{value}</strong></div>;
+}
+
+function QualityRubricFields() {
+  return (
+    <fieldset className="quality-rubric-fields">
+      <legend>Kalite puanları</legend>
+      <div>
+        {qualityScoreFields.map((field) => (
+          <label key={field.name} title={field.title}>
+            {field.label}
+            <input
+              name={field.name}
+              type="number"
+              min="1"
+              max="5"
+              step="1"
+              defaultValue="3"
+              aria-label={`${field.label} kalite puanı`}
+              required
+            />
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+function QualityAverage({ label, value }: { label: string; value?: number }) {
+  return <div><span>{label}</span><strong>{value === undefined ? "-" : value.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 2 })}</strong></div>;
+}
+
+function readQualityScores(data: FormData): QualityScores | null {
+  const scores = {} as QualityScores;
+  for (const field of qualityScoreFields) {
+    const value = Number(data.get(field.name));
+    if (!Number.isInteger(value) || value < 1 || value > 5) return null;
+    scores[field.name] = value;
+  }
+  return scores;
 }
 
 function findingSummary(scan: PIIScan) {

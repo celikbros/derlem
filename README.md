@@ -368,6 +368,8 @@ Ayrıntılı yönergeler: [docs/local_development.md](docs/local_development.md)
 | `GET/POST` | `/api/v1/sources/{id}/reviews` | İnceleme geçmişi ve karar |
 | `GET` | `/api/v1/sources/{id}/pii-scans` | PII tarama sonuçları |
 | `GET` | `/api/v1/sources/{id}/documents` | Bounded belge örnekleri |
+| `GET` | `/api/v1/sources/{id}/document-sample-generations` | Aktif/arşiv örnek nesillerini listeler |
+| `POST` | `/api/v1/sources/{id}/documents/resample` | Review başlamamış kaynağı kontrollü yeniden örnekler |
 | `POST` | `/api/v1/sources/{id}/documents/bulk-reviews` | En fazla 200 bekleyen belgeyi atomik toplu inceleme |
 | `GET/PATCH` | `/api/v1/documents/{id}` | Immutable içerik okuma veya yeni sürüm |
 | `GET/POST` | `/api/v1/documents/{id}/reviews` | Belge kalite puanı ve moderasyon geçmişi |
@@ -447,6 +449,7 @@ ve Tam Document İndeks sıradaki aktif hedef.**
 - [x] Normalize edilmiş document exact-dedup fingerprint kapısı
 - [x] Deterministik ve bounded belge örnekleme
 - [x] Açıklanabilir risk puanlı, temsil + risk kotasını birleştiren örnekleme
+- [x] Nesil ve üyelik snapshot'lı, atomik kontrollü yeniden örnekleme
 - [x] Object store tabanlı immutable belge sürümleri ve editor diyaloğu
 - [x] Belge kalite puanı, immutable review geçmişi ve tam örnek kapsama kapısı
 - [x] Sürüm kontrollü ve atomik toplu belge inceleme
@@ -463,7 +466,7 @@ ve Tam Document İndeks sıradaki aktif hedef.**
 ### Sıradaki işler
 
 - [ ] Tam corpus document indeksleme ve progress metrikleri
-- [ ] Çok boyutlu kalite skorları ve Gardas kontrollü yeniden örnekleme
+- [ ] Çok boyutlu insan kalite skorları
 - [ ] Çoklu shard/Parquet paketleme ve token tahmini
 - [ ] Near-dedup ve yaklaşık decontamination
 - [ ] S3/MinIO object store implementasyonu
@@ -479,6 +482,7 @@ ve Tam Document İndeks sıradaki aktif hedef.**
 - [Production deployment](docs/production_deployment.md)
 - [API ve iş akışları](docs/api_workflows.md)
 - [Risk bazlı örnekleme](docs/risk_sampling.md)
+- [Kontrollü yeniden örnekleme](docs/document_resampling.md)
 - [Kanonik export sözleşmesi](docs/canonical_exports.md)
 - [Pretraining data factory](docs/pretraining_data_factory.md)
 - [Model prompt format soyutlaması](docs/model_prompt_format_abstraction.md)

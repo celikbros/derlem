@@ -13,6 +13,7 @@ const jobLabels: Record<string, string> = {
   check_exact_duplicate: "Dosya dedup",
   index_document_fingerprints: "Normalize dedup",
   sample_documents: "Belge örnekleme",
+  resample_documents: "Belge yeniden örnekleme",
   freeze_release: "Release freeze",
   export_release: "Release export",
 };
@@ -92,7 +93,7 @@ function resultSummary(job: BackgroundJob) {
   if (job.status === "running") return "İşleniyor";
   if (job.job_type === "scan_pii" && typeof job.result?.status === "string") return `PII: ${job.result.status}`;
   if (job.job_type === "index_document_fingerprints" && typeof job.result?.status === "string") return `Dedup: ${job.result.status}`;
-  if (job.job_type === "sample_documents" && job.status === "succeeded") {
+  if (["sample_documents", "resample_documents"].includes(job.job_type) && job.status === "succeeded") {
     const samples = Number(job.result?.sample_size ?? 0).toLocaleString("tr-TR");
     const risky = Number(job.result?.selected_risk_documents ?? 0).toLocaleString("tr-TR");
     return `${samples} örnek · ${risky} riskli`;

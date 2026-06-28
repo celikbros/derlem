@@ -40,6 +40,55 @@ func (s *Server) listSourceDocuments(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"items": documents})
 }
 
+func (s *Server) queueDocumentResample(w http.ResponseWriter, r *http.Request) {
+	principal, _ := principalFrom(r.Context())
+	jobID, err := s.documents.QueueResample(r.Context(), r.PathValue("id"), principal.Subject)
+	if errors.Is(err, repository.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "source_not_found", "Kaynak bulunamadı.")
+		return
+	}
+	if errors.Is(err, repository.ErrConflict) {
+		writeError(w, http.StatusConflict, "document_resample_conflict", "Aktif bir yeniden örnekleme işi var veya kaynak durumu değişti.")
+		return
+	}
+	var gateError *repository.GateError
+	if errors.As(err, &gateError) {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
+			"error": map[string]any{
+				"code":    "document_resample_gate_blocked",
+				"message": "Kaynak güvenli yeniden örnekleme koşullarını karşılamıyor.",
+				"reasons": gateError.Reasons,
+			},
+		})
+		return
+	}
+	if err != nil {
+		s.logger.Error("queue document resample failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "Yeniden örnekleme işi başlatılamadı.")
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]string{"job_id": jobID, "status": "queued"})
+}
+
+func (s *Server) listDocumentSampleGenerations(w http.ResponseWriter, r *http.Request) {
+	sourceID := r.PathValue("id")
+	if _, err := s.sources.Get(r.Context(), sourceID); errors.Is(err, repository.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "source_not_found", "Kaynak bulunamadı.")
+		return
+	} else if err != nil {
+		s.logger.Error("get source before sample generation list failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "Kaynak doğrulanamadı.")
+		return
+	}
+	generations, err := s.documents.ListSampleGenerations(r.Context(), sourceID)
+	if err != nil {
+		s.logger.Error("list document sample generations failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "Örnek nesilleri getirilemedi.")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": generations})
+}
+
 func (s *Server) getDocument(w http.ResponseWriter, r *http.Request) {
 	document, err := s.documents.Get(r.Context(), r.PathValue("id"))
 	if errors.Is(err, repository.ErrNotFound) {

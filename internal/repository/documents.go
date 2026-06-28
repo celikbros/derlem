@@ -25,7 +25,7 @@ func (r *Documents) ListBySource(ctx context.Context, sourceID string, limit int
 	rows, err := r.pool.Query(ctx, `
 		SELECT `+documentColumns+`
 		FROM documents
-		WHERE source_id = $1
+		WHERE source_id = $1 AND is_active
 		ORDER BY source_ordinal ASC
 		LIMIT $2
 	`, sourceID, limit)
@@ -43,6 +43,157 @@ func (r *Documents) ListBySource(ctx context.Context, sourceID string, limit int
 		documents = append(documents, document)
 	}
 	return documents, rows.Err()
+}
+
+func (r *Documents) ListSampleGenerations(ctx context.Context, sourceID string) ([]domain.DocumentSampleGeneration, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT source_id::text, generation, source_sha256, sampling_method,
+			status, sample_count, job_id::text, created_at
+		FROM document_sample_generations
+		WHERE source_id = $1
+		ORDER BY generation DESC
+	`, sourceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	generations := []domain.DocumentSampleGeneration{}
+	for rows.Next() {
+		var generation domain.DocumentSampleGeneration
+		if err := rows.Scan(
+			&generation.SourceID, &generation.Generation, &generation.SourceSHA256,
+			&generation.SamplingMethod, &generation.Status, &generation.SampleCount,
+			&generation.JobID, &generation.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		generations = append(generations, generation)
+	}
+	return generations, rows.Err()
+}
+
+func (r *Documents) QueueResample(ctx context.Context, sourceID, actorID string) (string, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback(ctx)
+
+	var objectSHA256 *string
+	var samplingStatus, samplingMethod, approvalStatus string
+	var generation, reviewedCount int64
+	if err := tx.QueryRow(ctx, `
+		SELECT object_sha256, document_sampling_status, document_sample_generation,
+			document_sampling_method, reviewed_document_count, approval_status
+		FROM sources
+		WHERE id = $1
+		FOR UPDATE
+	`, sourceID).Scan(
+		&objectSHA256, &samplingStatus, &generation, &samplingMethod,
+		&reviewedCount, &approvalStatus,
+	); errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	} else if err != nil {
+		return "", err
+	}
+
+	reasons := []string{}
+	if objectSHA256 == nil || samplingStatus != "sampled" {
+		reasons = append(reasons, "source_not_sampled")
+	}
+	sourceReviewStarted := reviewedCount > 0 || approvalStatus == "approved_source" ||
+		approvalStatus == "release_candidate" || approvalStatus == "rejected" ||
+		approvalStatus == "quarantined"
+
+	var activeCount, unsafeCount, documentReviewCount, sourceReviewCount int64
+	if err := tx.QueryRow(ctx, `
+		SELECT
+			count(*) FILTER (WHERE document.is_active),
+			count(*) FILTER (WHERE document.is_active AND (
+				document.current_version <> 1 OR document.status <> 'sampled'
+			)),
+			(SELECT count(*)
+			 FROM document_reviews AS review
+			 JOIN documents AS reviewed_document ON reviewed_document.id = review.document_id
+			 WHERE reviewed_document.source_id = $1),
+			(SELECT count(*) FROM reviews AS review WHERE review.source_id = $1)
+		FROM documents AS document
+		WHERE document.source_id = $1
+	`, sourceID).Scan(
+		&activeCount, &unsafeCount, &documentReviewCount, &sourceReviewCount,
+	); err != nil {
+		return "", err
+	}
+	if sourceReviewStarted || sourceReviewCount > 0 {
+		reasons = append(reasons, "source_review_already_started")
+	}
+	if activeCount == 0 {
+		reasons = append(reasons, "active_sample_missing")
+	}
+	if unsafeCount > 0 {
+		reasons = append(reasons, "sample_documents_changed")
+	}
+	if documentReviewCount > 0 {
+		reasons = append(reasons, "sample_reviews_exist")
+	}
+	if len(reasons) > 0 {
+		return "", &GateError{Reasons: reasons}
+	}
+
+	var jobID string
+	err = tx.QueryRow(ctx, `
+		INSERT INTO background_jobs(job_type, priority, payload, created_by)
+		VALUES (
+			'resample_documents', 55,
+			jsonb_build_object(
+				'source_id', $1::text,
+				'object_sha256', $2::text,
+				'previous_generation', $3::bigint,
+				'previous_sampling_method', $4::text,
+				'requested_by', $5::text
+			),
+			$5::uuid
+		)
+		ON CONFLICT DO NOTHING
+		RETURNING id::text
+	`, sourceID, *objectSHA256, generation, samplingMethod, actorID).Scan(&jobID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrConflict
+	}
+	if err != nil {
+		return "", err
+	}
+
+	updated, err := tx.Exec(ctx, `
+		UPDATE sources
+		SET document_sampling_status = 'resampling'
+		WHERE id = $1 AND document_sampling_status = 'sampled'
+	`, sourceID)
+	if err != nil {
+		return "", err
+	}
+	if updated.RowsAffected() != 1 {
+		return "", ErrConflict
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO audit_events(actor_id, action, entity_type, entity_id, details)
+		VALUES (
+			$1, 'source.document_resample_queued', 'source', $2,
+			jsonb_build_object(
+				'job_id', $3::text, 'object_sha256', $4::text,
+				'previous_generation', $5::bigint,
+				'previous_sampling_method', $6::text,
+				'active_sample_count', $7::bigint
+			)
+		)
+	`, actorID, sourceID, jobID, *objectSHA256, generation, samplingMethod, activeCount); err != nil {
+		return "", fmt.Errorf("audit document resample queue: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return "", err
+	}
+	return jobID, nil
 }
 
 func (r *Documents) Get(ctx context.Context, id string) (domain.Document, error) {
@@ -79,6 +230,9 @@ func (r *Documents) UpdateContent(
 	}
 	if err != nil {
 		return domain.Document{}, err
+	}
+	if !before.IsActive {
+		return domain.Document{}, ErrConflict
 	}
 	if before.CurrentVersion != expectedVersion {
 		return domain.Document{}, ErrConflict
@@ -171,6 +325,9 @@ func (r *Documents) Review(
 	if err != nil {
 		return domain.Source{}, domain.Document{}, domain.DocumentReview{}, err
 	}
+	if !document.IsActive {
+		return domain.Source{}, domain.Document{}, domain.DocumentReview{}, ErrConflict
+	}
 	if document.CurrentVersion != input.DocumentVersion {
 		return domain.Source{}, domain.Document{}, domain.DocumentReview{}, ErrConflict
 	}
@@ -258,7 +415,7 @@ func (r *Documents) BulkReview(
 	rows, err := tx.Query(ctx, `
 		SELECT `+documentColumns+`
 		FROM documents
-		WHERE source_id = $1 AND id = ANY($2::uuid[])
+		WHERE source_id = $1 AND is_active AND id = ANY($2::uuid[])
 		ORDER BY source_ordinal
 		FOR UPDATE
 	`, sourceID, documentIDs)
@@ -475,15 +632,17 @@ func refreshSourceDocumentReviewCounts(ctx context.Context, tx pgx.Tx, sourceID 
 		UPDATE sources
 		SET reviewed_document_count = (
 				SELECT count(*) FROM documents
-				WHERE source_id = $1 AND status IN ('approved', 'rejected', 'sensitive_review')
+				WHERE source_id = $1 AND is_active
+				  AND status IN ('approved', 'rejected', 'sensitive_review')
 			),
 			approved_document_count = (
 				SELECT count(*) FROM documents
-				WHERE source_id = $1 AND status = 'approved'
+				WHERE source_id = $1 AND is_active AND status = 'approved'
 			),
 			flagged_document_count = (
 				SELECT count(*) FROM documents
-				WHERE source_id = $1 AND status IN ('rejected', 'sensitive_review')
+				WHERE source_id = $1 AND is_active
+				  AND status IN ('rejected', 'sensitive_review')
 			),
 			approval_status = CASE
 				WHEN $2 AND approval_status IN ('approved_source', 'release_candidate')
@@ -502,6 +661,7 @@ const documentColumns = `
 	id::text, source_id::text, source_ordinal, external_id,
 	current_object_sha256, text_preview, byte_size, char_count,
 	status, current_version, sampling_method, risk_score, risk_reasons,
+	is_active, sample_generation,
 	created_at, updated_at`
 
 func scanDocument(row scanner) (domain.Document, error) {
@@ -511,6 +671,7 @@ func scanDocument(row scanner) (domain.Document, error) {
 		&document.CurrentObjectSHA256, &document.TextPreview, &document.ByteSize,
 		&document.CharCount, &document.Status, &document.CurrentVersion,
 		&document.SamplingMethod, &document.RiskScore, &document.RiskReasons,
+		&document.IsActive, &document.SampleGeneration,
 		&document.CreatedAt, &document.UpdatedAt,
 	)
 	return document, err

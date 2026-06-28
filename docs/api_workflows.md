@@ -15,6 +15,8 @@ POST  /sources/{id}/ingest
 POST  /sources/{id}/upload
 GET   /sources/{id}/pii-scans
 GET   /sources/{id}/documents
+GET   /sources/{id}/document-sample-generations
+POST  /sources/{id}/documents/resample
 POST  /sources/{id}/documents/bulk-reviews
 GET   /documents/{id}
 PATCH /documents/{id}
@@ -69,6 +71,26 @@ store'a, ordinal/preview/surum/risk metadata'si PostgreSQL'e yazilir. Job sonucu
 yalniz risk neden sayaclarini tasir, eslesen metni veya kimlik degerini tasimaz.
 Bu tablo tum corpus'un document indeksi degil, insan incelemesi icin bounded
 sample katmanidir. Ayrintili sozlesme: [Risk Bazli Ornekleme](risk_sampling.md).
+
+## Kontrollu Yeniden Ornekleme
+
+`POST /sources/{id}/documents/resample` yalniz admin rolune aciktir. Kaynak
+sample edilmis olmali; aktif belgelerde edit, review veya kaynak onayi baslamis
+olmamali. Kapilardan biri kapanmissa islem `422 document_resample_gate_blocked`
+ile reddedilir.
+
+Worker yeni ornek listesini eski nesil aktifken uretir. Son yayim transaction'i:
+
+1. Eski generation snapshot'ini `superseded` yapar.
+2. Eski aktif document satirlarini pasifler.
+3. Yeni belgeleri insert/reactivate eder ve risk metadata'sini yazar.
+4. Her secimi `document_sample_memberships` tablosuna sabitler.
+5. Yeni generation'i `active`, kaynagi yeniden `sampled` yapar.
+
+Herhangi bir adim hata verirse transaction geri alinir ve eski nesil aktif
+kalir. Worker nihai olarak basarisiz olursa kaynak `resampling` durumundan eski
+`sampled` durumuna doner. Nesil listesi
+`GET /sources/{id}/document-sample-generations` ile okunur.
 
 ## Onay Kapisi
 

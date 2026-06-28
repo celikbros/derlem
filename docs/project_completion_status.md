@@ -79,6 +79,7 @@ ana kapılar artık teknik değil:
 - Export manifesti, artifact checksum'u, job progress'i ve rol kontrollü indirme.
 - En fazla 200 bekleyen belge için atomik toplu review ve ortak kalite puanı.
 - Deterministik risk-stratified örnekleme, risk filtresi ve açıklanabilir neden etiketleri.
+- Generation/membership snapshot'lı kontrollü yeniden örnekleme ve rollback.
 
 ## Kalan Teknik İşler
 
@@ -86,7 +87,7 @@ ana kapılar artık teknik değil:
 
 - Büyük job'larda progress/result raporlarını güçlendirmek.
 - Full corpus index işlerinde okunmuş byte/satır/doküman ilerlemesini UI'a taşımak.
-- Gardas temiz adayının eski reservoir örneklerini kontrollü risk örneklemiyle yenilemek.
+- Gardas temiz adayının kuyruğa alınan risk yeniden örnekleme işini tamamlamak.
 - Gardas temiz adayının hak/lisans ve örnek review kapılarını kapatmak.
 
 ### v0.3 İçin Kalanlar

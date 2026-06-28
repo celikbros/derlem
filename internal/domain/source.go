@@ -39,6 +39,8 @@ type Source struct {
 	LineCount                      *int64    `json:"line_count,omitempty"`
 	DocumentCount                  *int64    `json:"document_count,omitempty"`
 	DocumentSamplingStatus         string    `json:"document_sampling_status"`
+	DocumentSampleGeneration       int64     `json:"document_sample_generation"`
+	DocumentSamplingMethod         string    `json:"document_sampling_method"`
 	SampledDocumentCount           int64     `json:"sampled_document_count"`
 	ReviewedDocumentCount          int64     `json:"reviewed_document_count"`
 	ApprovedDocumentCount          int64     `json:"approved_document_count"`

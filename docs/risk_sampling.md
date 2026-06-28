@@ -68,8 +68,8 @@ cozulur; global rastgele duruma veya calisma zamanina baglilik yoktur.
 
 Migration eski document sample kayitlarini `risk_score=0` ve bos neden listesi
 ile korur. Eski sample sessizce degistirilmez. Gardas temiz adayinin mevcut 200
-reservoir ornegi review baslamadan once ayri, audit'li bir kontrollu yeniden
-ornekleme islemiyle yenilenecektir.
+reservoir ornegi generation ve membership snapshot'li kontrollu yeniden
+ornekleme isiyle yenilenir. Ayrinti: [Kontrollu Yeniden Ornekleme](document_resampling.md).
 
 ## Sinirlar
 

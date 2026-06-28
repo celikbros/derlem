@@ -57,6 +57,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/sources/{id}/reviews", s.authenticate(requireRoles("admin", "moderator", "expert_reviewer")(http.HandlerFunc(s.reviewSource))))
 	mux.Handle("GET /api/v1/sources/{id}/pii-scans", s.authenticate(http.HandlerFunc(s.listSourcePIIScans)))
 	mux.Handle("GET /api/v1/sources/{id}/documents", s.authenticate(http.HandlerFunc(s.listSourceDocuments)))
+	mux.Handle("GET /api/v1/sources/{id}/document-sample-generations", s.authenticate(http.HandlerFunc(s.listDocumentSampleGenerations)))
+	mux.Handle("POST /api/v1/sources/{id}/documents/resample", s.authenticate(requireRoles("admin")(http.HandlerFunc(s.queueDocumentResample))))
 	mux.Handle("POST /api/v1/sources/{id}/documents/bulk-reviews", s.authenticate(requireRoles("admin", "moderator", "expert_reviewer")(http.HandlerFunc(s.bulkReviewDocuments))))
 	mux.Handle("GET /api/v1/documents/{id}", s.authenticate(http.HandlerFunc(s.getDocument)))
 	mux.Handle("PATCH /api/v1/documents/{id}", s.authenticate(requireRoles("admin", "editor")(http.HandlerFunc(s.updateDocument))))

@@ -200,7 +200,7 @@ class Worker:
                     duplicate_count,
                     duplicate_source_count,
                 )
-            elif job.job_type == "sample_documents":
+            elif job.job_type in {"sample_documents", "resample_documents"}:
                 object_sha256, report, stored_samples = self._sample_documents(job)
                 with psycopg.connect(self.config.database_url) as connection:
                     self._complete_document_sampling(
@@ -209,10 +209,12 @@ class Worker:
                         object_sha256,
                         report,
                         stored_samples,
+                        resample=job.job_type == "resample_documents",
                     )
                 LOGGER.info(
-                    "job_succeeded job_id=%s sampled=%s total_documents=%s",
+                    "job_succeeded job_id=%s job_type=%s sampled=%s total_documents=%s",
                     job.id,
+                    job.job_type,
                     len(report.samples),
                     report.total_documents,
                 )
@@ -929,13 +931,18 @@ class Worker:
         object_sha256: str,
         report: SamplingReport,
         stored_samples: list[tuple[SampledDocument, StoredObject]],
+        *,
+        resample: bool = False,
     ) -> None:
         source_id = str(job.payload["source_id"])
         inserted_count = 0
+        retired_count = 0
         with connection.transaction():
             source = connection.execute(
                 """
-                SELECT object_sha256, duplicate_status, normalized_dedup_status, pii_status
+                SELECT object_sha256, duplicate_status, normalized_dedup_status, pii_status,
+                    document_sampling_status, document_sample_generation,
+                    document_sampling_method, reviewed_document_count, approval_status
                 FROM sources
                 WHERE id = %s
                 FOR UPDATE
@@ -946,6 +953,80 @@ class Worker:
                 raise RuntimeError("Source object changed while completing document sampling")
             if source[1] != "unique" or source[2] != "unique":
                 raise RuntimeError("Only canonical deduplicated sources can be sampled")
+
+            previous_generation = int(source[5])
+            previous_sampling_method = str(source[6])
+            if resample:
+                if (
+                    source[4] != "resampling"
+                    or int(source[7]) != 0
+                    or source[8] in {"approved_source", "release_candidate", "rejected", "quarantined"}
+                ):
+                    raise RuntimeError("Source is no longer eligible for document resampling")
+                safety = connection.execute(
+                    """
+                    SELECT
+                        count(*) FILTER (WHERE document.is_active),
+                        count(*) FILTER (WHERE document.is_active AND (
+                            document.current_version <> 1 OR document.status <> 'sampled'
+                        )),
+                        (SELECT count(*)
+                         FROM document_reviews AS review
+                         JOIN documents AS reviewed_document
+                           ON reviewed_document.id = review.document_id
+                         WHERE reviewed_document.source_id = %s),
+                        (SELECT count(*) FROM reviews AS review WHERE review.source_id = %s)
+                    FROM documents AS document
+                    WHERE document.source_id = %s
+                    """,
+                    (source_id, source_id, source_id),
+                ).fetchone()
+                if (
+                    safety is None
+                    or int(safety[0]) == 0
+                    or int(safety[1]) > 0
+                    or int(safety[2]) > 0
+                    or int(safety[3]) > 0
+                ):
+                    raise RuntimeError("Document samples changed while resampling")
+                retired_count = connection.execute(
+                    "UPDATE documents SET is_active = false WHERE source_id = %s AND is_active",
+                    (source_id,),
+                ).rowcount
+                sample_generation = previous_generation + 1
+            else:
+                if source[4] != "not_sampled":
+                    raise RuntimeError("Source is no longer eligible for initial document sampling")
+                sample_generation = max(1, previous_generation + 1)
+
+            if resample:
+                superseded = connection.execute(
+                    """
+                    UPDATE document_sample_generations
+                    SET status = 'superseded'
+                    WHERE source_id = %s AND status = 'active'
+                    """,
+                    (source_id,),
+                )
+                if superseded.rowcount != 1:
+                    raise RuntimeError("Active sample generation snapshot was not found")
+            connection.execute(
+                """
+                INSERT INTO document_sample_generations(
+                    source_id, generation, source_sha256, sampling_method,
+                    status, sample_count, job_id
+                )
+                VALUES (%s, %s, %s, %s, 'active', %s, %s)
+                """,
+                (
+                    source_id,
+                    sample_generation,
+                    object_sha256,
+                    report.sampling_method,
+                    len(report.samples),
+                    job.id,
+                ),
+            )
 
             for sample, stored in stored_samples:
                 connection.execute(
@@ -964,10 +1045,22 @@ class Worker:
                     INSERT INTO documents(
                         source_id, source_ordinal, external_id, current_object_sha256,
                         text_preview, byte_size, char_count, sampling_method,
-                        risk_score, risk_reasons
+                        risk_score, risk_reasons, is_active, sample_generation
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (source_id, source_ordinal) DO NOTHING
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, true, %s)
+                    ON CONFLICT (source_id, source_ordinal) DO UPDATE SET
+                        external_id = EXCLUDED.external_id,
+                        current_object_sha256 = EXCLUDED.current_object_sha256,
+                        text_preview = EXCLUDED.text_preview,
+                        byte_size = EXCLUDED.byte_size,
+                        char_count = EXCLUDED.char_count,
+                        status = 'sampled',
+                        current_version = 1,
+                        sampling_method = EXCLUDED.sampling_method,
+                        risk_score = EXCLUDED.risk_score,
+                        risk_reasons = EXCLUDED.risk_reasons,
+                        is_active = true,
+                        sample_generation = EXCLUDED.sample_generation
                     RETURNING id
                     """,
                     (
@@ -981,6 +1074,7 @@ class Worker:
                         report.sampling_method,
                         sample.risk_score,
                         list(sample.risk_reasons),
+                        sample_generation,
                     ),
                 ).fetchone()
                 if document is None:
@@ -993,6 +1087,7 @@ class Worker:
                         actor_type, reason
                     )
                     VALUES (%s, 1, %s, %s, %s, 'system', %s)
+                    ON CONFLICT (document_id, version) DO NOTHING
                     """,
                     (
                         document[0],
@@ -1002,15 +1097,35 @@ class Worker:
                         report.sampling_method,
                     ),
                 )
+                connection.execute(
+                    """
+                    INSERT INTO document_sample_memberships(
+                        source_id, generation, document_id, source_ordinal,
+                        object_sha256, risk_score, risk_reasons
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        source_id,
+                        sample_generation,
+                        document[0],
+                        sample.source_ordinal,
+                        stored.sha256,
+                        sample.risk_score,
+                        list(sample.risk_reasons),
+                    ),
+                )
 
             updated = connection.execute(
                 """
                 UPDATE sources
                 SET document_count = %s,
                     sampled_document_count = (
-                        SELECT count(*) FROM documents WHERE source_id = %s
+                        SELECT count(*) FROM documents WHERE source_id = %s AND is_active
                     ),
                     document_sampling_status = 'sampled',
+                    document_sample_generation = %s,
+                    document_sampling_method = %s,
                     approval_status = CASE
                         WHEN %s = 'clear'
                              AND duplicate_status = 'unique'
@@ -1021,7 +1136,15 @@ class Worker:
                     END
                 WHERE id = %s AND object_sha256 = %s
                 """,
-                (report.total_documents, source_id, source[3], source_id, object_sha256),
+                (
+                    report.total_documents,
+                    source_id,
+                    sample_generation,
+                    report.sampling_method,
+                    source[3],
+                    source_id,
+                    object_sha256,
+                ),
             )
             if updated.rowcount != 1:
                 raise RuntimeError("Source object changed while recording document samples")
@@ -1029,8 +1152,13 @@ class Worker:
             result_json = json.dumps(
                 {
                     "sampling_method": report.sampling_method,
+                    "previous_sampling_method": previous_sampling_method,
+                    "previous_generation": previous_generation,
+                    "sample_generation": sample_generation,
+                    "resample": resample,
                     "sample_size": len(report.samples),
                     "inserted_count": inserted_count,
+                    "retired_count": retired_count,
                     "total_documents": report.total_documents,
                     "eligible_documents": report.eligible_documents,
                     "skipped_oversized": report.skipped_oversized,
@@ -1042,9 +1170,13 @@ class Worker:
             connection.execute(
                 """
                 INSERT INTO audit_events(actor_type, action, entity_type, entity_id, details)
-                VALUES ('system', 'source.documents_sampled', 'source', %s, %s::jsonb)
+                VALUES (
+                    'system',
+                    CASE WHEN %s THEN 'source.documents_resampled' ELSE 'source.documents_sampled' END,
+                    'source', %s, %s::jsonb
+                )
                 """,
-                (source_id, result_json),
+                (resample, source_id, result_json),
             )
             connection.execute(
                 """
@@ -1624,6 +1756,26 @@ class Worker:
                 WHERE id = %s AND document_sampling_status = 'not_sampled'
                 """,
                 (str(job.payload.get("source_id", "")),),
+            )
+        if next_status == "failed" and job.job_type == "resample_documents":
+            source_id = str(job.payload.get("source_id", ""))
+            connection.execute(
+                """
+                UPDATE sources
+                SET document_sampling_status = 'sampled'
+                WHERE id = %s AND document_sampling_status = 'resampling'
+                """,
+                (source_id,),
+            )
+            connection.execute(
+                """
+                INSERT INTO audit_events(actor_type, action, entity_type, entity_id, details)
+                VALUES (
+                    'system', 'source.document_resample_failed', 'source', %s,
+                    jsonb_build_object('job_id', %s::text, 'error', %s::text)
+                )
+                """,
+                (source_id, str(job.id), str(error)[:4000]),
             )
         if next_status == "failed" and job.job_type == "index_document_fingerprints":
             connection.execute(

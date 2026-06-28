@@ -112,7 +112,7 @@ Yapılacaklar:
 - Index job'larında ilerleme metrikleri ekle: okunan byte, satır, indexed document, skipped oversized.
 - `documents` tablosunu sadece sample için tutmaya devam et; tam indeks ham metin saklamasın.
 - Review UI'da büyük kaynaklar için "tam corpus özet kartı" göster. **Tamamlandı.**
-- Büyük kaynaklarda bounded sample stratejisini risk bazlı hale getir. **Yeni sample işleri için tamamlandı. Gardas eski örneklemi kontrollü yeniden üretilecek.**
+- Büyük kaynaklarda bounded sample stratejisini risk bazlı hale getir. **Tamamlandı; generation/membership snapshot'lı kontrollü yeniden örnekleme hazır.**
 
 Kapanış kriteri:
 

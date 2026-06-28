@@ -19,6 +19,8 @@ type Document struct {
 	SamplingMethod      string    `json:"sampling_method"`
 	RiskScore           int16     `json:"risk_score"`
 	RiskReasons         []string  `json:"risk_reasons"`
+	IsActive            bool      `json:"is_active"`
+	SampleGeneration    int64     `json:"sample_generation"`
 	CreatedAt           time.Time `json:"created_at"`
 	UpdatedAt           time.Time `json:"updated_at"`
 }
@@ -52,6 +54,17 @@ type BulkDocumentReviewResult struct {
 	Source    Source           `json:"source"`
 	Documents []Document       `json:"documents"`
 	Reviews   []DocumentReview `json:"reviews"`
+}
+
+type DocumentSampleGeneration struct {
+	SourceID       string    `json:"source_id"`
+	Generation     int64     `json:"generation"`
+	SourceSHA256   string    `json:"source_sha256"`
+	SamplingMethod string    `json:"sampling_method"`
+	Status         string    `json:"status"`
+	SampleCount    int64     `json:"sample_count"`
+	JobID          *string   `json:"job_id,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 type DocumentReview struct {

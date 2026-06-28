@@ -24,7 +24,9 @@ export type Source = {
   byte_size?: number;
   line_count?: number;
   document_count?: number;
-  document_sampling_status: "not_sampled" | "sampled" | "failed";
+  document_sampling_status: "not_sampled" | "resampling" | "sampled" | "failed";
+  document_sample_generation: number;
+  document_sampling_method: string;
   sampled_document_count: number;
   reviewed_document_count: number;
   approved_document_count: number;
@@ -58,6 +60,8 @@ export type Document = {
   sampling_method: string;
   risk_score: number;
   risk_reasons: string[];
+  is_active: boolean;
+  sample_generation: number;
   created_at: string;
   updated_at: string;
 };
@@ -72,6 +76,17 @@ export type DocumentReview = {
   document_version: number;
   object_sha256: string;
   context: Record<string, unknown>;
+  created_at: string;
+};
+
+export type DocumentSampleGeneration = {
+  source_id: string;
+  generation: number;
+  source_sha256: string;
+  sampling_method: string;
+  status: "active" | "superseded";
+  sample_count: number;
+  job_id?: string;
   created_at: string;
 };
 

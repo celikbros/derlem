@@ -63,8 +63,8 @@ random state.
 
 The migration preserves old samples with `risk_score=0` and an empty reason
 list. It does not silently replace reviewed data. The existing 200 Gardas clean
-candidate reservoir samples will be replaced through a separate audited,
-controlled resampling operation before review begins.
+candidate reservoir samples are replaced through generation and membership
+snapshots. See [Controlled Document Resampling](document_resampling.en.md).
 
 ## Limits
 

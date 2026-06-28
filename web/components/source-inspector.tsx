@@ -21,7 +21,7 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import { JobStatus } from "@/components/jobs-panel";
 import { messageFrom, requestJSON } from "@/lib/client-api";
-import type { BackgroundJob, Document, DocumentReview, PIIScan, Review, Source, User } from "@/lib/types";
+import type { BackgroundJob, Document, DocumentReview, DocumentSampleGeneration, PIIScan, Review, Source, User } from "@/lib/types";
 
 const purposeLabels: Record<string, string> = {
   pretrain: "Pretrain",
@@ -74,9 +74,11 @@ export function SourceInspector({
   const [documentStatusFilter, setDocumentStatusFilter] = useState<"pending" | "risk" | "approved" | "flagged" | "all">("pending");
   const [activeDocument, setActiveDocument] = useState<Document | null>(null);
   const [documentReviews, setDocumentReviews] = useState<DocumentReview[]>([]);
+  const [sampleGenerations, setSampleGenerations] = useState<DocumentSampleGeneration[]>([]);
   const [documentContent, setDocumentContent] = useState("");
   const [selectedDocumentIDs, setSelectedDocumentIDs] = useState<Set<string>>(new Set());
   const [bulkReviewing, setBulkReviewing] = useState(false);
+  const [resampling, setResampling] = useState(false);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const editDialog = useRef<HTMLDialogElement>(null);
@@ -85,16 +87,18 @@ export function SourceInspector({
   const loadActivity = useCallback(async () => {
     setLoading(true);
     try {
-      const [reviewPayload, scanPayload, jobPayload, documentPayload] = await Promise.all([
+      const [reviewPayload, scanPayload, jobPayload, documentPayload, generationPayload] = await Promise.all([
         requestJSON<{ items: Review[] }>(`/api/sources/${source.id}/reviews`),
         requestJSON<{ items: PIIScan[] }>(`/api/sources/${source.id}/pii-scans`),
         requestJSON<{ items: BackgroundJob[] }>(`/api/jobs?source_id=${source.id}&limit=20`),
         requestJSON<{ items: Document[] }>(`/api/sources/${source.id}/documents?limit=200`),
+        requestJSON<{ items: DocumentSampleGeneration[] }>(`/api/sources/${source.id}/document-sample-generations`),
       ]);
       setReviews(reviewPayload.items);
       setScans(scanPayload.items);
       setJobs(jobPayload.items);
       setDocuments(documentPayload.items);
+      setSampleGenerations(generationPayload.items);
       const pendingIDs = new Set(documentPayload.items
         .filter((document) => document.status === "sampled" || document.status === "edited")
         .map((document) => document.id));
@@ -104,12 +108,14 @@ export function SourceInspector({
       const duplicateCheckFinished = jobPayload.items.some((job) => job.job_type === "check_exact_duplicate" && job.status === "succeeded");
       const normalizedDedupFinished = jobPayload.items.some((job) => job.job_type === "index_document_fingerprints" && job.status === "succeeded");
       const samplingFinished = jobPayload.items.some((job) => job.job_type === "sample_documents" && job.status === "succeeded");
+      const resamplingFinished = jobPayload.items.some((job) => job.job_type === "resample_documents" && ["succeeded", "failed"].includes(job.status));
       if (
         (!source.object_sha256 && ingestFinished)
         || (source.pii_status === "not_scanned" && scanFinished)
         || (source.duplicate_status === "not_checked" && duplicateCheckFinished)
         || (source.normalized_dedup_status === "not_checked" && normalizedDedupFinished)
         || (source.document_sampling_status === "not_sampled" && samplingFinished)
+        || (source.document_sampling_status === "resampling" && resamplingFinished)
       ) {
         await onRefresh();
       }
@@ -132,6 +138,10 @@ export function SourceInspector({
   const canEditDocument = user.roles.some((role) => ["admin", "editor"].includes(role));
   const canManageSource = user.roles.some((role) => ["admin", "data_manager", "editor"].includes(role));
   const canIngestSource = user.roles.some((role) => ["admin", "data_manager"].includes(role));
+  const canResample = user.roles.includes("admin")
+    && source.document_sampling_status === "sampled"
+    && source.sampled_document_count > 0
+    && source.reviewed_document_count === 0;
   const gateChecks = [
     { label: "Dosya alındı", passed: Boolean(source.object_sha256) },
     { label: "Haklar temiz", passed: source.rights_status === "cleared" },
@@ -408,6 +418,22 @@ export function SourceInspector({
     }
   }
 
+  async function queueDocumentResample() {
+    setResampling(true);
+    try {
+      const result = await requestJSON<{ job_id: string }>(`/api/sources/${source.id}/documents/resample`, {
+        method: "POST",
+      });
+      onNotice(`Risk bazlı yeniden örnekleme kuyruğa alındı: ${result.job_id.slice(0, 8)}`);
+      await onRefresh();
+      await loadActivity();
+    } catch (error) {
+      onNotice(messageFrom(error));
+    } finally {
+      setResampling(false);
+    }
+  }
+
   async function submitReview(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
@@ -458,6 +484,7 @@ export function SourceInspector({
         <Detail label="Normalize dedup" value={`${source.normalized_dedup_status} / ${source.normalized_duplicate_count}`} />
         {source.normalized_duplicate_source_count > 0 && <Detail label="Tekrar kaynakları" value={source.normalized_duplicate_source_count.toLocaleString("tr-TR")} />}
         <Detail label="Belge örnekleme" value={`${source.document_sampling_status} / ${source.sampled_document_count}`} />
+        <Detail label="Örnek nesli" value={`${source.document_sample_generation} / ${source.document_sampling_method}`} />
         <Detail label="Örnek inceleme" value={`${source.approved_document_count} onay · ${source.flagged_document_count} işaretli`} />
         {source.declared_sha256 && <Detail label="Beyan SHA256" value={source.declared_sha256} mono />}
         {source.declared_byte_size !== undefined && <Detail label="Beyan boyutu" value={formatBytes(source.declared_byte_size)} />}
@@ -474,6 +501,7 @@ export function SourceInspector({
           <CorpusMetric label="Satır" value={corpusLineCount !== undefined ? corpusLineCount.toLocaleString("tr-TR") : "Bilinmiyor"} />
           <CorpusMetric label="Doküman" value={corpusDocumentCount !== undefined ? corpusDocumentCount.toLocaleString("tr-TR") : "Bilinmiyor"} />
           <CorpusMetric label="Örnek" value={`${reviewedCount.toLocaleString("tr-TR")} / ${sampleCount.toLocaleString("tr-TR")}`} tone={reviewPercent === 100 ? "good" : "watch"} />
+          <CorpusMetric label="Örnek nesli" value={String(source.document_sample_generation)} />
           <CorpusMetric label="Riskli örnek" value={riskSampleCount.toLocaleString("tr-TR")} tone={riskSampleCount > 0 ? "watch" : "good"} />
           <CorpusMetric label="PII" value={source.pii_status} tone={source.pii_status === "clear" ? "good" : "risk"} />
           <CorpusMetric label="Normalize tekrar" value={normalizedDuplicateText} tone={source.normalized_dedup_status === "unique" ? "good" : "risk"} />
@@ -544,9 +572,16 @@ export function SourceInspector({
       <section className="inspector-section">
         <div className="section-heading">
           <h3><FileText size={16} /> Belge örnekleri</h3>
-          <button className="icon-button compact" type="button" title="Sıradaki bekleyen örneği aç" onClick={() => void openNextPendingDocument()}>
-            <ClipboardCheck size={15} />
-          </button>
+          <div className="header-actions">
+            {canResample && (
+              <button className="icon-button compact" type="button" disabled={resampling} title="Risk bazlı yeniden örnekle" onClick={() => void queueDocumentResample()}>
+                <RefreshCw className={resampling ? "spin" : ""} size={15} />
+              </button>
+            )}
+            <button className="icon-button compact" type="button" title="Sıradaki bekleyen örneği aç" onClick={() => void openNextPendingDocument()}>
+              <ClipboardCheck size={15} />
+            </button>
+          </div>
         </div>
         <div className="document-progress">
           <div>
@@ -563,6 +598,17 @@ export function SourceInspector({
           </div>
           <progress max={sampleCount || 1} value={reviewedCount} aria-label={`Örnek inceleme ilerlemesi yüzde ${reviewPercent}`} />
         </div>
+        {sampleGenerations.length > 0 && (
+          <div className="sample-generation-list" aria-label="Örnek nesilleri">
+            {sampleGenerations.map((generation) => (
+              <div key={generation.generation}>
+                <span>Nesil {generation.generation}</span>
+                <strong className={generation.status}>{generation.status === "active" ? "Aktif" : "Arşiv"}</strong>
+                <small>{generation.sample_count.toLocaleString("tr-TR")} örnek · {generation.sampling_method} · {formatDate(generation.created_at)}</small>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="document-filter-tabs" role="tablist" aria-label="Belge örneği filtresi">
           <button type="button" aria-pressed={documentStatusFilter === "pending"} onClick={() => setDocumentStatusFilter("pending")}>Bekleyen {pendingDocuments.length}</button>
           <button type="button" aria-pressed={documentStatusFilter === "risk"} onClick={() => setDocumentStatusFilter("risk")}>Riskli {riskyDocuments.length}</button>

@@ -1354,6 +1354,44 @@ textarea:focus {
   background: var(--green);
 }
 
+.sample-generation-list {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+
+.sample-generation-list > div {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 3px 8px;
+  padding: 7px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #ffffff;
+}
+
+.sample-generation-list span,
+.sample-generation-list strong {
+  font-size: 10px;
+}
+
+.sample-generation-list strong.active {
+  color: var(--green-dark);
+}
+
+.sample-generation-list strong.superseded {
+  color: var(--muted);
+}
+
+.sample-generation-list small {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .document-filter-tabs {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

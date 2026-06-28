@@ -364,6 +364,8 @@ See [docs/local_development.md](docs/local_development.md) for details.
 | `GET/POST` | `/api/v1/sources/{id}/reviews` | Review history and decision |
 | `GET` | `/api/v1/sources/{id}/pii-scans` | PII scan results |
 | `GET` | `/api/v1/sources/{id}/documents` | Bounded document samples |
+| `GET` | `/api/v1/sources/{id}/document-sample-generations` | List active and archived sample generations |
+| `POST` | `/api/v1/sources/{id}/documents/resample` | Safely resample a source before review begins |
 | `POST` | `/api/v1/sources/{id}/documents/bulk-reviews` | Atomically review up to 200 pending documents |
 | `GET/PATCH` | `/api/v1/documents/{id}` | Read immutable content or create a version |
 | `GET/POST` | `/api/v1/documents/{id}/reviews` | Document quality score and moderation history |
@@ -443,6 +445,7 @@ Document Index is the next active target.**
 - [x] Normalized document exact-dedup fingerprint gate
 - [x] Deterministic bounded document sampling
 - [x] Explainable risk scoring with combined representative and risk quotas
+- [x] Atomic controlled resampling with generation and membership snapshots
 - [x] Deterministic model-independent JSONL/TXT exports from frozen releases
 - [x] Export artifact/manifest checksums, progress reporting, and role-gated downloads
 - [x] Object-store-backed immutable document versions and editor dialog
@@ -459,7 +462,7 @@ Document Index is the next active target.**
 ### Next
 
 - [ ] Full-corpus document indexing and progress metrics
-- [ ] Multidimensional quality scores and controlled Gardas resampling
+- [ ] Multidimensional human quality scores
 - [ ] Multi-shard/Parquet packaging and token estimates
 - [ ] Near-dedup and approximate decontamination
 - [ ] S3/MinIO storage implementation
@@ -475,6 +478,7 @@ Document Index is the next active target.**
 - [Production deployment](docs/production_deployment.md)
 - [API and workflows](docs/api_workflows.md)
 - [Risk-based sampling](docs/risk_sampling.en.md)
+- [Controlled document resampling](docs/document_resampling.en.md)
 - [Canonical export contract](docs/canonical_exports.en.md)
 - [Pretraining data factory](docs/pretraining_data_factory.md)
 - [Model prompt format abstraction](docs/model_prompt_format_abstraction.md)

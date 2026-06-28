@@ -1,6 +1,6 @@
 # Derlem Proje Tamamlanma Durumu
 
-**Tarih:** 2026-06-26  
+**Tarih:** 2026-06-28
 **Kapsam:** Derlem veri atölyesinin mevcut gerçek durumu, kalan işler ve tamamlanma yorumu.
 
 ## Kısa Cevap
@@ -15,10 +15,10 @@ v0.2 ve v0.3 işlerinin bitmesi gerekiyor. En pratik ifadeyle:
 | Hedef | Durum | Kalan |
 |---|---:|---|
 | Yerel Core MVP | %100 | Bitti |
-| Gardas temiz adayını onaylı kaynak yapmak | %70-75 | Hak/lisans kanıtı + 200 örnek review |
-| Model ekiplerine düzenli JSONL/TXT export vermek | %55-60 | Export Builder + export manifest |
-| Büyük corpus pilotu | %65-70 | Progress raporları + review/export akışı |
-| Üretim-ready v1.0 | %40-45 | v0.4-v0.6 + hukuk/KVKK + prod altyapı |
+| Gardas temiz adayını onaylı kaynak yapmak | %75-80 | Hak/lisans kanıtı + 200 örnek review |
+| Model ekiplerine düzenli JSONL/TXT export vermek | %85-90 | Gardas onayı + ilk büyük release |
+| Büyük corpus pilotu | %80-85 | Resume desteği + Gardas review/export kapanışı |
+| Üretim-ready v1.0 | %45-50 | v0.4-v0.6 + hukuk/KVKK + prod altyapı |
 
 Bu yüzden "proje bitti mi?" sorusunun cevabı hedefe göre değişir:
 
@@ -41,6 +41,7 @@ Bu yüzden "proje bitti mi?" sorusunun cevabı hedefe göre değişir:
 | Exact dedup | `unique` |
 | Normalize dedup | `unique` |
 | Örnekleme | `sampled` |
+| Örnek nesli/yöntemi | `2 / risk-stratified-sha256-v1` |
 | Örnek sayısı | `200` |
 | İncelenen/onaylanan örnek | `0 / 200` |
 | Hak durumu | `unknown` |
@@ -80,15 +81,15 @@ ana kapılar artık teknik değil:
 - En fazla 200 bekleyen belge için atomik toplu review ve ortak kalite puanı.
 - Deterministik risk-stratified örnekleme, risk filtresi ve açıklanabilir neden etiketleri.
 - Generation/membership snapshot'lı kontrollü yeniden örnekleme ve rollback.
+- Ingest, PII, fingerprint ve sample/resample işlerinde canlı byte/satır/doküman ilerlemesi.
+- Gardas clean candidate nesil 2 risk örneklemi: 5.922.891 belge tarandı, 200 örneğin 115'i risk kotasından seçildi.
 
 ## Kalan Teknik İşler
 
 ### v0.2 İçin Kalanlar
 
-- Büyük job'larda progress/result raporlarını güçlendirmek.
-- Full corpus index işlerinde okunmuş byte/satır/doküman ilerlemesini UI'a taşımak.
-- Gardas temiz adayının kuyruğa alınan risk yeniden örnekleme işini tamamlamak.
 - Gardas temiz adayının hak/lisans ve örnek review kapılarını kapatmak.
+- Büyük ingest için kesintiden sonra kaldığı yerden devam etme desteği eklemek.
 
 ### v0.3 İçin Kalanlar
 
@@ -118,6 +119,6 @@ Kod tarafında yakın hedef şudur:
 Benim mühendislik değerlendirmem:
 
 - **Yerel güvenli veri atölyesi:** tamam.
-- **Büyük corpus pilotu:** yarıdan fazla bitti.
+- **Büyük corpus pilotu:** teknik hat hazır; resume ve Gardas insan/hak kapanışı kaldı.
 - **Model ekiplerine üretilebilir veri teslimi:** temel JSONL/TXT teslim hattı hazır; Gardas temiz adayının kapıları kapanınca büyük gerçek corpus export edilebilir.
 - **Tam üretim platformu:** ayrıca altyapı, hukuk ve operasyon gerekir.

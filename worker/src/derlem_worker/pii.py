@@ -4,6 +4,11 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 import re
+from typing import Callable
+
+
+ProgressCallback = Callable[[dict[str, int]], None]
+PROGRESS_INTERVAL_BYTES = 64 * 1024 * 1024
 
 
 EMAIL_PATTERN = re.compile(r"(?<![\w.+-])[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,63}(?![\w.-])", re.IGNORECASE)
@@ -27,11 +32,48 @@ class PIIReport:
 class PIIScanner:
     version = "basic-tr-v1"
 
-    def scan_file(self, path: Path) -> PIIReport:
+    def scan_file(
+        self,
+        path: Path,
+        *,
+        progress_callback: ProgressCallback | None = None,
+        progress_interval_bytes: int = PROGRESS_INTERVAL_BYTES,
+    ) -> PIIReport:
+        if progress_interval_bytes <= 0:
+            raise ValueError("progress_interval_bytes must be positive")
         counts: Counter[str] = Counter()
-        with path.open("r", encoding="utf-8", errors="strict") as source:
-            for line in source:
-                counts.update(count_pii_in_text(line))
+        total_bytes = path.stat().st_size
+        bytes_processed = 0
+        lines_read = 0
+        next_progress_at = progress_interval_bytes
+        last_reported_bytes = -1
+        with path.open("rb") as source:
+            for raw_line in source:
+                bytes_processed += len(raw_line)
+                lines_read += 1
+                counts.update(count_pii_in_text(raw_line.decode("utf-8")))
+                if progress_callback is not None and bytes_processed >= next_progress_at:
+                    progress_callback(
+                        {
+                            "input_bytes_processed": bytes_processed,
+                            "input_bytes_total": total_bytes,
+                            "lines_read": lines_read,
+                            "findings_count": sum(counts.values()),
+                        }
+                    )
+                    last_reported_bytes = bytes_processed
+                    while next_progress_at <= bytes_processed:
+                        next_progress_at += progress_interval_bytes
+
+        if progress_callback is not None and bytes_processed != last_reported_bytes:
+            progress_callback(
+                {
+                    "input_bytes_processed": bytes_processed,
+                    "input_bytes_total": total_bytes,
+                    "lines_read": lines_read,
+                    "findings_count": sum(counts.values()),
+                }
+            )
 
         findings = {
             key: counts.get(key, 0)

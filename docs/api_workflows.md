@@ -72,6 +72,12 @@ yalniz risk neden sayaclarini tasir, eslesen metni veya kimlik degerini tasimaz.
 Bu tablo tum corpus'un document indeksi degil, insan incelemesi icin bounded
 sample katmanidir. Ayrintili sozlesme: [Risk Bazli Ornekleme](risk_sampling.md).
 
+Ingest, PII, fingerprint ve sample/resample taramalari calisirken `GET /jobs`
+yanitindaki `result.phase` ve `result.progress` alanlari byte, satir ve
+is-tipine ozel dokuman sayaclarini tasir. Worker bu gecici sonucu yaklasik her
+64 MiB'de ayri transaction ile gunceller; basarili final result gecici progress'i
+degistirir. Ayrinti: [Arka Plan Isi Ilerleme Sozlesmesi](job_progress.md).
+
 ## Kontrollu Yeniden Ornekleme
 
 `POST /sources/{id}/documents/resample` yalniz admin rolune aciktir. Kaynak

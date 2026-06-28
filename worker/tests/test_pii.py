@@ -46,6 +46,26 @@ def test_scanner_marks_clean_text_clear(tmp_path: Path) -> None:
     assert sum(report.findings.values()) == 0
 
 
+def test_scanner_reports_byte_line_and_finding_progress(tmp_path: Path) -> None:
+    source = tmp_path / "pii-progress.txt"
+    source.write_text("temiz\ntest@example.com\n", encoding="utf-8")
+    updates: list[dict[str, int]] = []
+
+    report = PIIScanner().scan_file(
+        source,
+        progress_callback=updates.append,
+        progress_interval_bytes=5,
+    )
+
+    assert report.status == "flagged"
+    assert updates[-1] == {
+        "input_bytes_processed": source.stat().st_size,
+        "input_bytes_total": source.stat().st_size,
+        "lines_read": 2,
+        "findings_count": 1,
+    }
+
+
 def test_count_pii_in_text_uses_same_validators() -> None:
     counts = count_pii_in_text("mail test@example.com tckn 10000000146 kart 4242 4242 4242 4242")
 

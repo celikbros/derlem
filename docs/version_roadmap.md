@@ -25,6 +25,8 @@ Sistem artık tek dosya/tek kaynak ölçeğinde güvenli bir uçtan uca akış �
 - Kaynak kaydı, browser upload ve güvenilir local ingest var.
 - Worker; SHA256, UTF-8, byte/line count, PII, source artifact exact duplicate,
   normalized document exact-dedup ve bounded sample çıkarıyor.
+- Büyük ingest, PII, fingerprint ve sample/resample işleri 64 MiB aralıklı canlı
+  byte/satır/doküman ilerlemesini İşler ekranına yazıyor.
 - İnsan review kapısı; lisans kanıtı, hak durumu, PII, dedup ve tüm örnek onaylarını zorunlu tutuyor.
 - Belge örneği açma, düzenleme, yeni immutable sürüm ve belge review geçmişi var.
 - Release Builder; aynı `content_purpose` içindeki onaylı kaynaklardan draft/frozen release üretiyor.
@@ -51,7 +53,7 @@ akışları kurmak, export/shard üretmek, kalite skorlarını derinleştirmek v
 | Sürüm | Durum | Ana hedef | Çıktı |
 |---|---|---|---|
 | v0.1 | Tamamlandı | Güvenli çekirdek veri atölyesi | Kaynak -> kalite kapıları -> review -> frozen release |
-| v0.2 | Aktif | Büyük corpus ingest ve tam document indeks | Gardas/Faz 2 seed'i gerçek operasyon kaynağı olur |
+| v0.2 | Operasyon kapanışı | Büyük corpus ingest ve tam document indeks | Gardas/Faz 2 seed'i gerçek operasyon kaynağı olur |
 | v0.3 | Aktif | Toplu review, kalite skorları, export/shard | Eğitim ekiplerine kanonik JSONL/TXT paketleri |
 | v0.4 | Planlandı | Gelişmiş dedup/decontam ve veri karışımı | MinHash/SimHash, mixture raporu, risk bazlı örneklem |
 | v0.5 | Planlandı | Katkı, ajan ve servis hesabı pilotu | Açık/kapalı katkı kuyruğu ve ajan audit modeli |
@@ -89,7 +91,7 @@ Kapanış kriteri:
 
 ## v0.2 - Büyük Corpus Ingest ve Tam Document İndeks
 
-**Durum:** Aktif.
+**Durum:** Ana teknik hedefler tamamlandı; resume ve Gardas review/hak kapanışı sürüyor.
 
 Amaç, Derlem'i örnek kaynak akışından büyük corpus operasyonuna taşımak. İlk büyük
 hedef Gardas/Faz 2 verisinin immutable store'a kontrollü alınması ve tam corpus
@@ -107,12 +109,12 @@ Yapılacaklar:
 
 - Gardas/Faz 2 seed manifestini güncelle: path, sha256, byte size, line count, doküman sayısı.
 - Seed dosyasını sadece path ile değil, immutable object store'a kopyalayarak kanonikleştir. **Tamamlandı.**
-- Büyük dosya ingest için resume edilebilir job raporu ekle.
-- Tam corpus document fingerprint indeksini source bazında çıkar.
-- Index job'larında ilerleme metrikleri ekle: okunan byte, satır, indexed document, skipped oversized.
+- Büyük dosya ingest için canlı progress/result raporu ekle. **Tamamlandı; resume desteği sonraki dilim.**
+- Tam corpus document fingerprint indeksini source bazında çıkar. **Tamamlandı.**
+- Index job'larında ilerleme metrikleri ekle: okunan byte, satır, indexed document, skipped oversized. **Tamamlandı.**
 - `documents` tablosunu sadece sample için tutmaya devam et; tam indeks ham metin saklamasın.
 - Review UI'da büyük kaynaklar için "tam corpus özet kartı" göster. **Tamamlandı.**
-- Büyük kaynaklarda bounded sample stratejisini risk bazlı hale getir. **Tamamlandı; generation/membership snapshot'lı kontrollü yeniden örnekleme hazır.**
+- Büyük kaynaklarda bounded sample stratejisini risk bazlı hale getir. **Tamamlandı; Gardas nesil 2 aktif, 200 örneğin 115'i risk kotasından seçildi.**
 
 Kapanış kriteri:
 
@@ -236,15 +238,17 @@ Kapanış kriteri:
 
 Önümüzdeki pratik sıra:
 
-1. Gardas/Faz 2 seed manifestini ve immutable ingest yolunu netleştir.
-2. Büyük dosya ingest job'una progress/result raporu ekle.
-3. Tam corpus fingerprint indeksini büyük kaynak üzerinde çalıştır.
+1. Gardas/Faz 2 seed manifestini ve immutable ingest yolunu netleştir. **Tamamlandı.**
+2. Büyük dosya ingest job'una progress/result raporu ekle. **Tamamlandı.**
+3. Tam corpus fingerprint indeksini büyük kaynak üzerinde çalıştır. **Tamamlandı.**
 4. Toplu review ekranını kaynak bazlı özet ve öncelik sırasıyla genişlet. **Tamamlandı.**
-5. Export Builder tasarımını ve ilk JSONL/TXT çıktısını oluştur.
-6. Büyük dosya ingest ve index job'larında progress/result raporunu derinleştir.
+5. Export Builder tasarımını ve ilk JSONL/TXT çıktısını oluştur. **Tamamlandı.**
+6. Büyük dosya ingest ve index job'larında progress/result raporunu derinleştir. **Tamamlandı.**
+7. Büyük ingest için resume/checkpoint desteği ekle.
+8. Gardas nesil 2 örneklerini hak/lisans kararıyla birlikte insan review'dan geçir.
 
 ## Şu Anki Karar
 
-Derlem'in yönü doğru: önce güvenlik ve izlenebilirlik omurgası kuruldu, şimdi
-ölçekli veri üretim kapasitesi eklenecek. Bir sonraki sürüm adı **v0.2 - Büyük
-Corpus Ingest ve Tam Document İndeks** olmalı.
+Derlem'in yönü doğru: güvenlik ve izlenebilirlik omurgası ile büyük corpus teknik
+hattı kuruldu. Şimdiki odak **v0.3 - kalite, paketleme ve ilk gerçek Gardas
+release'i**; v0.2 için resume ve operasyon kapanışı paralel yürür.

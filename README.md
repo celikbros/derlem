@@ -433,8 +433,8 @@ sonra kanıtlanan darboğaza göre ayrıştırma yapılır.
 ## Yol Haritası
 
 Ayrıntılı versiyon hedefleri için [Derlem Versiyon Yol Haritası](docs/version_roadmap.md)
-belgesini izleyin. Özetle: **v0.1 Core MVP tamamlandı; v0.2 Büyük Corpus Ingest
-ve Tam Document İndeks sıradaki aktif hedef.**
+belgesini izleyin. Özetle: **v0.1 Core MVP tamamlandı; v0.2'nin büyük corpus
+indeks ve iş görünürlüğü çalışıyor, v0.3 kalite/paketleme aktif hedef.**
 
 ### Tamamlanan çalışan dilim
 
@@ -450,6 +450,7 @@ ve Tam Document İndeks sıradaki aktif hedef.**
 - [x] Deterministik ve bounded belge örnekleme
 - [x] Açıklanabilir risk puanlı, temsil + risk kotasını birleştiren örnekleme
 - [x] Nesil ve üyelik snapshot'lı, atomik kontrollü yeniden örnekleme
+- [x] Büyük ingest, PII, fingerprint ve sample işlerinde canlı byte/satır/doküman ilerlemesi
 - [x] Object store tabanlı immutable belge sürümleri ve editor diyaloğu
 - [x] Belge kalite puanı, immutable review geçmişi ve tam örnek kapsama kapısı
 - [x] Sürüm kontrollü ve atomik toplu belge inceleme
@@ -465,7 +466,6 @@ ve Tam Document İndeks sıradaki aktif hedef.**
 
 ### Sıradaki işler
 
-- [ ] Tam corpus document indeksleme ve progress metrikleri
 - [ ] Çok boyutlu insan kalite skorları
 - [ ] Çoklu shard/Parquet paketleme ve token tahmini
 - [ ] Near-dedup ve yaklaşık decontamination
@@ -483,6 +483,7 @@ ve Tam Document İndeks sıradaki aktif hedef.**
 - [API ve iş akışları](docs/api_workflows.md)
 - [Risk bazlı örnekleme](docs/risk_sampling.md)
 - [Kontrollü yeniden örnekleme](docs/document_resampling.md)
+- [Arka plan işi ilerleme sözleşmesi](docs/job_progress.md)
 - [Kanonik export sözleşmesi](docs/canonical_exports.md)
 - [Pretraining data factory](docs/pretraining_data_factory.md)
 - [Model prompt format soyutlaması](docs/model_prompt_format_abstraction.md)

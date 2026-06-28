@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import random
 import re
+from typing import Callable
 import unicodedata
 
 
@@ -18,6 +19,9 @@ _IDENTIFIER_RE = re.compile(
     r"(?:[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}|\bTR\d{24}\b|(?<!\d)\d{11}(?!\d))",
     re.IGNORECASE,
 )
+ProgressCallback = Callable[[dict[str, int]], None]
+ByteProgressCallback = Callable[[int, int], None]
+PROGRESS_INTERVAL_BYTES = 64 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -47,8 +51,10 @@ def sample_line_documents(
     sample_size: int,
     max_document_bytes: int,
     seed: str,
+    progress_callback: ProgressCallback | None = None,
+    progress_interval_bytes: int = PROGRESS_INTERVAL_BYTES,
 ) -> SamplingReport:
-    if sample_size <= 0 or max_document_bytes <= 0:
+    if sample_size <= 0 or max_document_bytes <= 0 or progress_interval_bytes <= 0:
         raise ValueError("Sampling limits must be positive")
 
     generator = random.Random(int(seed[:16], 16))
@@ -61,7 +67,27 @@ def sample_line_documents(
     skipped_oversized = 0
     risk_candidate_documents = 0
 
-    for ordinal, raw_line, oversized in _bounded_lines(path, max_document_bytes):
+    def report_progress(bytes_processed: int, lines_read: int) -> None:
+        if progress_callback is None:
+            return
+        progress_callback(
+            {
+                "input_bytes_processed": bytes_processed,
+                "input_bytes_total": path.stat().st_size,
+                "lines_read": lines_read,
+                "documents_scanned": total_documents,
+                "eligible_documents": eligible_documents,
+                "skipped_oversized": skipped_oversized,
+                "risk_candidate_documents": risk_candidate_documents,
+            }
+        )
+
+    for ordinal, raw_line, oversized in _bounded_lines(
+        path,
+        max_document_bytes,
+        progress_callback=report_progress,
+        progress_interval_bytes=progress_interval_bytes,
+    ):
         if oversized:
             total_documents += 1
             skipped_oversized += 1
@@ -170,18 +196,34 @@ def score_document_risk(text: str, raw_line: str | None = None) -> tuple[int, tu
     return min(score, 10), tuple(reasons)
 
 
-def _bounded_lines(path: Path, max_bytes: int):
+def _bounded_lines(
+    path: Path,
+    max_bytes: int,
+    *,
+    progress_callback: ByteProgressCallback | None = None,
+    progress_interval_bytes: int = PROGRESS_INTERVAL_BYTES,
+):
+    if progress_interval_bytes <= 0:
+        raise ValueError("progress_interval_bytes must be positive")
     with path.open("rb") as source:
         ordinal = 0
+        next_progress_at = progress_interval_bytes
         while True:
             chunk = source.readline(max_bytes + 1)
             if not chunk:
+                if progress_callback is not None:
+                    progress_callback(source.tell(), ordinal)
                 return
             ordinal += 1
             oversized = len(chunk) > max_bytes
             if oversized and not chunk.endswith(b"\n"):
                 while chunk and not chunk.endswith(b"\n"):
                     chunk = source.readline(max_bytes + 1)
+            bytes_processed = source.tell()
+            if progress_callback is not None and bytes_processed >= next_progress_at:
+                progress_callback(bytes_processed, ordinal)
+                while next_progress_at <= bytes_processed:
+                    next_progress_at += progress_interval_bytes
             if oversized:
                 yield ordinal, None, True
                 continue

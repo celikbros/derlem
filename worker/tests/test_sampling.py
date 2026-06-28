@@ -20,6 +20,29 @@ def test_sampling_is_deterministic_and_bounded(tmp_path: Path) -> None:
     assert list(first.samples) == sorted(first.samples, key=lambda item: item.source_ordinal)
 
 
+def test_sampling_reports_scan_progress(tmp_path: Path) -> None:
+    source = tmp_path / "progress.txt"
+    source.write_text("\n".join(f"yeterince uzun belge metni {index}" for index in range(20)), encoding="utf-8")
+    updates: list[dict[str, int]] = []
+
+    report = sample_line_documents(
+        source,
+        sample_size=5,
+        max_document_bytes=128,
+        seed="a" * 64,
+        progress_callback=updates.append,
+        progress_interval_bytes=32,
+    )
+
+    assert report.total_documents == 20
+    assert len(updates) > 1
+    assert updates[-1]["input_bytes_processed"] == source.stat().st_size
+    assert updates[-1]["input_bytes_total"] == source.stat().st_size
+    assert updates[-1]["lines_read"] == 20
+    assert updates[-1]["documents_scanned"] == 20
+    assert updates[-1]["eligible_documents"] == 20
+
+
 def test_sampling_extracts_jsonl_text_and_external_id(tmp_path: Path) -> None:
     source = tmp_path / "records.jsonl"
     source.write_text('{"id":"a-1","text":"Merhaba dünya"}\n', encoding="utf-8")

@@ -8,6 +8,11 @@ from pathlib import Path
 import shutil
 import stat
 import tempfile
+from typing import Callable
+
+
+ProgressCallback = Callable[[dict[str, int]], None]
+PROGRESS_INTERVAL_BYTES = 64 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -27,16 +32,26 @@ class ContentAddressedStore:
         self.temp_root.mkdir(parents=True, exist_ok=True)
         self.object_root.mkdir(parents=True, exist_ok=True)
 
-    def ingest_file(self, source_path: Path) -> StoredObject:
+    def ingest_file(
+        self,
+        source_path: Path,
+        *,
+        progress_callback: ProgressCallback | None = None,
+        progress_interval_bytes: int = PROGRESS_INTERVAL_BYTES,
+    ) -> StoredObject:
         source_path = source_path.resolve(strict=True)
         if not source_path.is_file():
             raise ValueError(f"Not a regular file: {source_path}")
+        if progress_interval_bytes <= 0:
+            raise ValueError("progress_interval_bytes must be positive")
 
         hasher = hashlib.sha256()
         decoder = codecs.getincrementaldecoder("utf-8")("strict")
+        total_bytes = source_path.stat().st_size
         byte_size = 0
         newline_count = 0
         last_byte: int | None = None
+        next_progress_at = progress_interval_bytes
 
         file_descriptor, temp_name = tempfile.mkstemp(prefix="ingest-", dir=self.temp_root)
         temp_path = Path(temp_name)
@@ -49,6 +64,16 @@ class ContentAddressedStore:
                     byte_size += len(chunk)
                     newline_count += chunk.count(b"\n")
                     last_byte = chunk[-1]
+                    if progress_callback is not None and byte_size >= next_progress_at:
+                        progress_callback(
+                            {
+                                "input_bytes_processed": byte_size,
+                                "input_bytes_total": total_bytes,
+                                "lines_read": newline_count,
+                            }
+                        )
+                        while next_progress_at <= byte_size:
+                            next_progress_at += progress_interval_bytes
                 decoder.decode(b"", final=True)
                 destination.flush()
                 os.fsync(destination.fileno())
@@ -59,6 +84,14 @@ class ContentAddressedStore:
             target.parent.mkdir(parents=True, exist_ok=True)
             self._publish_create_only(temp_path, target)
             line_count = newline_count + (1 if byte_size > 0 and last_byte != ord("\n") else 0)
+            if progress_callback is not None:
+                progress_callback(
+                    {
+                        "input_bytes_processed": byte_size,
+                        "input_bytes_total": total_bytes,
+                        "lines_read": line_count,
+                    }
+                )
             return StoredObject(
                 sha256=digest,
                 storage_key=storage_key,

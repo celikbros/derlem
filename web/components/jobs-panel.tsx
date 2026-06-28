@@ -22,8 +22,8 @@ export function JobsPanel({ onNotice }: { onNotice: (message: string) => void })
   const [jobs, setJobs] = useState<BackgroundJob[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const payload = await requestJSON<{ items: BackgroundJob[] }>("/api/jobs?limit=200");
       setJobs(payload.items);
@@ -35,6 +35,12 @@ export function JobsPanel({ onNotice }: { onNotice: (message: string) => void })
   }, [onNotice]);
 
   useEffect(() => { void load(); }, [load]);
+  const hasActiveJobs = jobs.some((job) => job.status === "queued" || job.status === "running");
+  useEffect(() => {
+    if (!hasActiveJobs) return;
+    const timer = window.setInterval(() => { void load(true); }, 2_000);
+    return () => window.clearInterval(timer);
+  }, [hasActiveJobs, load]);
 
   return (
     <section className="jobs-panel">
@@ -53,11 +59,17 @@ export function JobsPanel({ onNotice }: { onNotice: (message: string) => void })
           <tbody>
             {jobs.map((job) => (
               <tr key={job.id}>
-                <td><strong>{jobLabels[job.job_type] ?? job.job_type}</strong><small className="row-subtitle">{job.id.slice(0, 8)}</small></td>
+                <td>
+                  <strong>{jobLabels[job.job_type] ?? job.job_type}</strong>
+                  <small className="row-subtitle">{job.id.slice(0, 8)}</small>
+                  {job.status === "running" && jobProgress(job) && <div className="job-progress-mobile"><JobResult job={job} /></div>}
+                </td>
                 <td><JobStatus status={job.status} /></td>
                 <td>{job.attempts} / {job.max_attempts}</td>
                 <td>{formatDate(job.created_at)}</td>
-                <td className={job.last_error ? "error-text" : undefined}>{job.last_error ?? resultSummary(job)}</td>
+                <td className={job.last_error ? "error-text" : undefined}>
+                  {job.last_error ?? <JobResult job={job} />}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -66,6 +78,67 @@ export function JobsPanel({ onNotice }: { onNotice: (message: string) => void })
       </div>
     </section>
   );
+}
+
+type Progress = Record<string, unknown>;
+
+const phaseLabels: Record<string, string> = {
+  ingesting: "Dosya kopyalanıyor",
+  scanning_pii: "PII taranıyor",
+  fingerprinting: "Parmak izi çıkarılıyor",
+  matching_duplicates: "Tekrarlar karşılaştırılıyor",
+  sampling: "Örnek seçiliyor",
+  publishing_samples: "Örnekler yayınlanıyor",
+  building: "Export oluşturuluyor",
+};
+
+function JobResult({ job }: { job: BackgroundJob }) {
+  const progress = jobProgress(job);
+  if (job.status !== "running" || !progress) return resultSummary(job);
+
+  const processedBytes = numberFrom(progress, "input_bytes_processed");
+  const totalBytes = numberFrom(progress, "input_bytes_total");
+  const percent = totalBytes > 0 ? Math.min(100, (processedBytes / totalBytes) * 100) : undefined;
+  const phase = typeof job.result?.phase === "string" ? job.result.phase : "running";
+  const detail = progressDetail(job.job_type, progress, processedBytes, totalBytes);
+
+  return (
+    <div className="job-progress-cell">
+      <div><strong>{phaseLabels[phase] ?? "İşleniyor"}</strong>{percent !== undefined && <span>%{percent.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}</span>}</div>
+      <small>{detail}</small>
+      {percent !== undefined && <progress max={100} value={percent} aria-label={`İş ilerlemesi yüzde ${percent.toFixed(1)}`} />}
+    </div>
+  );
+}
+
+function jobProgress(job: BackgroundJob): Progress | undefined {
+  const progress = job.result?.progress;
+  return progress && typeof progress === "object" && !Array.isArray(progress)
+    ? progress as Progress
+    : undefined;
+}
+
+function progressDetail(jobType: string, progress: Progress, processedBytes: number, totalBytes: number) {
+  const lines = numberFrom(progress, "lines_read").toLocaleString("tr-TR");
+  const byteSummary = totalBytes > 0 ? `${formatBytes(processedBytes)} / ${formatBytes(totalBytes)}` : formatBytes(processedBytes);
+  if (jobType === "index_document_fingerprints") {
+    return `${byteSummary} · ${lines} satır · ${numberFrom(progress, "indexed_documents").toLocaleString("tr-TR")} indeks`;
+  }
+  if (["sample_documents", "resample_documents"].includes(jobType)) {
+    return `${byteSummary} · ${numberFrom(progress, "documents_scanned").toLocaleString("tr-TR")} belge · ${numberFrom(progress, "risk_candidate_documents").toLocaleString("tr-TR")} risk adayı`;
+  }
+  if (jobType === "scan_pii") {
+    return `${byteSummary} · ${lines} satır · ${numberFrom(progress, "findings_count").toLocaleString("tr-TR")} bulgu`;
+  }
+  if (jobType === "export_release") {
+    return `${byteSummary} · ${numberFrom(progress, "records_written").toLocaleString("tr-TR")} kayıt`;
+  }
+  return `${byteSummary} · ${lines} satır`;
+}
+
+function numberFrom(value: Progress, key: string) {
+  const candidate = value[key];
+  return typeof candidate === "number" && Number.isFinite(candidate) ? candidate : 0;
 }
 
 export function JobStatus({ status }: { status: BackgroundJob["status"] }) {
@@ -82,14 +155,6 @@ export function JobStatus({ status }: { status: BackgroundJob["status"] }) {
 
 function resultSummary(job: BackgroundJob) {
   if (job.status === "queued") return "Bekliyor";
-  if (job.status === "running" && job.job_type === "export_release") {
-    const progress = job.result?.progress;
-    if (progress && typeof progress === "object" && "records_written" in progress) {
-      const records = Number(progress.records_written).toLocaleString("tr-TR");
-      const bytes = "output_bytes_written" in progress ? Number(progress.output_bytes_written) : 0;
-      return `${records} kayıt · ${formatMegabytes(bytes)} MB`;
-    }
-  }
   if (job.status === "running") return "İşleniyor";
   if (job.job_type === "scan_pii" && typeof job.result?.status === "string") return `PII: ${job.result.status}`;
   if (job.job_type === "index_document_fingerprints" && typeof job.result?.status === "string") return `Dedup: ${job.result.status}`;
@@ -105,8 +170,16 @@ function resultSummary(job: BackgroundJob) {
   return job.status === "succeeded" ? "Başarılı" : "-";
 }
 
-function formatMegabytes(bytes: number) {
-  return (bytes / 1024 / 1024).toLocaleString("tr-TR", { maximumFractionDigits: 1 });
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes.toLocaleString("tr-TR")} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let value = bytes / 1024;
+  let unit = units[0];
+  for (let index = 1; index < units.length && value >= 1024; index += 1) {
+    value /= 1024;
+    unit = units[index];
+  }
+  return `${value.toLocaleString("tr-TR", { maximumFractionDigits: 1 })} ${unit}`;
 }
 
 function formatDate(value: string) {

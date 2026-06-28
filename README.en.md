@@ -429,8 +429,8 @@ on one machine first and split only around demonstrated bottlenecks.
 ## Roadmap
 
 For detailed version targets, see [Derlem Version Roadmap](docs/version_roadmap.md).
-In short: **v0.1 Core MVP is complete; v0.2 Large Corpus Ingest and Full
-Document Index is the next active target.**
+In short: **v0.1 Core MVP is complete; v0.2 large-corpus indexing and job
+visibility are operational, and v0.3 quality/packaging is the active target.**
 
 ### Operational slice
 
@@ -446,6 +446,7 @@ Document Index is the next active target.**
 - [x] Deterministic bounded document sampling
 - [x] Explainable risk scoring with combined representative and risk quotas
 - [x] Atomic controlled resampling with generation and membership snapshots
+- [x] Live byte/line/document progress for large ingest, PII, fingerprint, and sampling jobs
 - [x] Deterministic model-independent JSONL/TXT exports from frozen releases
 - [x] Export artifact/manifest checksums, progress reporting, and role-gated downloads
 - [x] Object-store-backed immutable document versions and editor dialog
@@ -461,7 +462,6 @@ Document Index is the next active target.**
 
 ### Next
 
-- [ ] Full-corpus document indexing and progress metrics
 - [ ] Multidimensional human quality scores
 - [ ] Multi-shard/Parquet packaging and token estimates
 - [ ] Near-dedup and approximate decontamination
@@ -479,6 +479,7 @@ Document Index is the next active target.**
 - [API and workflows](docs/api_workflows.md)
 - [Risk-based sampling](docs/risk_sampling.en.md)
 - [Controlled document resampling](docs/document_resampling.en.md)
+- [Background job progress contract](docs/job_progress.en.md)
 - [Canonical export contract](docs/canonical_exports.en.md)
 - [Pretraining data factory](docs/pretraining_data_factory.md)
 - [Model prompt format abstraction](docs/model_prompt_format_abstraction.md)

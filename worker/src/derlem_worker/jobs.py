@@ -167,7 +167,16 @@ class Worker:
         try:
             if job.job_type in {"ingest_local_file", "ingest_staged_file"}:
                 ingest_path = self._ingest_path(job)
-                stored = self.store.ingest_file(ingest_path)
+                with psycopg.connect(self.config.database_url) as progress_connection:
+                    stored = self.store.ingest_file(
+                        ingest_path,
+                        progress_callback=lambda progress: self._write_job_progress(
+                            progress_connection,
+                            job,
+                            "ingesting",
+                            progress,
+                        ),
+                    )
                 with psycopg.connect(self.config.database_url) as connection:
                     self._complete_ingest(connection, job, stored)
                 if job.job_type == "ingest_staged_file":
@@ -271,6 +280,8 @@ class Worker:
                 attempts = attempts + 1,
                 locked_at = now(),
                 locked_by = %s,
+                result = NULL,
+                last_error = NULL,
                 updated_at = now()
             FROM candidate
             WHERE job.id = candidate.id
@@ -291,6 +302,27 @@ class Worker:
             attempts=row["attempts"],
             max_attempts=row["max_attempts"],
         )
+
+    @staticmethod
+    def _write_job_progress(
+        connection: psycopg.Connection,
+        job: Job,
+        phase: str,
+        progress: dict[str, int],
+    ) -> None:
+        connection.execute(
+            """
+            UPDATE background_jobs
+            SET result = jsonb_build_object(
+                    'phase', %s::text,
+                    'progress', %s::jsonb
+                ),
+                updated_at = now()
+            WHERE id = %s AND status = 'running'
+            """,
+            (phase, json.dumps(progress, ensure_ascii=False), job.id),
+        )
+        connection.commit()
 
     def _ingest_path(self, job: Job) -> Path:
         source_id = str(job.payload.get("source_id", "")).strip()
@@ -332,7 +364,17 @@ class Worker:
 
         object_path = (self.config.storage_root / str(row["storage_key"])).resolve()
         object_path.relative_to(self.config.storage_root)
-        return object_sha256, self.pii_scanner.scan_file(object_path)
+        with psycopg.connect(self.config.database_url) as progress_connection:
+            report = self.pii_scanner.scan_file(
+                object_path,
+                progress_callback=lambda progress: self._write_job_progress(
+                    progress_connection,
+                    job,
+                    "scanning_pii",
+                    progress,
+                ),
+            )
+        return object_sha256, report
 
     def _sample_documents(
         self,
@@ -364,16 +406,38 @@ class Worker:
 
         object_path = (self.config.storage_root / str(row["storage_key"])).resolve()
         object_path.relative_to(self.config.storage_root)
-        report = sample_line_documents(
-            object_path,
-            sample_size=self.config.document_sample_size,
-            max_document_bytes=self.config.max_document_bytes,
-            seed=object_sha256,
-        )
-        stored_samples = [
-            (sample, self.store.ingest_bytes(sample.text.encode("utf-8")))
-            for sample in report.samples
-        ]
+        with psycopg.connect(self.config.database_url) as progress_connection:
+            latest_progress: dict[str, int] = {}
+
+            def update_sampling_progress(progress: dict[str, int]) -> None:
+                latest_progress.clear()
+                latest_progress.update(progress)
+                self._write_job_progress(
+                    progress_connection,
+                    job,
+                    "sampling",
+                    progress,
+                )
+
+            report = sample_line_documents(
+                object_path,
+                sample_size=self.config.document_sample_size,
+                max_document_bytes=self.config.max_document_bytes,
+                seed=object_sha256,
+                progress_callback=update_sampling_progress,
+            )
+            publish_progress = dict(latest_progress)
+            publish_progress["samples_selected"] = len(report.samples)
+            self._write_job_progress(
+                progress_connection,
+                job,
+                "publishing_samples",
+                publish_progress,
+            )
+            stored_samples = [
+                (sample, self.store.ingest_bytes(sample.text.encode("utf-8")))
+                for sample in report.samples
+            ]
         return object_sha256, report, stored_samples
 
     def _complete_ingest(
@@ -732,43 +796,78 @@ class Worker:
             skipped_too_short = 0
             batch: list[tuple[str, str, int, str, int, str]] = []
             object_path = self._stored_object_path(str(source[2]))
-            for ordinal, raw_line, oversized in _bounded_lines(
-                object_path,
-                self.config.max_document_bytes,
-            ):
-                if oversized:
-                    total_documents += 1
-                    skipped_oversized += 1
-                    continue
-                assert raw_line is not None
-                stripped = raw_line.strip()
-                if not stripped:
-                    continue
-                total_documents += 1
-                text, _ = _document_from_line(stripped)
-                if not text:
-                    continue
-                fingerprint = document_fingerprint(text)
-                if fingerprint is None:
-                    skipped_too_short += 1
-                    continue
-                normalized_sha256, normalized_char_count = fingerprint
-                indexed_documents += 1
-                batch.append(
-                    (
-                        source_id,
-                        object_sha256,
-                        ordinal,
-                        normalized_sha256,
-                        normalized_char_count,
-                        FINGERPRINT_VERSION,
+            total_input_bytes = object_path.stat().st_size
+            lines_read = 0
+            with psycopg.connect(self.config.database_url) as progress_connection:
+                def report_fingerprint_progress(bytes_processed: int, lines_read: int) -> None:
+                    self._write_job_progress(
+                        progress_connection,
+                        job,
+                        "fingerprinting",
+                        {
+                            "input_bytes_processed": bytes_processed,
+                            "input_bytes_total": total_input_bytes,
+                            "lines_read": lines_read,
+                            "documents_scanned": total_documents,
+                            "indexed_documents": indexed_documents,
+                            "skipped_oversized": skipped_oversized,
+                            "skipped_too_short": skipped_too_short,
+                        },
                     )
-                )
-                if len(batch) >= 1000:
+
+                for ordinal, raw_line, oversized in _bounded_lines(
+                    object_path,
+                    self.config.max_document_bytes,
+                    progress_callback=report_fingerprint_progress,
+                ):
+                    lines_read = ordinal
+                    if oversized:
+                        total_documents += 1
+                        skipped_oversized += 1
+                        continue
+                    assert raw_line is not None
+                    stripped = raw_line.strip()
+                    if not stripped:
+                        continue
+                    total_documents += 1
+                    text, _ = _document_from_line(stripped)
+                    if not text:
+                        continue
+                    fingerprint = document_fingerprint(text)
+                    if fingerprint is None:
+                        skipped_too_short += 1
+                        continue
+                    normalized_sha256, normalized_char_count = fingerprint
+                    indexed_documents += 1
+                    batch.append(
+                        (
+                            source_id,
+                            object_sha256,
+                            ordinal,
+                            normalized_sha256,
+                            normalized_char_count,
+                            FINGERPRINT_VERSION,
+                        )
+                    )
+                    if len(batch) >= 1000:
+                        self._insert_document_fingerprint_batch(connection, batch)
+                        batch.clear()
+                if batch:
                     self._insert_document_fingerprint_batch(connection, batch)
-                    batch.clear()
-            if batch:
-                self._insert_document_fingerprint_batch(connection, batch)
+                self._write_job_progress(
+                    progress_connection,
+                    job,
+                    "matching_duplicates",
+                    {
+                        "input_bytes_processed": total_input_bytes,
+                        "input_bytes_total": total_input_bytes,
+                        "lines_read": lines_read,
+                        "documents_scanned": total_documents,
+                        "indexed_documents": indexed_documents,
+                        "skipped_oversized": skipped_oversized,
+                        "skipped_too_short": skipped_too_short,
+                    },
+                )
 
             duplicate_counts = connection.execute(
                 """

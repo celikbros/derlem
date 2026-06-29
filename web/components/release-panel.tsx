@@ -2,6 +2,7 @@
 
 import {
   Archive,
+  ChartBar,
   Check,
   Download,
   FileArchive,
@@ -165,6 +166,8 @@ export function ReleasePanel({
     });
   }
 
+  const selectedMixture = selected ? mixtureReport(selected) : undefined;
+
   return (
     <section className={`release-layout${selected ? " with-detail" : ""}`}>
       <div className="release-list-panel">
@@ -230,6 +233,23 @@ export function ReleasePanel({
               {gateRows(selected).map((gate) => <div key={gate.label}><span>{gate.label}</span><strong className={gate.status}>{gate.text}</strong></div>)}
             </div>
           </section>
+
+          {selectedMixture && (
+            <section className="release-section">
+              <h3><ChartBar size={16} /> Veri karışımı</h3>
+              <div className="mixture-summary">
+                <div className="mixture-totals">
+                  <span>{selectedMixture.totals.source_count.toLocaleString("tr-TR")} kaynak</span>
+                  <span>{formatBytes(selectedMixture.totals.byte_size)}</span>
+                  <span>{selectedMixture.totals.line_count.toLocaleString("tr-TR")} kayıt</span>
+                </div>
+                <MixtureDimension label="Dil" entries={selectedMixture.dimensions.language} />
+                <MixtureDimension label="Alan" entries={selectedMixture.dimensions.domain} />
+                <MixtureDimension label="Kaynak tipi" entries={selectedMixture.dimensions.source_type} />
+                <MixtureDimension label="Lisans" entries={selectedMixture.dimensions.license} />
+              </div>
+            </section>
+          )}
 
           <section className="release-section">
             <h3><Archive size={16} /> Frozen kaynaklar</h3>
@@ -347,6 +367,53 @@ function gateRows(release: Release) {
     const text = status === "passed" ? "Geçti" : status === "blocked" || status === "failed" ? "Bloke" : status === "not_applicable" ? "Uygulanmaz" : "Bekliyor";
     return { label, status, text };
   });
+}
+
+type MixtureEntry = {
+  value: string;
+  source_count: number;
+  source_share_bps: number;
+  byte_size: number;
+  byte_share_bps: number;
+  line_count: number;
+  line_share_bps: number;
+};
+
+type MixtureReport = {
+  schema_version: "derlem.mixture-report.v1";
+  totals: { source_count: number; byte_size: number; line_count: number };
+  dimensions: Record<"language" | "domain" | "source_type" | "license" | "rights_status", MixtureEntry[]>;
+};
+
+function mixtureReport(release: Release): MixtureReport | undefined {
+  const candidate = release.gate_results?.mixture_report;
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return undefined;
+  const report = candidate as Partial<MixtureReport>;
+  if (report.schema_version !== "derlem.mixture-report.v1" || !report.totals || !report.dimensions) return undefined;
+  return report as MixtureReport;
+}
+
+function MixtureDimension({ label, entries }: { label: string; entries: MixtureEntry[] }) {
+  return (
+    <div className="mixture-dimension">
+      <strong>{label}</strong>
+      <div>
+        {entries.map((entry) => {
+          const share = entry.byte_size > 0 ? entry.byte_share_bps : entry.source_share_bps;
+          return (
+            <div key={entry.value}>
+              <span title={entry.value}>{entry.value}</span>
+              <b>{formatBasisPoints(share)} · {entry.source_count.toLocaleString("tr-TR")}</b>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function formatBasisPoints(value: number) {
+  return `${(value / 100).toLocaleString("tr-TR", { maximumFractionDigits: 2 })}%`;
 }
 
 function formatDate(value: string) {

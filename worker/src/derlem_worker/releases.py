@@ -206,6 +206,66 @@ def build_release_manifest(
     ).encode("utf-8")
 
 
+def build_mixture_report(sources: Iterable[dict[str, object]]) -> dict[str, object]:
+    source_list = sorted(sources, key=lambda source: str(source["source_id"]))
+    total_bytes = sum(_non_negative_int(source.get("byte_size")) for source in source_list)
+    total_lines = sum(_non_negative_int(source.get("line_count")) for source in source_list)
+    dimensions: dict[str, list[dict[str, object]]] = {}
+
+    for dimension in ("language", "domain", "source_type", "license", "rights_status"):
+        grouped: dict[str, dict[str, int]] = {}
+        for source in source_list:
+            value = str(source.get(dimension) or "unknown").strip() or "unknown"
+            bucket = grouped.setdefault(value, {"source_count": 0, "byte_size": 0, "line_count": 0})
+            bucket["source_count"] += 1
+            bucket["byte_size"] += _non_negative_int(source.get("byte_size"))
+            bucket["line_count"] += _non_negative_int(source.get("line_count"))
+
+        entries = []
+        for value in sorted(grouped):
+            bucket = grouped[value]
+            entries.append(
+                {
+                    "value": value,
+                    "source_count": bucket["source_count"],
+                    "source_share_bps": _share_bps(bucket["source_count"], len(source_list)),
+                    "byte_size": bucket["byte_size"],
+                    "byte_share_bps": _share_bps(bucket["byte_size"], total_bytes),
+                    "line_count": bucket["line_count"],
+                    "line_share_bps": _share_bps(bucket["line_count"], total_lines),
+                }
+            )
+        dimensions[dimension] = entries
+
+    return {
+        "schema_version": "derlem.mixture-report.v1",
+        "status": "reported",
+        "totals": {
+            "source_count": len(source_list),
+            "byte_size": total_bytes,
+            "line_count": total_lines,
+            "missing_byte_size_count": sum(source.get("byte_size") is None for source in source_list),
+            "missing_line_count": sum(source.get("line_count") is None for source in source_list),
+        },
+        "dimensions": dimensions,
+    }
+
+
+def _non_negative_int(value: object) -> int:
+    if value is None:
+        return 0
+    parsed = int(value)
+    if parsed < 0:
+        raise ValueError("Mixture metrics must be non-negative")
+    return parsed
+
+
+def _share_bps(value: int, total: int) -> int:
+    if total <= 0:
+        return 0
+    return (value * 10_000 + total // 2) // total
+
+
 def build_release_export(
     release: dict[str, object],
     sources: list[dict[str, object]],

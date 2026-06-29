@@ -8,6 +8,7 @@ import pytest
 from derlem_worker.releases import (
     ReleaseGateError,
     build_export_manifest,
+    build_mixture_report,
     build_release_export,
     build_release_manifest,
     exact_decontamination,
@@ -72,6 +73,72 @@ def test_release_manifest_is_deterministic_and_sorted() -> None:
     assert first == second
     decoded = json.loads(first)
     assert [source["source_id"] for source in decoded["sources"]] == ["a", "b"]
+
+
+def test_mixture_report_is_deterministic_weighted_and_sorted() -> None:
+    sources = [
+        {
+            "source_id": "b",
+            "language": "en",
+            "domain": "code",
+            "source_type": "canonical_jsonl",
+            "license": "internal",
+            "rights_status": "cleared",
+            "byte_size": 300,
+            "line_count": 30,
+        },
+        {
+            "source_id": "a",
+            "language": "tr",
+            "domain": "general",
+            "source_type": "web_corpus",
+            "license": "cc-by-4.0",
+            "rights_status": "cleared",
+            "byte_size": 700,
+            "line_count": 70,
+        },
+    ]
+
+    first = build_mixture_report(sources)
+    second = build_mixture_report(list(reversed(sources)))
+
+    assert first == second
+    assert first["schema_version"] == "derlem.mixture-report.v1"
+    assert first["totals"] == {
+        "source_count": 2,
+        "byte_size": 1000,
+        "line_count": 100,
+        "missing_byte_size_count": 0,
+        "missing_line_count": 0,
+    }
+    languages = first["dimensions"]["language"]
+    assert [entry["value"] for entry in languages] == ["en", "tr"]
+    assert languages[0]["source_share_bps"] == 5000
+    assert languages[0]["byte_share_bps"] == 3000
+    assert languages[1]["line_share_bps"] == 7000
+
+
+def test_mixture_report_tracks_missing_metrics_and_unknown_values() -> None:
+    report = build_mixture_report(
+        [
+            {
+                "source_id": "a",
+                "language": "",
+                "domain": None,
+                "source_type": "other",
+                "license": "unknown",
+                "rights_status": "unknown",
+                "byte_size": None,
+                "line_count": None,
+            }
+        ]
+    )
+
+    assert report["totals"]["missing_byte_size_count"] == 1
+    assert report["totals"]["missing_line_count"] == 1
+    assert report["dimensions"]["language"][0]["value"] == "unknown"
+    assert report["dimensions"]["domain"][0]["value"] == "unknown"
+    assert report["dimensions"]["language"][0]["byte_share_bps"] == 0
 
 
 def test_jsonl_export_is_deterministic_model_independent_and_sorted(tmp_path: Path) -> None:

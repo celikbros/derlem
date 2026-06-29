@@ -464,6 +464,7 @@ insan/hak operasyonu sürüyor; sıradaki teknik hedef v0.4.**
 - [x] Export artifact ve manifest SHA256 doğrulaması, ilerleme metrikleri ve rol kontrollü indirme
 - [x] Conversation/tool/preference için `derlem.canonical-sample.v1` doğrulama ve yapısal JSONL export
 - [x] Export manifestinde yöntem kimlikli, modelden bağımsız token tahmin aralığı
+- [x] Frozen release için dil/alan/kaynak tipi/lisans/hak ağırlıklı mixture raporu
 - [x] Frozen manifest ve kaynak artifact indirme
 - [x] Next.js yönetim arayüzü
 - [x] GitHub Actions CI
@@ -491,6 +492,8 @@ insan/hak operasyonu sürüyor; sıradaki teknik hedef v0.4.**
 - [Arka plan işi ilerleme sözleşmesi](docs/job_progress.md)
 - [Çok boyutlu belge kalitesi](docs/multidimensional_quality.md)
 - [Kanonik export sözleşmesi](docs/canonical_exports.md)
+- [Release mixture raporu](docs/release_mixture_report.md)
+- [Release mixture report (English)](docs/release_mixture_report.en.md)
 - [Pretraining data factory](docs/pretraining_data_factory.md)
 - [Model prompt format soyutlaması](docs/model_prompt_format_abstraction.md)
 - [Ölçeklenebilirlik mimarisi](docs/scalability_architecture.md)

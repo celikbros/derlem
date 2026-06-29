@@ -616,6 +616,62 @@ h2 {
   color: #315d80;
 }
 
+.mixture-summary {
+  display: grid;
+  gap: 13px;
+}
+
+.mixture-totals {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.mixture-totals span {
+  overflow: hidden;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--muted);
+  font-size: 9px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mixture-dimension {
+  display: grid;
+  gap: 5px;
+}
+
+.mixture-dimension > strong {
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.mixture-dimension > div {
+  display: grid;
+  gap: 4px;
+}
+
+.mixture-dimension > div > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  font-size: 11px;
+}
+
+.mixture-dimension span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mixture-dimension b {
+  font-weight: 600;
+}
+
 .release-status {
   display: inline-flex;
   min-height: 24px;

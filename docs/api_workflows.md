@@ -180,6 +180,11 @@ Frozen release ve release-source satirlari veritabani trigger'lariyla
 degistirilemez. Manifest ve kaynak artifact'leri consumer endpointlerinden
 salt-okunur indirilir.
 
+Freeze ayrica `derlem.mixture-report.v1` raporunu
+`gate_results.mixture_report` altina yazar. Dil, alan, kaynak tipi, lisans ve
+hak durumu dagilimlari kaynak sayisi, byte ve satir basis-point paylariyla
+API ve frozen manifestte ayni snapshot'a baglanir.
+
 ## Kanonik Export
 
 `POST /releases/{id}/exports`, yalnizca `frozen` durumundaki release icin

@@ -21,6 +21,7 @@ from derlem_worker.pii import PIIReport, PIIScanner
 from derlem_worker.releases import (
     ReleaseGateError,
     build_export_manifest,
+    build_mixture_report,
     build_release_export,
     build_release_manifest,
     exact_decontamination,
@@ -1407,6 +1408,8 @@ class Worker:
             (str(source["source_sha256"]), self._stored_object_path(str(source["storage_key"])))
             for source in source_rows
         ]
+        manifest_sources = [self._manifest_source(source) for source in source_rows]
+        mixture_report = build_mixture_report(manifest_sources)
         if release["content_purpose"] == "pretrain":
             reference_paths = [
                 (str(reference["object_sha256"]), self._stored_object_path(str(reference["storage_key"])))
@@ -1437,10 +1440,10 @@ class Worker:
             "normalized_dedup_gate": {"status": "passed"},
             "document_review_gate": {"status": "passed"},
             "decontamination": decontamination_result,
+            "mixture_report": mixture_report,
         }
         frozen_at = datetime.now(timezone.utc)
         frozen_at_text = frozen_at.isoformat().replace("+00:00", "Z")
-        manifest_sources = [self._manifest_source(source) for source in source_rows]
         manifest_bytes = build_release_manifest(
             dict(release),
             manifest_sources,

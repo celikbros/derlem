@@ -162,7 +162,7 @@ Yapılacaklar:
 - MinHash/SimHash near-dedup pilotu.
 - Near-dedup politikasını veri tipine göre ayır: pretrain, instruction, eval, holdout.
 - Approximate decontamination: eval/holdout ile n-gram veya fingerprint overlap.
-- Mixture raporu: dil, domain, kaynak tipi, lisans, kalite bandı.
+- Mixture raporu: dil, domain, kaynak tipi, lisans ve hak durumu. **Kaynak snapshot katmanı tamamlandı; `derlem.mixture-report.v1`. Kalite bandı export katmanında sonraki dilim.**
 - Release içi tekrar ve kaynaklar arası tekrar oranları.
 - Dedup kararlarını geri alınabilir rapor olarak sakla; ham dosyayı değiştirme.
 

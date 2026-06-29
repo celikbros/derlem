@@ -40,6 +40,16 @@ test("inspect a frozen release and its downloadable artifacts", async ({ page },
     await expect(detail.getByText("~183 token", { exact: false })).toBeVisible();
   }
 
+  const mixtureSmokeRow = page.getByRole("row").filter({ hasText: "Mixture Report Smoke" });
+  if (await mixtureSmokeRow.count() === 1) {
+    const mixtureButton = mixtureSmokeRow.getByRole("button");
+    await expect(mixtureButton).toHaveCount(1);
+    await mixtureButton.click();
+    await expect(detail.getByRole("heading", { name: "Mixture Report Smoke" })).toBeVisible();
+    await expect(detail.getByRole("heading", { name: "Veri karışımı" })).toBeVisible();
+    await expect(detail.getByText("100% · 1", { exact: true })).toHaveCount(4);
+  }
+
   const screenshotDirectory = path.resolve("..", "var", "screenshots");
   await mkdir(screenshotDirectory, { recursive: true });
   await page.screenshot({

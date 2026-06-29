@@ -72,6 +72,7 @@ ana kapılar artık teknik değil:
 - Kaynak approval gates.
 - Release Builder ve frozen manifest.
 - Pretrain exact decontamination.
+- Eval/holdout için report-only SimHash64 yaklaşık decontamination pilotu.
 - Web UI: kaynak katalogu, inceleme, işler, sürümler.
 - Gardas ham seed import + triage.
 - Gardas temiz aday üretimi ve ingest.
@@ -88,6 +89,7 @@ ana kapılar artık teknik değil:
 - `multidimensional-v1` insan kalite rubric'i, tekil/toplu review ve kaynak ortalamaları.
 - `derlem.canonical-sample.v1` conversation/tool/preference doğrulaması ve yapısal JSONL export.
 - `unicode-codepoint-range-v1` yöntem kimlikli token tahmin aralığı, manifest/API/UI kaydı.
+- `derlem.mixture-report.v1` release karışım snapshot'ı ve API/UI görünümü.
 
 ## Kalan Teknik İşler
 
@@ -98,6 +100,12 @@ ana kapılar artık teknik değil:
 ### v0.3 Durumu
 
 - Teknik hedefler tamamlandı; Gardas'ın ilk büyük gerçek release/export operasyonu v0.2 insan/hak kapanışına bağlı.
+
+### v0.4 İçin Kalanlar
+
+- Release içi ve kaynaklar arası near-dedup raporu.
+- SimHash64 yaklaşık eşiklerinin gerçek corpus üzerinde kalibrasyonu ve insan inceleme politikası.
+- Mixture raporuna kalite bandı dağılımı eklenmesi.
 
 ### v1.0 İçin Kalanlar
 

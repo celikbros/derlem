@@ -429,8 +429,9 @@ on one machine first and split only around demonstrated bottlenecks.
 ## Roadmap
 
 For detailed version targets, see [Derlem Version Roadmap](docs/version_roadmap.md).
-In short: **v0.1 Core MVP is complete; v0.2 large-corpus indexing and job
-visibility are operational, and v0.3 quality/packaging is the active target.**
+In short: **v0.1 and the v0.3 quality/export targets are complete; v0.2
+large-corpus infrastructure is operational while Gardas human/rights work
+continues; v0.4 is the active technical target.**
 
 ### Operational slice
 
@@ -457,14 +458,18 @@ visibility are operational, and v0.3 quality/packaging is the active target.**
 - [x] Draft/frozen Release Builder for approved sources of one purpose
 - [x] Deterministic manifest, source-version snapshot, and SHA256 snapshot
 - [x] Exact pretrain document decontamination against eval/holdout
+- [x] Report-only SimHash64 approximate decontamination pilot against eval/holdout
+- [x] Model-independent structured conversation/tool/preference JSONL exports
+- [x] Method-identified model-independent token estimate ranges
+- [x] Frozen release mixture report by language/domain/source type/license/rights
 - [x] Frozen manifest and source-artifact downloads
 - [x] Next.js operations UI
 - [x] GitHub Actions CI
 
 ### Next
 
-- [ ] Multi-shard/Parquet packaging and token estimates
-- [ ] Near-dedup and approximate decontamination
+- [ ] Multi-shard/Parquet packaging
+- [ ] In-release near-dedup and corpus calibration of approximate thresholds
 - [ ] S3/MinIO storage implementation
 - [ ] Keycloak/OAuth and service accounts
 
@@ -482,6 +487,8 @@ visibility are operational, and v0.3 quality/packaging is the active target.**
 - [Background job progress contract](docs/job_progress.en.md)
 - [Multidimensional document quality](docs/multidimensional_quality.en.md)
 - [Canonical export contract](docs/canonical_exports.en.md)
+- [Release mixture report](docs/release_mixture_report.en.md)
+- [Approximate decontamination pilot](docs/approximate_decontamination.en.md)
 - [Pretraining data factory](docs/pretraining_data_factory.md)
 - [Model prompt format abstraction](docs/model_prompt_format_abstraction.md)
 - [Scalability architecture](docs/scalability_architecture.md)

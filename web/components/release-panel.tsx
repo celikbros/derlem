@@ -360,10 +360,24 @@ function gateRows(release: Release) {
     ["normalized_dedup_gate", "Normalize dedup"],
     ["document_review_gate", "Belge incelemesi"],
     ["decontamination", "Dekontaminasyon"],
+    ["approximate_decontamination", "Yaklaşık sızıntı"],
   ] as const;
   return definitions.map(([key, label]) => {
     const value = release.gate_results?.[key];
     const status = value && typeof value === "object" && "status" in value ? String(value.status) : "pending";
+    if (key === "approximate_decontamination" && (!value || typeof value !== "object")) {
+      return { label, status: "not_applicable", text: "Legacy" };
+    }
+    if (key === "approximate_decontamination" && value && typeof value === "object") {
+      if (status === "not_applicable") return { label, status, text: "Uygulanmaz" };
+      if (status === "inconclusive") return { label, status: "warning", text: "Belirsiz" };
+      const count = "potential_match_count" in value ? Number(value.potential_match_count) : 0;
+      return {
+        label,
+        status: count > 0 ? "warning" : "passed",
+        text: count > 0 ? `${count.toLocaleString("tr-TR")} aday` : "Aday yok",
+      };
+    }
     const text = status === "passed" ? "Geçti" : status === "blocked" || status === "failed" ? "Bloke" : status === "not_applicable" ? "Uygulanmaz" : "Bekliyor";
     return { label, status, text };
   });

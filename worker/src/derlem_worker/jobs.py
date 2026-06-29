@@ -33,6 +33,7 @@ from derlem_worker.sampling import (
     _document_from_line,
     sample_line_documents,
 )
+from derlem_worker.similarity import approximate_decontamination
 from derlem_worker.storage import ContentAddressedStore, IngestOutcome, StoredObject
 
 LOGGER = logging.getLogger(__name__)
@@ -1426,8 +1427,31 @@ class Worker:
                     {"decontamination": decontamination.to_dict()},
                 )
             decontamination_result = decontamination.to_dict()
+            if reference_paths:
+                with psycopg.connect(self.config.database_url) as progress_connection:
+                    approximate = approximate_decontamination(
+                        reference_paths,
+                        release_paths,
+                        max_document_bytes=self.config.max_document_bytes,
+                        progress_callback=lambda progress: self._write_job_progress(
+                            progress_connection,
+                            job,
+                            "approximate_decontamination",
+                            progress,
+                        ),
+                    )
+                approximate_decontamination_result = approximate.to_dict()
+            else:
+                approximate_decontamination_result = {
+                    "status": "not_applicable",
+                    "reason": "no_eval_or_holdout_sources",
+                }
         else:
             decontamination_result = {
+                "status": "not_applicable",
+                "reason": "content_purpose_is_not_pretrain",
+            }
+            approximate_decontamination_result = {
                 "status": "not_applicable",
                 "reason": "content_purpose_is_not_pretrain",
             }
@@ -1440,6 +1464,7 @@ class Worker:
             "normalized_dedup_gate": {"status": "passed"},
             "document_review_gate": {"status": "passed"},
             "decontamination": decontamination_result,
+            "approximate_decontamination": approximate_decontamination_result,
             "mixture_report": mixture_report,
         }
         frozen_at = datetime.now(timezone.utc)

@@ -460,6 +460,7 @@ insan/hak operasyonu sürüyor; sıradaki teknik hedef v0.4.**
 - [x] Aynı amaçtaki onaylı kaynaklardan draft/frozen Release Builder
 - [x] Deterministik manifest, kaynak sürümü ve SHA256 snapshot'ı
 - [x] Eval/holdout ile pretrain document exact decontamination
+- [x] Eval/holdout ile report-only SimHash64 yaklaşık decontamination pilotu
 - [x] Frozen release'ten deterministik, modelden bağımsız JSONL/TXT Export Builder
 - [x] Export artifact ve manifest SHA256 doğrulaması, ilerleme metrikleri ve rol kontrollü indirme
 - [x] Conversation/tool/preference için `derlem.canonical-sample.v1` doğrulama ve yapısal JSONL export
@@ -472,7 +473,7 @@ insan/hak operasyonu sürüyor; sıradaki teknik hedef v0.4.**
 ### Sıradaki işler
 
 - [ ] Çoklu shard/Parquet paketleme
-- [ ] Near-dedup ve yaklaşık decontamination
+- [ ] Release içi near-dedup ve yaklaşık eşiklerin corpus üzerinde kalibrasyonu
 - [ ] S3/MinIO object store implementasyonu
 - [ ] Keycloak/OAuth ve servis hesapları
 
@@ -494,6 +495,8 @@ insan/hak operasyonu sürüyor; sıradaki teknik hedef v0.4.**
 - [Kanonik export sözleşmesi](docs/canonical_exports.md)
 - [Release mixture raporu](docs/release_mixture_report.md)
 - [Release mixture report (English)](docs/release_mixture_report.en.md)
+- [Yaklaşık dekontaminasyon pilotu](docs/approximate_decontamination.md)
+- [Approximate decontamination pilot (English)](docs/approximate_decontamination.en.md)
 - [Pretraining data factory](docs/pretraining_data_factory.md)
 - [Model prompt format soyutlaması](docs/model_prompt_format_abstraction.md)
 - [Ölçeklenebilirlik mimarisi](docs/scalability_architecture.md)

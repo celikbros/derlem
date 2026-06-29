@@ -616,6 +616,11 @@ h2 {
   color: #315d80;
 }
 
+.gate-result-list strong.warning {
+  background: #fff2d8;
+  color: #81570b;
+}
+
 .mixture-summary {
   display: grid;
   gap: 13px;

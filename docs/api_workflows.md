@@ -174,6 +174,14 @@ yeniden dogrular. Pretrain release'inde eval ve holdout kaynaklarinin belge
 metinleri `document-text-sha256-v1` exact-match yontemiyle karsilastirilir.
 Eslesme veya bounded satir limitinin asilmasi freeze'i bloke eder.
 
+Exact kapi gectikten sonra worker ayni referanslara karsi
+`normalized-word-3gram-simhash64-v1-hamming10-bands8x8-v1` yaklasik
+decontamination pilotunu calistirir. Sonuc
+`gate_results.approximate_decontamination` altinda frozen snapshot'a baglanir.
+Bu pilot report-only'dir: adaylar insan incelemesine gider, tek basina freeze'i
+bloke etmez. Bir release belgesinde 5.000 aday siniri asilirsa sonuc temiz
+sayilmaz ve `inconclusive` olur. Rapor ve gecici SQLite indeks ham metin tutmaz.
+
 Basarili freeze, deterministik `derlem.release-manifest.v1` JSON manifestini
 immutable store'a yazar, manifest SHA256'sini ve freeze zamanini sabitler.
 Frozen release ve release-source satirlari veritabani trigger'lariyla

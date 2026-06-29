@@ -1,6 +1,6 @@
 # Derlem Versiyon Yol Haritasi
 
-**Tarih:** 2026-06-25
+**Tarih:** 2026-06-29
 **Kapsam:** Derlem veri atölyesinin versiyon versiyon hedefleri, mevcut konumu ve sonraki işler.
 
 Bu belge Derlem'i LLM/tokenizer projelerinden bağımsız, modelden bağımsız ve
@@ -32,6 +32,7 @@ Sistem artık tek dosya/tek kaynak ölçeğinde güvenli bir uçtan uca akış �
 - Release Builder; aynı `content_purpose` içindeki onaylı kaynaklardan draft/frozen release üretiyor.
 - Frozen manifest, kaynak SHA256 snapshot'ı, release audit'i ve artifact download uçları var.
 - Pretrain release için eval/holdout exact decontamination kapısı var.
+- Pretrain release için eval/holdout SimHash64 yaklaşık decontamination pilot raporu var.
 - Next.js web arayüzünde kaynak katalogu, inceleme, işler ve sürümler ekranları çalışıyor.
 - GitHub Actions CI backend/worker/web için yeşil.
 
@@ -153,15 +154,15 @@ Kapanış kriteri:
 
 ## v0.4 - Gelişmiş Dedup, Decontamination ve Mixture
 
-**Durum:** Planlandı.
+**Durum:** Aktif; mixture snapshot raporu ve yaklaşık decontamination pilotu tamamlandı.
 
 Amaç, büyük corpus kalitesini model eğitimine daha uygun hale getirmek.
 
 Yapılacaklar:
 
-- MinHash/SimHash near-dedup pilotu.
+- MinHash/SimHash near-dedup pilotu. **Release/eval yaklaşık decontamination için SimHash64 çekirdeği tamamlandı; release içi near-dedup politikası sürüyor.**
 - Near-dedup politikasını veri tipine göre ayır: pretrain, instruction, eval, holdout.
-- Approximate decontamination: eval/holdout ile n-gram veya fingerprint overlap.
+- Approximate decontamination: eval/holdout ile n-gram veya fingerprint overlap. **Tamamlandı; `normalized-word-3gram-simhash64-v1-hamming10-bands8x8-v1`, report-only pilot.**
 - Mixture raporu: dil, domain, kaynak tipi, lisans ve hak durumu. **Kaynak snapshot katmanı tamamlandı; `derlem.mixture-report.v1`. Kalite bandı export katmanında sonraki dilim.**
 - Release içi tekrar ve kaynaklar arası tekrar oranları.
 - Dedup kararlarını geri alınabilir rapor olarak sakla; ham dosyayı değiştirme.
@@ -169,7 +170,7 @@ Yapılacaklar:
 Kapanış kriteri:
 
 - Büyük corpus release'i near-dedup raporu üretir.
-- Eval/holdout sızıntısı approximate kontrolle de raporlanır.
+- Eval/holdout sızıntısı approximate kontrolle de raporlanır. **Tamamlandı.**
 - Mixture raporu model ekipleri için anlaşılırdır.
 
 ## v0.5 - Katkı, Ajan ve Servis Hesapları

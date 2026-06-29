@@ -12,6 +12,7 @@ Canlı ilerleme üreten işler:
 - `scan_pii`
 - `index_document_fingerprints`
 - `sample_documents` ve `resample_documents`
+- `freeze_release` içindeki yaklaşık dekontaminasyon taraması
 - `export_release`
 
 ## JSON Sözleşmesi
@@ -47,6 +48,7 @@ uygun/riskli aday sayılarını, PII işi toplam bulgu sayısını, export işi 
 | `matching_duplicates` | Üretilen fingerprint'ler karşılaştırılıyor |
 | `sampling` | Temsil ve risk kotalı örnek seçiliyor |
 | `publishing_samples` | Seçilen örnek nesli atomik olarak yayınlanıyor |
+| `approximate_decontamination` | Eval/holdout SimHash indeksi kuruluyor ve pretrain adayları taranıyor |
 | `building` | Release export artifact'i üretiliyor |
 
 ## Yazma ve Yenileme Politikası

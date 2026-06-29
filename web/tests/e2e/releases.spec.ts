@@ -28,6 +28,7 @@ test("inspect a frozen release and its downloadable artifacts", async ({ page },
   await expect(detail.getByRole("heading", { name: "Derlem Instruction Seed" })).toBeVisible();
   await expect(detail.getByText("Geçti", { exact: true })).toHaveCount(5);
   await expect(detail.getByText("Uygulanmaz", { exact: true })).toBeVisible();
+  await expect(detail.getByText("Legacy", { exact: true })).toBeVisible();
   await expect(detail.getByRole("link", { name: "Manifest indir" })).toBeVisible();
   await expect(detail.getByTitle("Artifact indir")).toBeVisible();
 

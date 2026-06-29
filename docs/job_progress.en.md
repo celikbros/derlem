@@ -10,6 +10,7 @@ instead of a separate table.
 - `scan_pii`
 - `index_document_fingerprints`
 - `sample_documents` and `resample_documents`
+- approximate decontamination within `freeze_release`
 - `export_release`
 
 ## Shape
@@ -45,6 +46,7 @@ adds the `estimated_tokens` capacity estimate.
 | `matching_duplicates` | Compare generated fingerprints |
 | `sampling` | Select representative and risk-quota samples |
 | `publishing_samples` | Atomically publish the selected generation |
+| `approximate_decontamination` | Build the eval/holdout SimHash index and scan pretrain candidates |
 | `building` | Build a release export artifact |
 
 ## Persistence Policy

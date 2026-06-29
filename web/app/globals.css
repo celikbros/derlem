@@ -626,6 +626,53 @@ h2 {
   gap: 13px;
 }
 
+.near-duplicate-summary {
+  display: grid;
+  gap: 12px;
+}
+
+.near-duplicate-breakdown {
+  display: grid;
+  gap: 6px;
+}
+
+.near-duplicate-breakdown > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+}
+
+.near-duplicate-breakdown span {
+  color: var(--muted);
+}
+
+.near-duplicate-samples {
+  display: grid;
+  gap: 6px;
+  padding-top: 2px;
+}
+
+.near-duplicate-samples > strong {
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.near-duplicate-samples > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  font-size: 10px;
+}
+
+.near-duplicate-samples span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .mixture-totals {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

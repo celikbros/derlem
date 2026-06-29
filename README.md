@@ -204,8 +204,8 @@ Duplicate kontrolü iki katmandır: `duplicate_status`, kaynak dosyanın byte-le
 SHA256 eşitliğini yakalar; `normalized_dedup_status`, JSONL `text`, `content`,
 `body` veya düz satır metnini NFKC + casefold + whitespace collapse ile
 normalize edip document-level SHA256 fingerprint index'i üretir. Bu kapı ham
-metni veritabanına yazmaz; yalnızca hash, ordinal ve sayaç saklar. MinHash/SimHash
-near-dedup ve n-gram overlap sonraki fazlardadır.
+metni veritabanına yazmaz; yalnızca hash, ordinal ve sayaç saklar. Freeze sırasında
+ayrı SimHash64 raporu release içi ve kaynaklar arası yakın tekrar çiftlerini ölçer.
 
 PII taraması eşleşen ham değerleri veritabanına yazmaz; yalnızca tür bazında
 sayım ve durum saklar. Geçerli TCKN checksum, IBAN mod-97 ve ödeme kartı Luhn
@@ -461,6 +461,7 @@ insan/hak operasyonu sürüyor; sıradaki teknik hedef v0.4.**
 - [x] Deterministik manifest, kaynak sürümü ve SHA256 snapshot'ı
 - [x] Eval/holdout ile pretrain document exact decontamination
 - [x] Eval/holdout ile report-only SimHash64 yaklaşık decontamination pilotu
+- [x] Tüm release amaçları için report-only kaynak içi/kaynaklar arası SimHash64 near-dedup raporu
 - [x] Frozen release'ten deterministik, modelden bağımsız JSONL/TXT Export Builder
 - [x] Export artifact ve manifest SHA256 doğrulaması, ilerleme metrikleri ve rol kontrollü indirme
 - [x] Conversation/tool/preference için `derlem.canonical-sample.v1` doğrulama ve yapısal JSONL export
@@ -473,7 +474,7 @@ insan/hak operasyonu sürüyor; sıradaki teknik hedef v0.4.**
 ### Sıradaki işler
 
 - [ ] Çoklu shard/Parquet paketleme
-- [ ] Release içi near-dedup ve yaklaşık eşiklerin corpus üzerinde kalibrasyonu
+- [ ] SimHash64 eşiklerinin gerçek corpus üzerinde kalibrasyonu ve insan karar politikası
 - [ ] S3/MinIO object store implementasyonu
 - [ ] Keycloak/OAuth ve servis hesapları
 
@@ -497,6 +498,8 @@ insan/hak operasyonu sürüyor; sıradaki teknik hedef v0.4.**
 - [Release mixture report (English)](docs/release_mixture_report.en.md)
 - [Yaklaşık dekontaminasyon pilotu](docs/approximate_decontamination.md)
 - [Approximate decontamination pilot (English)](docs/approximate_decontamination.en.md)
+- [Release yakın tekrar raporu](docs/release_near_dedup_report.md)
+- [Release near-duplicate report (English)](docs/release_near_dedup_report.en.md)
 - [Pretraining data factory](docs/pretraining_data_factory.md)
 - [Model prompt format soyutlaması](docs/model_prompt_format_abstraction.md)
 - [Ölçeklenebilirlik mimarisi](docs/scalability_architecture.md)

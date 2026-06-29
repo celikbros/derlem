@@ -8,6 +8,7 @@ import {
   FileArchive,
   FileJson,
   FileText,
+  Files,
   LockKeyhole,
   LoaderCircle,
   Plus,
@@ -167,6 +168,7 @@ export function ReleasePanel({
   }
 
   const selectedMixture = selected ? mixtureReport(selected) : undefined;
+  const selectedNearDuplicates = selected ? nearDuplicateReport(selected) : undefined;
 
   return (
     <section className={`release-layout${selected ? " with-detail" : ""}`}>
@@ -233,6 +235,35 @@ export function ReleasePanel({
               {gateRows(selected).map((gate) => <div key={gate.label}><span>{gate.label}</span><strong className={gate.status}>{gate.text}</strong></div>)}
             </div>
           </section>
+
+          {selectedNearDuplicates && (
+            <section className="release-section">
+              <h3><Files size={16} /> Yakın tekrar raporu</h3>
+              <div className="near-duplicate-summary">
+                <div className="mixture-totals">
+                  <span>{selectedNearDuplicates.indexed_document_count.toLocaleString("tr-TR")} indeks</span>
+                  <span>{selectedNearDuplicates.potential_pair_count.toLocaleString("tr-TR")} çift</span>
+                  <span>{selectedNearDuplicates.candidate_overflow_document_count.toLocaleString("tr-TR")} taşma</span>
+                </div>
+                <div className="near-duplicate-breakdown">
+                  <div><span>Kaynak içi</span><strong>{selectedNearDuplicates.within_source_pair_count.toLocaleString("tr-TR")}</strong></div>
+                  <div><span>Kaynaklar arası</span><strong>{selectedNearDuplicates.cross_source_pair_count.toLocaleString("tr-TR")}</strong></div>
+                  <div><span>Hamming eşiği</span><strong>≤ {selectedNearDuplicates.hamming_threshold}</strong></div>
+                </div>
+                {selectedNearDuplicates.sample_pairs.length > 0 && (
+                  <div className="near-duplicate-samples">
+                    <strong>Örnek çiftler</strong>
+                    {selectedNearDuplicates.sample_pairs.slice(0, 5).map((pair) => {
+                      const source = releaseSourceLabel(selected, pair.source_sha256);
+                      const matched = releaseSourceLabel(selected, pair.matched_source_sha256);
+                      const label = `${source} #${pair.source_ordinal} ↔ ${matched} #${pair.matched_source_ordinal}`;
+                      return <div key={`${pair.source_sha256}:${pair.source_ordinal}:${pair.matched_source_sha256}:${pair.matched_source_ordinal}`}><span title={label}>{label}</span><b>d={pair.hamming_distance}</b></div>;
+                    })}
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
 
           {selectedMixture && (
             <section className="release-section">
@@ -358,6 +389,7 @@ function gateRows(release: Release) {
     ["pii_gate", "PII"],
     ["exact_duplicate_gate", "Exact tekrar"],
     ["normalized_dedup_gate", "Normalize dedup"],
+    ["near_duplicate_report", "Yakın tekrarlar"],
     ["document_review_gate", "Belge incelemesi"],
     ["decontamination", "Dekontaminasyon"],
     ["approximate_decontamination", "Yaklaşık sızıntı"],
@@ -365,6 +397,18 @@ function gateRows(release: Release) {
   return definitions.map(([key, label]) => {
     const value = release.gate_results?.[key];
     const status = value && typeof value === "object" && "status" in value ? String(value.status) : "pending";
+    if (key === "near_duplicate_report" && (!value || typeof value !== "object")) {
+      return { label, status: "not_applicable", text: "Legacy" };
+    }
+    if (key === "near_duplicate_report" && value && typeof value === "object") {
+      if (status === "inconclusive") return { label, status: "warning", text: "Belirsiz" };
+      const count = "potential_pair_count" in value ? Number(value.potential_pair_count) : 0;
+      return {
+        label,
+        status: count > 0 ? "warning" : "passed",
+        text: count > 0 ? `${count.toLocaleString("tr-TR")} çift` : "Aday yok",
+      };
+    }
     if (key === "approximate_decontamination" && (!value || typeof value !== "object")) {
       return { label, status: "not_applicable", text: "Legacy" };
     }
@@ -392,6 +436,39 @@ type MixtureEntry = {
   line_count: number;
   line_share_bps: number;
 };
+
+type NearDuplicateReport = {
+  schema_version: "derlem.release-near-dedup-report.v1";
+  status: "reported" | "inconclusive";
+  indexed_document_count: number;
+  potential_pair_count: number;
+  within_source_pair_count: number;
+  cross_source_pair_count: number;
+  candidate_overflow_document_count: number;
+  hamming_threshold: number;
+  sample_pairs: Array<{
+    source_sha256: string;
+    source_ordinal: number;
+    matched_source_sha256: string;
+    matched_source_ordinal: number;
+    relation: "within_source" | "cross_source";
+    hamming_distance: number;
+    similarity_estimate_bps: number;
+  }>;
+};
+
+function nearDuplicateReport(release: Release): NearDuplicateReport | undefined {
+  const candidate = release.gate_results?.near_duplicate_report;
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return undefined;
+  const report = candidate as Partial<NearDuplicateReport>;
+  if (report.schema_version !== "derlem.release-near-dedup-report.v1") return undefined;
+  return report as NearDuplicateReport;
+}
+
+function releaseSourceLabel(release: Release, sha256: string) {
+  return release.sources.find((source) => source.source_sha256 === sha256)?.source_name
+    ?? sha256.slice(0, 10);
+}
 
 type MixtureReport = {
   schema_version: "derlem.mixture-report.v1";

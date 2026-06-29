@@ -28,7 +28,7 @@ test("inspect a frozen release and its downloadable artifacts", async ({ page },
   await expect(detail.getByRole("heading", { name: "Derlem Instruction Seed" })).toBeVisible();
   await expect(detail.getByText("Geçti", { exact: true })).toHaveCount(5);
   await expect(detail.getByText("Uygulanmaz", { exact: true })).toBeVisible();
-  await expect(detail.getByText("Legacy", { exact: true })).toBeVisible();
+  await expect(detail.getByText("Legacy", { exact: true })).toHaveCount(2);
   await expect(detail.getByRole("link", { name: "Manifest indir" })).toBeVisible();
   await expect(detail.getByTitle("Artifact indir")).toBeVisible();
 
@@ -49,6 +49,18 @@ test("inspect a frozen release and its downloadable artifacts", async ({ page },
     await expect(detail.getByRole("heading", { name: "Mixture Report Smoke" })).toBeVisible();
     await expect(detail.getByRole("heading", { name: "Veri karışımı" })).toBeVisible();
     await expect(detail.getByText("100% · 1", { exact: true })).toHaveCount(4);
+  }
+
+  const nearDedupSmokeRow = page.getByRole("row").filter({ hasText: "Near Dedup Smoke" });
+  if (await nearDedupSmokeRow.count() === 1) {
+    const nearDedupButton = nearDedupSmokeRow.getByRole("button");
+    await expect(nearDedupButton).toHaveCount(1);
+    await nearDedupButton.click();
+    await expect(detail.getByRole("heading", { name: "Near Dedup Smoke" })).toBeVisible();
+    await expect(detail.getByRole("heading", { name: "Yakın tekrar raporu" })).toBeVisible();
+    await expect(detail.getByText("2 indeks", { exact: true })).toBeVisible();
+    await expect(detail.getByText("0 çift", { exact: true })).toBeVisible();
+    await expect(detail.getByText("0 taşma", { exact: true })).toBeVisible();
   }
 
   const screenshotDirectory = path.resolve("..", "var", "screenshots");

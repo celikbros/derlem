@@ -33,7 +33,7 @@ from derlem_worker.sampling import (
     _document_from_line,
     sample_line_documents,
 )
-from derlem_worker.similarity import approximate_decontamination
+from derlem_worker.similarity import approximate_decontamination, release_near_duplicates
 from derlem_worker.storage import ContentAddressedStore, IngestOutcome, StoredObject
 
 LOGGER = logging.getLogger(__name__)
@@ -1411,6 +1411,18 @@ class Worker:
         ]
         manifest_sources = [self._manifest_source(source) for source in source_rows]
         mixture_report = build_mixture_report(manifest_sources)
+        with psycopg.connect(self.config.database_url) as progress_connection:
+            near_duplicates = release_near_duplicates(
+                release_paths,
+                max_document_bytes=self.config.max_document_bytes,
+                progress_callback=lambda progress: self._write_job_progress(
+                    progress_connection,
+                    job,
+                    "release_near_dedup",
+                    progress,
+                ),
+            )
+        near_duplicate_report = near_duplicates.to_dict()
         if release["content_purpose"] == "pretrain":
             reference_paths = [
                 (str(reference["object_sha256"]), self._stored_object_path(str(reference["storage_key"])))
@@ -1463,6 +1475,7 @@ class Worker:
             "exact_duplicate_gate": {"status": "passed"},
             "normalized_dedup_gate": {"status": "passed"},
             "document_review_gate": {"status": "passed"},
+            "near_duplicate_report": near_duplicate_report,
             "decontamination": decontamination_result,
             "approximate_decontamination": approximate_decontamination_result,
             "mixture_report": mixture_report,

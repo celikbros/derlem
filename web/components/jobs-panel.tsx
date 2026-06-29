@@ -84,6 +84,7 @@ type Progress = Record<string, unknown>;
 
 const phaseLabels: Record<string, string> = {
   approximate_decontamination: "Yaklaşık sızıntı taranıyor",
+  release_near_dedup: "Yakın tekrarlar taranıyor",
   validating_checkpoint: "Checkpoint doğrulanıyor",
   ingesting: "Dosya kopyalanıyor",
   scanning_pii: "PII taranıyor",
@@ -140,6 +141,11 @@ function progressDetail(jobType: string, progress: Progress, processedBytes: num
     const tokens = numberFrom(progress, "estimated_tokens");
     const tokenSummary = tokens > 0 ? ` · ~${formatCount(tokens)} token` : "";
     return `${byteSummary} · ${numberFrom(progress, "records_written").toLocaleString("tr-TR")} kayıt${tokenSummary}`;
+  }
+  if (jobType === "freeze_release" && "potential_duplicate_pairs" in progress) {
+    const overflows = numberFrom(progress, "candidate_overflow_documents");
+    const overflowSummary = overflows > 0 ? ` · ${overflows.toLocaleString("tr-TR")} taşma` : "";
+    return `${numberFrom(progress, "release_documents_scanned").toLocaleString("tr-TR")} belge · ${numberFrom(progress, "potential_duplicate_pairs").toLocaleString("tr-TR")} yakın çift · ${numberFrom(progress, "cross_source_pairs").toLocaleString("tr-TR")} kaynaklar arası${overflowSummary}`;
   }
   if (jobType === "freeze_release" && "release_documents_scanned" in progress) {
     const overflows = numberFrom(progress, "candidate_overflow_documents");

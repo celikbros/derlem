@@ -19,12 +19,14 @@ decontamination gate and is bound to the frozen release snapshot under
 Method identifier:
 `normalized-word-3gram-simhash64-v1-hamming10-bands8x8-v1`.
 
-1. Document text passes through Derlem's canonical document normalization.
-2. Word 3-grams are extracted from documents containing at least five tokens.
-3. A deterministic BLAKE2b-based 64-bit SimHash signature is produced.
-4. Eval/holdout signatures are split into eight 8-bit bands in a temporary SQLite index.
-5. At most 5,000 references sharing one or more bands are compared per pretrain document.
-6. The best candidate with Hamming distance at most 10 is reported as a potential match.
+1. Plain text/JSONL content is selected; canonical conversation/preference records
+   use messages, tools, and exportable semantic text instead of the JSON envelope.
+2. Selected text passes through Derlem's canonical document normalization.
+3. Word 3-grams are extracted from documents containing at least five tokens.
+4. A deterministic BLAKE2b-based 64-bit SimHash signature is produced.
+5. Eval/holdout signatures are split into eight 8-bit bands in a temporary SQLite index.
+6. At most 5,000 references sharing one or more bands are compared per pretrain document.
+7. The best candidate with Hamming distance at most 10 is reported as a potential match.
 
 The temporary index stores only the 64-bit signature, source SHA256, and line
 ordinal, and is deleted when the job ends. Up to 20 sample matches include

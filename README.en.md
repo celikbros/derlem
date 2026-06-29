@@ -203,8 +203,8 @@ Duplicate control now has two layers: `duplicate_status` detects byte-identical
 source files using SHA256, while `normalized_dedup_status` indexes document-level
 SHA256 fingerprints after NFKC normalization, casefolding, and whitespace
 collapse. The fingerprint table stores hashes, ordinals, and counts only; it
-does not store raw text. MinHash/SimHash near-dedup and n-gram overlap are
-later-phase work.
+does not store raw text. A separate SimHash64 report measures near-duplicate
+pairs within and across release sources during freeze.
 
 PII scans never store raw matched values; they store only category counts and
 status. Checks include valid TCKN checksum, IBAN mod-97, and Luhn-valid payment
@@ -459,6 +459,7 @@ continues; v0.4 is the active technical target.**
 - [x] Deterministic manifest, source-version snapshot, and SHA256 snapshot
 - [x] Exact pretrain document decontamination against eval/holdout
 - [x] Report-only SimHash64 approximate decontamination pilot against eval/holdout
+- [x] Report-only SimHash64 near-duplicate report within and across release sources
 - [x] Model-independent structured conversation/tool/preference JSONL exports
 - [x] Method-identified model-independent token estimate ranges
 - [x] Frozen release mixture report by language/domain/source type/license/rights
@@ -469,7 +470,7 @@ continues; v0.4 is the active technical target.**
 ### Next
 
 - [ ] Multi-shard/Parquet packaging
-- [ ] In-release near-dedup and corpus calibration of approximate thresholds
+- [ ] Real-corpus calibration of SimHash64 thresholds and human decision policy
 - [ ] S3/MinIO storage implementation
 - [ ] Keycloak/OAuth and service accounts
 
@@ -489,6 +490,7 @@ continues; v0.4 is the active technical target.**
 - [Canonical export contract](docs/canonical_exports.en.md)
 - [Release mixture report](docs/release_mixture_report.en.md)
 - [Approximate decontamination pilot](docs/approximate_decontamination.en.md)
+- [Release near-duplicate report](docs/release_near_dedup_report.en.md)
 - [Pretraining data factory](docs/pretraining_data_factory.md)
 - [Model prompt format abstraction](docs/model_prompt_format_abstraction.md)
 - [Scalability architecture](docs/scalability_architecture.md)

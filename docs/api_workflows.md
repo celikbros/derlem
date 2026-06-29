@@ -62,7 +62,8 @@ kaynaklar icin eksik kontrol job'larini idempotent olarak kuyruga ekler.
 Byte-level kontrol kaynak artifact'inin SHA256 tekrarini yakalar. Normalize
 document exact-dedup ise duz satir veya JSONL `text`, `content`, `body` alanini
 NFKC + casefold + whitespace collapse ile fingerprint'e cevirir. DB'ye ham metin
-degil, hash/ordinal/sayac yazilir. Near-dedup kontrolleri sonraki fazdadir.
+degil, hash/ordinal/sayac yazilir. Release freeze asamasinda ayri bir SimHash64
+near-dedup raporu release ici ve kaynaklar arasi aday ciftleri olcer.
 
 `sample_documents`, kaynak dosyasini bounded satir okuyucuyla tarar ve
 `risk-stratified-sha256-v1` orneklemini uretir. Ornek kotasinin en fazla yarisi
@@ -173,6 +174,13 @@ artifact duplicate, normalized document dedup ve document-review kapilarini
 yeniden dogrular. Pretrain release'inde eval ve holdout kaynaklarinin belge
 metinleri `document-text-sha256-v1` exact-match yontemiyle karsilastirilir.
 Eslesme veya bounded satir limitinin asilmasi freeze'i bloke eder.
+
+Tum release amaclarinda worker
+`normalized-word-3gram-simhash64-v1-hamming3-bands4x16-v1` yontemiyle release
+ici ve kaynaklar arasi yakin tekrar raporu uretir. Report-only sonuc
+`gate_results.near_duplicate_report` altinda saklanir; aday ciftler otomatik
+silinmez ve freeze'i tek basina bloke etmez. Aday siniri asilirsa rapor
+`inconclusive` olur. Gecici indeks ve rapor ham metin tasimaz.
 
 Exact kapi gectikten sonra worker ayni referanslara karsi
 `normalized-word-3gram-simhash64-v1-hamming10-bands8x8-v1` yaklasik

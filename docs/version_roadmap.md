@@ -33,6 +33,7 @@ Sistem artık tek dosya/tek kaynak ölçeğinde güvenli bir uçtan uca akış �
 - Frozen manifest, kaynak SHA256 snapshot'ı, release audit'i ve artifact download uçları var.
 - Pretrain release için eval/holdout exact decontamination kapısı var.
 - Pretrain release için eval/holdout SimHash64 yaklaşık decontamination pilot raporu var.
+- Tüm release amaçları için kaynak içi/kaynaklar arası SimHash64 near-dedup raporu var.
 - Next.js web arayüzünde kaynak katalogu, inceleme, işler ve sürümler ekranları çalışıyor.
 - GitHub Actions CI backend/worker/web için yeşil.
 
@@ -154,22 +155,22 @@ Kapanış kriteri:
 
 ## v0.4 - Gelişmiş Dedup, Decontamination ve Mixture
 
-**Durum:** Aktif; mixture snapshot raporu ve yaklaşık decontamination pilotu tamamlandı.
+**Durum:** Aktif; mixture snapshot, release near-dedup ve yaklaşık decontamination pilotları tamamlandı.
 
 Amaç, büyük corpus kalitesini model eğitimine daha uygun hale getirmek.
 
 Yapılacaklar:
 
-- MinHash/SimHash near-dedup pilotu. **Release/eval yaklaşık decontamination için SimHash64 çekirdeği tamamlandı; release içi near-dedup politikası sürüyor.**
+- MinHash/SimHash near-dedup pilotu. **Tamamlandı; `derlem.release-near-dedup-report.v1`, Hamming 3 / 4x16, report-only.**
 - Near-dedup politikasını veri tipine göre ayır: pretrain, instruction, eval, holdout.
 - Approximate decontamination: eval/holdout ile n-gram veya fingerprint overlap. **Tamamlandı; `normalized-word-3gram-simhash64-v1-hamming10-bands8x8-v1`, report-only pilot.**
 - Mixture raporu: dil, domain, kaynak tipi, lisans ve hak durumu. **Kaynak snapshot katmanı tamamlandı; `derlem.mixture-report.v1`. Kalite bandı export katmanında sonraki dilim.**
-- Release içi tekrar ve kaynaklar arası tekrar oranları.
+- Release içi tekrar ve kaynaklar arası tekrar oranları. **Tamamlandı; aday çift sayıları ayrı raporlanıyor.**
 - Dedup kararlarını geri alınabilir rapor olarak sakla; ham dosyayı değiştirme.
 
 Kapanış kriteri:
 
-- Büyük corpus release'i near-dedup raporu üretir.
+- Büyük corpus release'i near-dedup raporu üretir. **Teknik hat tamamlandı; `Near Dedup Smoke` frozen manifestinde checksum zinciriyle doğrulandı. Büyük Gardas ölçümü insan/hak kapanışına bağlı.**
 - Eval/holdout sızıntısı approximate kontrolle de raporlanır. **Tamamlandı.**
 - Mixture raporu model ekipleri için anlaşılırdır.
 

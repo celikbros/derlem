@@ -73,6 +73,8 @@ ana kapılar artık teknik değil:
 - Release Builder ve frozen manifest.
 - Pretrain exact decontamination.
 - Eval/holdout için report-only SimHash64 yaklaşık decontamination pilotu.
+- `derlem.release-near-dedup-report.v1` kaynak içi/kaynaklar arası yakın tekrar raporu.
+- `Near Dedup Smoke` frozen release: 2 belge, 0 aday çift, 0 taşma ve manifest SHA256 doğrulaması.
 - Web UI: kaynak katalogu, inceleme, işler, sürümler.
 - Gardas ham seed import + triage.
 - Gardas temiz aday üretimi ve ingest.
@@ -103,7 +105,6 @@ ana kapılar artık teknik değil:
 
 ### v0.4 İçin Kalanlar
 
-- Release içi ve kaynaklar arası near-dedup raporu.
 - SimHash64 yaklaşık eşiklerinin gerçek corpus üzerinde kalibrasyonu ve insan inceleme politikası.
 - Mixture raporuna kalite bandı dağılımı eklenmesi.
 

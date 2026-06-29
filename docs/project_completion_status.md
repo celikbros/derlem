@@ -1,6 +1,6 @@
 # Derlem Proje Tamamlanma Durumu
 
-**Tarih:** 2026-06-28
+**Tarih:** 2026-06-29
 **Kapsam:** Derlem veri atölyesinin mevcut gerçek durumu, kalan işler ve tamamlanma yorumu.
 
 ## Kısa Cevap
@@ -17,7 +17,7 @@ v0.2 ve v0.3 işlerinin bitmesi gerekiyor. En pratik ifadeyle:
 | Yerel Core MVP | %100 | Bitti |
 | Gardas temiz adayını onaylı kaynak yapmak | %75-80 | Hak/lisans kanıtı + 200 örnek review |
 | Model ekiplerine düzenli JSONL/TXT export vermek | %85-90 | Gardas onayı + ilk büyük release |
-| Büyük corpus pilotu | %80-85 | Resume desteği + Gardas review/export kapanışı |
+| Büyük corpus pilotu | %85-90 | Gardas review/export kapanışı |
 | Üretim-ready v1.0 | %45-50 | v0.4-v0.6 + hukuk/KVKK + prod altyapı |
 
 Bu yüzden "proje bitti mi?" sorusunun cevabı hedefe göre değişir:
@@ -82,6 +82,7 @@ ana kapılar artık teknik değil:
 - Deterministik risk-stratified örnekleme, risk filtresi ve açıklanabilir neden etiketleri.
 - Generation/membership snapshot'lı kontrollü yeniden örnekleme ve rollback.
 - Ingest, PII, fingerprint ve sample/resample işlerinde canlı byte/satır/doküman ilerlemesi.
+- Büyük ingest işlerinde job UUID'sine bağlı, kaynak önekini yeniden doğrulayan resume/checkpoint desteği.
 - Gardas clean candidate nesil 2 risk örneklemi: 5.922.891 belge tarandı, 200 örneğin 115'i risk kotasından seçildi.
 - `multidimensional-v1` insan kalite rubric'i, tekil/toplu review ve kaynak ortalamaları.
 
@@ -90,7 +91,6 @@ ana kapılar artık teknik değil:
 ### v0.2 İçin Kalanlar
 
 - Gardas temiz adayının hak/lisans ve örnek review kapılarını kapatmak.
-- Büyük ingest için kesintiden sonra kaldığı yerden devam etme desteği eklemek.
 
 ### v0.3 İçin Kalanlar
 
@@ -119,6 +119,6 @@ Kod tarafında yakın hedef şudur:
 Benim mühendislik değerlendirmem:
 
 - **Yerel güvenli veri atölyesi:** tamam.
-- **Büyük corpus pilotu:** teknik hat hazır; resume ve Gardas insan/hak kapanışı kaldı.
+- **Büyük corpus pilotu:** teknik hat ve kesintiden devam hazır; Gardas insan/hak kapanışı kaldı.
 - **Model ekiplerine üretilebilir veri teslimi:** temel JSONL/TXT teslim hattı hazır; Gardas temiz adayının kapıları kapanınca büyük gerçek corpus export edilebilir.
 - **Tam üretim platformu:** ayrıca altyapı, hukuk ve operasyon gerekir.

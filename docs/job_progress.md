@@ -39,6 +39,7 @@ uygun/riskli aday sayılarını, PII işi toplam bulgu sayısını ekler.
 
 | Faz | Anlamı |
 |---|---|
+| `validating_checkpoint` | Önceki ingest checkpoint'i kaynak önekiyle byte byte doğrulanıyor |
 | `ingesting` | Dosya doğrulanıyor ve immutable store'a kopyalanıyor |
 | `scanning_pii` | Temel PII desenleri taranıyor |
 | `fingerprinting` | Normalize document fingerprint'leri üretiliyor |
@@ -50,6 +51,8 @@ uygun/riskli aday sayılarını, PII işi toplam bulgu sayısını ekler.
 ## Yazma ve Yenileme Politikası
 
 - Worker tarama sırasında yaklaşık her 64 MiB'de bir progress yazar.
+- Ingest progress yazılmadan önce checkpoint `flush` ve `fsync` edilir; retry aynı
+  job UUID'sine ait doğrulanmış byte konumundan devam eder.
 - Progress ayrı PostgreSQL bağlantısıyla commit edilir; uzun corpus transaction'ı
   tamamlanmadan UI tarafından görülebilir.
 - Retry başladığında eski `result` ve `last_error` temizlenir.

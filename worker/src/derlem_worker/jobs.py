@@ -32,7 +32,7 @@ from derlem_worker.sampling import (
     _document_from_line,
     sample_line_documents,
 )
-from derlem_worker.storage import ContentAddressedStore, StoredObject
+from derlem_worker.storage import ContentAddressedStore, IngestOutcome, StoredObject
 
 LOGGER = logging.getLogger(__name__)
 
@@ -168,20 +168,31 @@ class Worker:
             if job.job_type in {"ingest_local_file", "ingest_staged_file"}:
                 ingest_path = self._ingest_path(job)
                 with psycopg.connect(self.config.database_url) as progress_connection:
-                    stored = self.store.ingest_file(
+                    outcome = self.store.ingest_file_resumable(
                         ingest_path,
+                        checkpoint_id=job.id,
                         progress_callback=lambda progress: self._write_job_progress(
                             progress_connection,
                             job,
-                            "ingesting",
+                            (
+                                "validating_checkpoint"
+                                if "checkpoint_bytes_validated" in progress
+                                else "ingesting"
+                            ),
                             progress,
                         ),
                     )
                 with psycopg.connect(self.config.database_url) as connection:
-                    self._complete_ingest(connection, job, stored)
+                    self._complete_ingest(connection, job, outcome)
+                self._discard_ingest_checkpoint(job, outcome.stored)
                 if job.job_type == "ingest_staged_file":
                     ingest_path.unlink(missing_ok=True)
-                LOGGER.info("job_succeeded job_id=%s sha256=%s", job.id, stored.sha256)
+                LOGGER.info(
+                    "job_succeeded job_id=%s sha256=%s resumed_from_bytes=%s",
+                    job.id,
+                    outcome.stored.sha256,
+                    outcome.resumed_from_bytes,
+                )
             elif job.job_type == "scan_pii":
                 object_sha256, report = self._scan_pii(job)
                 with psycopg.connect(self.config.database_url) as connection:
@@ -444,8 +455,9 @@ class Worker:
         self,
         connection: psycopg.Connection,
         job: Job,
-        stored: StoredObject,
+        outcome: IngestOutcome,
     ) -> None:
+        stored = outcome.stored
         source_id = str(job.payload["source_id"])
         with connection.transaction():
             declared = connection.execute(
@@ -503,10 +515,25 @@ class Worker:
                 INSERT INTO audit_events(actor_type, action, entity_type, entity_id, details)
                 VALUES (
                     'system', 'source.ingested', 'source', %s,
-                    jsonb_build_object('job_id', %s::text, 'sha256', %s::text, 'byte_size', %s::bigint)
+                    jsonb_build_object(
+                        'job_id', %s::text,
+                        'sha256', %s::text,
+                        'byte_size', %s::bigint,
+                        'resumed_from_bytes', %s::bigint,
+                        'checkpoint_revalidated_bytes', %s::bigint,
+                        'checkpoint_reset', %s::boolean
+                    )
                 )
                 """,
-                (source_id, str(job.id), stored.sha256, stored.byte_size),
+                (
+                    source_id,
+                    str(job.id),
+                    stored.sha256,
+                    stored.byte_size,
+                    outcome.resumed_from_bytes,
+                    outcome.checkpoint_revalidated_bytes,
+                    outcome.checkpoint_reset,
+                ),
             )
             connection.execute(
                 """
@@ -548,6 +575,9 @@ class Worker:
                             "line_count": stored.line_count,
                             "detected_encoding": stored.detected_encoding,
                             "original_filename": job.payload.get("original_filename"),
+                            "resumed_from_bytes": outcome.resumed_from_bytes,
+                            "checkpoint_revalidated_bytes": outcome.checkpoint_revalidated_bytes,
+                            "checkpoint_reset": outcome.checkpoint_reset,
                         }
                     ),
                     job.id,
@@ -1951,3 +1981,18 @@ class Worker:
                 ),
             )
         connection.commit()
+        if next_status == "failed" and job.job_type in {"ingest_local_file", "ingest_staged_file"}:
+            self._discard_ingest_checkpoint(job)
+
+    def _discard_ingest_checkpoint(self, job: Job, stored: StoredObject | None = None) -> None:
+        try:
+            if stored is None:
+                self.store.discard_checkpoint(job.id)
+            else:
+                self.store.finalize_checkpoint(job.id, stored)
+        except OSError as error:
+            LOGGER.warning(
+                "ingest_checkpoint_cleanup_failed job_id=%s error=%s",
+                job.id,
+                error,
+            )

@@ -91,7 +91,7 @@ Kapanış kriteri:
 
 ## v0.2 - Büyük Corpus Ingest ve Tam Document İndeks
 
-**Durum:** Ana teknik hedefler tamamlandı; resume ve Gardas review/hak kapanışı sürüyor.
+**Durum:** Teknik hedefler tamamlandı; Gardas review/hak kapanışı sürüyor.
 
 Amaç, Derlem'i örnek kaynak akışından büyük corpus operasyonuna taşımak. İlk büyük
 hedef Gardas/Faz 2 verisinin immutable store'a kontrollü alınması ve tam corpus
@@ -109,7 +109,8 @@ Yapılacaklar:
 
 - Gardas/Faz 2 seed manifestini güncelle: path, sha256, byte size, line count, doküman sayısı.
 - Seed dosyasını sadece path ile değil, immutable object store'a kopyalayarak kanonikleştir. **Tamamlandı.**
-- Büyük dosya ingest için canlı progress/result raporu ekle. **Tamamlandı; resume desteği sonraki dilim.**
+- Büyük dosya ingest için canlı progress/result raporu ekle. **Tamamlandı.**
+- Job UUID'sine bağlı, kaynak önekini byte byte doğrulayan resume/checkpoint desteği ekle. **Tamamlandı.**
 - Tam corpus document fingerprint indeksini source bazında çıkar. **Tamamlandı.**
 - Index job'larında ilerleme metrikleri ekle: okunan byte, satır, indexed document, skipped oversized. **Tamamlandı.**
 - `documents` tablosunu sadece sample için tutmaya devam et; tam indeks ham metin saklamasın.
@@ -123,6 +124,7 @@ Kapanış kriteri:
 - Tam document fingerprint index tamamlanır.
 - Dedup/PII/document count raporu UI ve audit'te görünür.
 - Büyük kaynak release'e girmeden önce tüm zorunlu kapılar çalışır.
+- Kesilen büyük ingest aynı job checkpoint'ini doğrulayıp kaldığı byte konumundan devam eder.
 
 ## v0.3 - Toplu Review, Kalite Skoru ve Export
 
@@ -245,11 +247,11 @@ Kapanış kriteri:
 4. Toplu review ekranını kaynak bazlı özet ve öncelik sırasıyla genişlet. **Tamamlandı.**
 5. Export Builder tasarımını ve ilk JSONL/TXT çıktısını oluştur. **Tamamlandı.**
 6. Büyük dosya ingest ve index job'larında progress/result raporunu derinleştir. **Tamamlandı.**
-7. Büyük ingest için resume/checkpoint desteği ekle.
+7. Büyük ingest için resume/checkpoint desteği ekle. **Tamamlandı.**
 8. Gardas nesil 2 örneklerini hak/lisans kararıyla birlikte insan review'dan geçir.
 
 ## Şu Anki Karar
 
 Derlem'in yönü doğru: güvenlik ve izlenebilirlik omurgası ile büyük corpus teknik
 hattı kuruldu. Şimdiki odak **v0.3 - kalite, paketleme ve ilk gerçek Gardas
-release'i**; v0.2 için resume ve operasyon kapanışı paralel yürür.
+release'i**; v0.2 teknik olarak kapandı, Gardas insan/hak operasyonu sürer.

@@ -37,6 +37,7 @@ risk-candidate counts, and PII scanning adds the aggregate finding count.
 
 | Phase | Meaning |
 |---|---|
+| `validating_checkpoint` | Byte-validate a previous ingest checkpoint against the source prefix |
 | `ingesting` | Validate and copy into immutable storage |
 | `scanning_pii` | Scan basic PII patterns |
 | `fingerprinting` | Build normalized document fingerprints |
@@ -48,6 +49,8 @@ risk-candidate counts, and PII scanning adds the aggregate finding count.
 ## Persistence Policy
 
 - Workers persist progress approximately every 64 MiB of input.
+- Before ingest progress is persisted, the checkpoint is flushed and `fsync`ed;
+  a retry resumes from the verified byte offset bound to the same job UUID.
 - A separate PostgreSQL connection commits progress outside the long corpus
   transaction, making it visible while work continues.
 - A retry clears stale `result` and `last_error` values.

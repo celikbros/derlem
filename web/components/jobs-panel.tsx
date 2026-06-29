@@ -83,6 +83,7 @@ export function JobsPanel({ onNotice }: { onNotice: (message: string) => void })
 type Progress = Record<string, unknown>;
 
 const phaseLabels: Record<string, string> = {
+  validating_checkpoint: "Checkpoint doğrulanıyor",
   ingesting: "Dosya kopyalanıyor",
   scanning_pii: "PII taranıyor",
   fingerprinting: "Parmak izi çıkarılıyor",
@@ -121,6 +122,10 @@ function jobProgress(job: BackgroundJob): Progress | undefined {
 function progressDetail(jobType: string, progress: Progress, processedBytes: number, totalBytes: number) {
   const lines = numberFrom(progress, "lines_read").toLocaleString("tr-TR");
   const byteSummary = totalBytes > 0 ? `${formatBytes(processedBytes)} / ${formatBytes(totalBytes)}` : formatBytes(processedBytes);
+  const checkpointTotal = numberFrom(progress, "checkpoint_bytes_total");
+  if (checkpointTotal > 0) {
+    return `${formatBytes(numberFrom(progress, "checkpoint_bytes_validated"))} / ${formatBytes(checkpointTotal)} doğrulandı`;
+  }
   if (jobType === "index_document_fingerprints") {
     return `${byteSummary} · ${lines} satır · ${numberFrom(progress, "indexed_documents").toLocaleString("tr-TR")} indeks`;
   }
@@ -166,6 +171,12 @@ function resultSummary(job: BackgroundJob) {
   if (job.job_type === "export_release" && job.status === "succeeded") {
     const records = Number(job.result?.record_count ?? 0).toLocaleString("tr-TR");
     return `${String(job.result?.format ?? "").toUpperCase()} · ${records} kayıt`;
+  }
+  if (["ingest_local_file", "ingest_staged_file"].includes(job.job_type) && job.status === "succeeded") {
+    const resumedBytes = Number(job.result?.resumed_from_bytes ?? 0);
+    return resumedBytes > 0
+      ? `${formatBytes(resumedBytes)} checkpoint'ten devam edildi`
+      : "İçe aktarıldı";
   }
   return job.status === "succeeded" ? "Başarılı" : "-";
 }

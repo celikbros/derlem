@@ -10,6 +10,7 @@ __pycache__/
 *.egg-info/
 *.tsbuildinfo
 .pytest_cache/
+.pytest_tmp_*/
 .next/
 test-results/
 playwright-report/

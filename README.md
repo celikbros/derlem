@@ -434,7 +434,8 @@ sonra kanıtlanan darboğaza göre ayrıştırma yapılır.
 
 Ayrıntılı versiyon hedefleri için [Derlem Versiyon Yol Haritası](docs/version_roadmap.md)
 belgesini izleyin. Özetle: **v0.1 Core MVP tamamlandı; v0.2'nin büyük corpus
-indeks ve iş görünürlüğü çalışıyor, v0.3 kalite/paketleme aktif hedef.**
+indeks, iş görünürlüğü ve kesintiden devam altyapısı çalışıyor; v0.3
+kalite/paketleme aktif hedef.**
 
 ### Tamamlanan çalışan dilim
 
@@ -451,6 +452,7 @@ indeks ve iş görünürlüğü çalışıyor, v0.3 kalite/paketleme aktif hedef
 - [x] Açıklanabilir risk puanlı, temsil + risk kotasını birleştiren örnekleme
 - [x] Nesil ve üyelik snapshot'lı, atomik kontrollü yeniden örnekleme
 - [x] Büyük ingest, PII, fingerprint ve sample işlerinde canlı byte/satır/doküman ilerlemesi
+- [x] Kaynak öneki doğrulamalı, job UUID'sine bağlı büyük ingest resume/checkpoint akışı
 - [x] Object store tabanlı immutable belge sürümleri ve editor diyaloğu
 - [x] Belge kalite puanı, immutable review geçmişi ve tam örnek kapsama kapısı
 - [x] Sürüm kontrollü ve atomik toplu belge inceleme
@@ -483,6 +485,8 @@ indeks ve iş görünürlüğü çalışıyor, v0.3 kalite/paketleme aktif hedef
 - [API ve iş akışları](docs/api_workflows.md)
 - [Risk bazlı örnekleme](docs/risk_sampling.md)
 - [Kontrollü yeniden örnekleme](docs/document_resampling.md)
+- [Kesintiden devam eden büyük ingest](docs/resumable_ingest.md)
+- [Resumable large-file ingest (English)](docs/resumable_ingest.en.md)
 - [Arka plan işi ilerleme sözleşmesi](docs/job_progress.md)
 - [Çok boyutlu belge kalitesi](docs/multidimensional_quality.md)
 - [Kanonik export sözleşmesi](docs/canonical_exports.md)

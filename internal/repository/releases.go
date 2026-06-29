@@ -452,7 +452,10 @@ func listReleaseSources(ctx context.Context, queryer releaseSourceQueryer, relea
 
 const releaseExportColumns = `
 	id::text, release_id::text, format, status, object_sha256,
-	manifest_object_sha256, record_count, byte_size, last_error,
+	manifest_object_sha256, record_count, byte_size,
+	estimated_token_count, token_estimate_lower_bound,
+	token_estimate_upper_bound, token_estimate_method, record_type_counts,
+	last_error,
 	created_by::text, created_at, completed_at`
 
 func scanReleaseExport(row scanner) (domain.ReleaseExport, error) {
@@ -460,7 +463,9 @@ func scanReleaseExport(row scanner) (domain.ReleaseExport, error) {
 	err := row.Scan(
 		&export.ID, &export.ReleaseID, &export.Format, &export.Status,
 		&export.ObjectSHA256, &export.ManifestObjectSHA256, &export.RecordCount,
-		&export.ByteSize, &export.LastError, &export.CreatedBy,
+		&export.ByteSize, &export.EstimatedTokenCount, &export.TokenEstimateLower,
+		&export.TokenEstimateUpper, &export.TokenEstimateMethod, &export.RecordTypeCounts,
+		&export.LastError, &export.CreatedBy,
 		&export.CreatedAt, &export.CompletedAt,
 	)
 	return export, err

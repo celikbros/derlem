@@ -357,10 +357,16 @@ function exportStatusText(value: Release["exports"][number] | undefined) {
   if (!value) return "Henüz üretilmedi";
   if (value.status === "ready") {
     const records = value.record_count?.toLocaleString("tr-TR") ?? "0";
-    return `${records} kayıt · ${formatBytes(value.byte_size ?? 0)}`;
+    const tokens = value.estimated_token_count;
+    const tokenSummary = tokens === undefined ? "" : ` · ~${formatCount(tokens)} token`;
+    return `${records} kayıt · ${formatBytes(value.byte_size ?? 0)}${tokenSummary}`;
   }
   if (value.status === "failed") return "Başarısız · yeniden denenebilir";
   return value.status === "building" ? "Üretiliyor" : "Kuyrukta";
+}
+
+function formatCount(value: number) {
+  return new Intl.NumberFormat("tr-TR", { notation: "compact", maximumFractionDigits: 1 }).format(value);
 }
 
 function formatBytes(value: number) {

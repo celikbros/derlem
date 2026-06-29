@@ -40,18 +40,23 @@ type ReleaseSource struct {
 }
 
 type ReleaseExport struct {
-	ID                   string     `json:"id"`
-	ReleaseID            string     `json:"release_id"`
-	Format               string     `json:"format"`
-	Status               string     `json:"status"`
-	ObjectSHA256         *string    `json:"object_sha256,omitempty"`
-	ManifestObjectSHA256 *string    `json:"manifest_object_sha256,omitempty"`
-	RecordCount          *int64     `json:"record_count,omitempty"`
-	ByteSize             *int64     `json:"byte_size,omitempty"`
-	LastError            *string    `json:"last_error,omitempty"`
-	CreatedBy            string     `json:"created_by"`
-	CreatedAt            time.Time  `json:"created_at"`
-	CompletedAt          *time.Time `json:"completed_at,omitempty"`
+	ID                   string          `json:"id"`
+	ReleaseID            string          `json:"release_id"`
+	Format               string          `json:"format"`
+	Status               string          `json:"status"`
+	ObjectSHA256         *string         `json:"object_sha256,omitempty"`
+	ManifestObjectSHA256 *string         `json:"manifest_object_sha256,omitempty"`
+	RecordCount          *int64          `json:"record_count,omitempty"`
+	ByteSize             *int64          `json:"byte_size,omitempty"`
+	EstimatedTokenCount  *int64          `json:"estimated_token_count,omitempty"`
+	TokenEstimateLower   *int64          `json:"token_estimate_lower_bound,omitempty"`
+	TokenEstimateUpper   *int64          `json:"token_estimate_upper_bound,omitempty"`
+	TokenEstimateMethod  *string         `json:"token_estimate_method,omitempty"`
+	RecordTypeCounts     json.RawMessage `json:"record_type_counts,omitempty"`
+	LastError            *string         `json:"last_error,omitempty"`
+	CreatedBy            string          `json:"created_by"`
+	CreatedAt            time.Time       `json:"created_at"`
+	CompletedAt          *time.Time      `json:"completed_at,omitempty"`
 }
 
 type CreateReleaseExportInput struct {

@@ -33,7 +33,8 @@ Canlı ilerleme üreten işler:
 
 Alanlar iş tipine göre genişleyebilir. Ortak alanlar byte ilerlemesi ve okunan
 satır sayısıdır. Fingerprint işi indekslenen belge sayılarını, sampling işi
-uygun/riskli aday sayılarını, PII işi toplam bulgu sayısını ekler.
+uygun/riskli aday sayılarını, PII işi toplam bulgu sayısını, export işi ise
+`estimated_tokens` kapasite tahminini ekler.
 
 ## Fazlar
 

@@ -31,7 +31,8 @@ instead of a separate table.
 
 Fields may expand by job type. Byte and line counters form the common contract.
 Fingerprinting adds indexed/skipped document counts, sampling adds eligible and
-risk-candidate counts, and PII scanning adds the aggregate finding count.
+risk-candidate counts, PII scanning adds the aggregate finding count, and export
+adds the `estimated_tokens` capacity estimate.
 
 ## Phases
 

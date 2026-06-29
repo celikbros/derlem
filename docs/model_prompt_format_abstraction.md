@@ -1,246 +1,135 @@
-# Model Prompt Format Abstraction
+# Model Prompt Format Soyutlaması
 
-Bu belge GLM-5.2, DeepSeek-V4-Pro ve Kimi-K2.7-Code gibi modellerin chat
-template/encoding farklari nedeniyle Veri Atolyesi veritabaninda nasil veri
-tutulmasi gerektigini tanimlar.
+**Kanonik şema:** `derlem.canonical-sample.v1`
 
-## Karar
+**Temel karar:** Derlem veriyi GLM, DeepSeek, Kimi, Gardas veya başka bir
+modelin chat template'ine göre saklamaz.
 
-Veritabani herhangi bir modelin Jinja template'ine gore tasarlanmaz.
+## Sorumluluk Sınırı
 
-Veriler birden fazla model ailesinin egitimi, degerlendirmesi veya post-training
-akislari icin yeniden kullanilabilir kalacak sekilde tasarlanir. Bir kayit
-`glm-5.2-format`, `deepseek-v4-format` veya `kimi-format` olarak saklanmaz;
-model bagimsiz semantik kayit olarak saklanir.
+Akış üç katmandır:
 
-Veritabani su iki katmani ayri tutar:
+1. **Derlem kanonik verisi**
+   - Conversation, preference, mesaj rolleri, içerik parçaları, araç tanımları
+     ve tool call/result bağlarını saklar.
+   - İnsan review, hak, PII, dedup, lineage ve release kapılarını uygular.
+2. **LLM/tokenizer ekibinin adapter katmanı**
+   - Kanonik JSONL'i hedef modelin Jinja template'i, Python encoder'ı veya
+     eğitim veri yükleyicisine dönüştürür.
+   - Özel token, thinking modu ve generation prompt gibi kararları verir.
+3. **Türetilmiş model artifact'i**
+   - Render edilmiş prompt veya tokenized paket model ekibine aittir.
+   - Yeniden üretilebilirlik için template SHA256, adapter sürümü ve tokenizer
+     sürümü kendi manifestinde tutulur.
 
-1. **Kanonik veri:** conversation, message, content part, tool call, tool result,
-   reasoning metadata, kaynak ve kalite bilgisi.
-2. **Model render katmani:** belirli model/template/encoder ile kanonik veriden
-   uretilen model-spesifik prompt string'i veya tokenized artifact.
+Yeni bir model çıktığında Derlem kayıtları yeniden onaylanmaz. Yalnızca tüketici
+adapter'ı değişir.
 
-Bu ayrim zorunludur. GLM, DeepSeek, Kimi veya baska bir model farkli ozel
-tokenlar ve formatlar kullansa bile ayni kanonik veri korunur; sadece render
-adapter'i degisir.
+## Kanonik Kayıt
 
-## Coklu Model Prensipleri
+Her kaynak tek bir değişmez `content_purpose` taşır. Bu nedenle instruction ve
+preference kayıtları ayrı kaynak/shard'larda tutulur.
 
-- Veri modeli hedef modele kilitlenmez.
-- Model-spesifik ozel tokenlar, chat template metni ve renderer sonucu ana veri
-  tablosuna yazilmaz.
-- Veri Atolyesi model bazli "uyumludur/uyumsuzdur" onayi vermez.
-- Her sample standart kanonik semantik ile etiketlenir; model egiten katman
-  kendi adapter'i ile bu veriyi hedef model formatina donusturur.
-- Ayni conversation sample birden fazla adapter ile render edilebilir; bu islem
-  veri atolyenin ana veri modelini degistirmez.
-- Render edilmis prompt birincil veri degil, turetilmis artifact'tir.
-- Turetilmis artifact sha256/object uri ile izlenir; kanonik veri degismeden kalir.
+Ortak alanlar:
 
-## Neden
+- `schema_version`: `derlem.canonical-sample.v1`
+- `record_type`: `conversation` veya `preference`
+- `sample_id`: kaynak içinde kararlı örnek kimliği
+- `content_purpose`: kaynak ve release amacıyla birebir aynı değer
+- `language`, `domain`, `task_type`: modelden bağımsız sınıflandırma
+- `train_policy`: `assistant_only`, `full_dialogue`, `no_train`, `eval_only`
+- `metadata`: kanonik anlamı bozmayan ek açıklamalar
 
-LLM'e giden girdi cogunlukla duz yazi degildir. Ornek farklar:
+Şema dosyası: `schemas/conversation_sample.schema.json`
 
-- GLM-5.2 template'i `messages`, `tools`, `reasoning_effort`,
-  `enable_thinking`, `reasoning_content`, `tool_calls` ve `tool` rollerini
-  model-spesifik token/XML benzeri bloklara render eder.
-- DeepSeek-V4-Pro Jinja chat template vermek yerine OpenAI uyumlu
-  `messages` yapisini model girdisine cevirmek icin ayri bir encoding katmani
-  tanimlar.
-- Kimi-K2.7-Code template'i text disinda image/video content part'larini,
-  role `name` alanini, tool declaration ve tool call bloklarini destekler.
+## Mesajlar
 
-Sonuc: veriyi sadece `prompt_text` ve `answer_text` olarak saklamak yetersizdir.
+`messages` sıralı bir dizidir. Desteklenen roller:
 
-## Kanonik Conversation Modeli
+- `system`
+- `developer`
+- `user`
+- `assistant`
+- `tool`
+- `other`
 
-Minimum mantiksal varliklar:
+Bir mesaj düz `content` metni veya sıralı içerik parçaları taşıyabilir. İçerik
+parçaları text, image/image_url, video/video_url, audio/audio_url ve
+tool_reference türlerini destekler. Binary varlık ana JSON kaydına gömülmez;
+`asset_ref` ile immutable nesneye bağlanır.
 
-```text
-conversation_samples
-messages
-message_parts
-tool_definitions
-tool_calls
-tool_results
-prompt_renderings
-model_adapters
-export_profiles
+## Araç Sözleşmesi
+
+Araç tanımı model fonksiyon formatına bağlı değildir:
+
+```json
+{
+  "name": "hava",
+  "description": "Şehir hava durumunu getirir",
+  "input_schema": {
+    "type": "object",
+    "properties": {"şehir": {"type": "string"}},
+    "required": ["şehir"]
+  },
+  "strict": true
+}
 ```
 
-### conversation_samples
+Assistant mesajındaki her tool call kararlı bir `id`, araç `name` değeri ve
+JSON object `arguments` taşır. `tool` rolündeki sonuç aynı kimliği
+`tool_call_id` ile referans eder. Bilinmeyen araç, tekrar eden çağrı kimliği
+veya karşılığı olmayan sonuç export'u bloke eder.
 
-- `sample_id`
-- `content_purpose`: pretrain, instruction, preference, eval, holdout, post_training
-- `task_type`
-- `language`
-- `domain`
-- `source_id`
-- `quality_status`
-- `train_policy`: assistant_only, full_dialogue, no_train, eval_only
-- `created_at`
+## Preference Kaydı
 
-### messages
+Preference kaydı ortak bağlamı `messages` altında, iki alternatifi ise
+`preference.chosen` ve `preference.rejected` mesaj dizilerinde tutar. Serbest
+metin etiketleri yerine aynı mesaj sözleşmesinin kullanılması, araç çağrılı ve
+multimodal tercih verisinin de modelden bağımsız kalmasını sağlar.
 
-- `message_id`
-- `sample_id`
-- `ordinal`
-- `role`: system, user, assistant, tool, developer, other
-- `name`
-- `content_text`
-- `reasoning_content`
-- `reasoning_visibility`: hidden, review_only, export_allowed
-- `tool_call_id`
-- `metadata_json`
+## Reasoning Politikası
 
-### message_parts
+`reasoning_content` varsa `reasoning_visibility` zorunludur:
 
-Metin disi ve parcali mesajlar icin:
+- `hidden`: kanonik export'a içerik yazılmaz.
+- `review_only`: reviewer görebilir, kanonik export'a içerik yazılmaz.
+- `export_allowed`: içerik kanonik export'ta korunur.
 
-- `part_id`
-- `message_id`
-- `ordinal`
-- `part_type`: text, image, image_url, video, video_url, audio, tool_reference
-- `text`
-- `asset_ref`
-- `mime_type`
-- `metadata_json`
+Bu alan modelin thinking token biçimini tanımlamaz. Adapter, export'a izinli
+gerekçeyi hedef modelin beklediği biçime kendisi dönüştürür.
 
-### tool_definitions
+## Kabul Edilmeyen Alanlar
 
-- `tool_id`
-- `sample_id`
-- `name`
-- `schema_json`
-- `defer_loading`
-- `strict`
+Kanonik kayıt şunları kabul etmez:
 
-### tool_calls
+- `model_compatibility`
+- model/provider adı
+- chat template veya Jinja metni
+- özel token dizileri
+- render edilmiş prompt
+- tokenizer sonucu veya model-spesifik token sayımı
 
-- `tool_call_id`
-- `message_id`
-- `name`
-- `arguments_json`
-- `call_order`
+Bu bilgiler veri kalitesini değil tüketici uygulamasını tarif eder.
 
-### tool_results
+## Export Davranışı
 
-- `tool_result_id`
-- `tool_call_id`
-- `message_id`
-- `content_text`
-- `content_json`
+- JSONL, sample'ı `derlem.canonical-export-record.v1` zarfında değiştirmeden ve
+  anahtarları deterministik sıralayarak export eder.
+- Kaynak SHA256, satır sırası ve kanonik payload SHA256 `lineage` alanına eklenir.
+- Kaydın `content_purpose` değeri release ile uyuşmazsa export bloke edilir.
+- Yapısal conversation/preference kaydı TXT'ye indirgenmez; TXT isteği bloke edilir.
+- Token tahmini yalnız kapasite planlamasıdır. Exact tokenizer sayımı tüketici
+  katmanında yapılır.
 
-### model_adapters
+Çalışan örnekler:
 
-- `adapter_id`
-- `model_id`
-- `provider`
-- `template_kind`: jinja, python_encoder, openai_compatible, custom
-- `template_ref`
-- `template_sha256`
-- `renderer_version`
-- `notes`
+- `data_samples/example_canonical_conversations.jsonl`
+- `data_samples/example_canonical_preferences.jsonl`
 
-### export_profiles
+Export zarfı: `schemas/canonical_export_record.schema.json`
 
-- `profile_id`
-- `name`: canonical_messages, instruction_jsonl, preference_jsonl, eval_jsonl
-- `purpose`: pretrain, instruction, preference, eval, holdout, post_training
-- `schema_version`
-- `required_fields`
-- `notes`
+## Sonuç
 
-Bu profil model uyumlulugu degil, verinin hangi standart export sozlesmesine
-uydugunu belirtir. GLM, DeepSeek, Kimi veya baska bir hedef model bu standart
-export'u kendi egitim katmaninda adapter ile donusturur.
-
-### prompt_renderings
-
-Bu tablo opsiyoneldir ama debug/reproducibility icin yararlidir.
-
-- `rendering_id`
-- `sample_id`
-- `adapter_id`
-- `render_config_json`
-- `rendered_prompt_sha256`
-- `rendered_prompt_object_uri`
-- `token_count`
-- `created_at`
-
-Render config ornekleri:
-
-- `add_generation_prompt`
-- `enable_thinking`
-- `reasoning_effort`
-- `thinking_mode`
-- `tools_enabled`
-- `multimodal_policy`
-
-## Export Politikasi
-
-Veri Atolyesi model template'i uygulamak zorunda degildir, ama su iki export'u
-uretebilmelidir:
-
-1. **Kanonik JSONL export**
-   - Model bagimsizdir.
-   - `messages`, `message_parts`, `tools`, `tool_calls`, `tool_results`
-     alanlarini tasir.
-
-2. **Render-ready export**
-   - Belirli model ailesi icin hazir metadata tasir.
-   - Render islemi LLM/tokenizer ekibinde veya ayri adapter job'unda yapilir.
-
-3. **Model-specific rendered export**
-   - Sadece talep edilirse uretilir.
-   - Aynı kanonik veri GLM, DeepSeek, Kimi veya Gardas adapter'lariyla farkli
-     prompt string'lerine donusturulebilir.
-   - Bu export yeniden uretilebilir olmalidir: adapter id, template sha256,
-     renderer version ve render config zorunludur.
-
-Model-spesifik render edilmis prompt saklanacaksa immutable object store'a
-sha256 ile yazilir. DB'de buyuk prompt blob'u tutulmaz.
-
-## DB Tasarim Sonucu
-
-GLM-5.2 template'ine gore veritabani tasarlanmaz. Ama GLM-5.2'nin ihtiyac
-duydugu yapilar kanonik modelde desteklenir:
-
-- `reasoning_effort`
-- `enable_thinking`
-- `reasoning_content`
-- `tools`
-- `tool_calls`
-- `tool_results`
-- system/user/assistant/tool rolleri
-
-DeepSeek-V4-Pro icin:
-
-- `messages`
-- `reasoning_content`
-- `thinking_mode`
-- Python encoder adapter kaydi
-
-Kimi-K2.7-Code icin:
-
-- multimodal `message_parts`
-- role `name`
-- tool declaration
-- tool call/result baglantisi
-- assistant reasoning
-
-Bu sekilde veri platformu model degistikce veri modelini yikmaz; sadece
-`model_adapters` ve render job'lari degisir.
-
-## Pratik Sonuc
-
-Egitim verisi hazirlarken varsayilan export kanonik JSONL olmalidir. LLM ekibi
-hangi model ailesi icin egitim veya ince ayar yapacaksa ilgili adapter ile
-render eder. Veri Atolyesi, ayni verinin birden fazla modele uygun kalmasini
-garanti etmek icin kanonik semantigi korur ve model-spesifik formati turetilmis
-artifact olarak ele alir.
-
-Yeni bir model ciktiginda Veri Atolyesi her sample'i tekrar onaylamaz. Yeni
-model icin adapter veya egitim pipeline'i, kanonik export'u okuyup hedef
-formatina cevirir. Atolye tarafinda yalnizca kanonik schema/export profilinin
-gecerliligi korunur.
+Derlem model uyumluluğu onaylamaz; kanonik anlamı, kaliteyi ve kökeni onaylar.
+LLM/tokenizer ekibi bu standardı okuyabildiği sürece aynı release birden fazla
+model ailesi için yeniden veri incelemesi yapılmadan kullanılabilir.

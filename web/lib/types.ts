@@ -162,6 +162,11 @@ export type ReleaseExport = {
   manifest_object_sha256?: string;
   record_count?: number;
   byte_size?: number;
+  estimated_token_count?: number;
+  token_estimate_lower_bound?: number;
+  token_estimate_upper_bound?: number;
+  token_estimate_method?: string;
+  record_type_counts?: Record<string, number>;
   last_error?: string;
   created_by: string;
   created_at: string;

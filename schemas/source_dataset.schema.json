@@ -36,6 +36,7 @@
         "code",
         "human_contribution",
         "internal_document",
+        "canonical_jsonl",
         "other"
       ]
     },
@@ -47,8 +48,7 @@
         "preference",
         "eval",
         "holdout",
-        "post_training",
-        "unknown"
+        "post_training"
       ]
     },
     "language": { "type": "string" },

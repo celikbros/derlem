@@ -18,8 +18,9 @@ test("inspect a frozen release and its downloadable artifacts", async ({ page },
   await createDialog.getByRole("button", { name: "Pencereyi kapat" }).click();
   await expect(createDialog).not.toBeVisible();
 
-  const releaseRow = page.getByRole("row").filter({ hasText: "Derlem Instruction Seed" });
+  const releaseRow = page.getByRole("row").filter({ hasText: "2026.06.24-rc1" });
   await expect(releaseRow).toBeVisible();
+  await expect(releaseRow.getByText("Derlem Instruction Seed", { exact: true })).toBeVisible();
   await expect(releaseRow.getByText("2026.06.24-rc1 · Frozen", { exact: true })).toBeVisible();
   await releaseRow.getByRole("button", { name: /Derlem Instruction Seed/ }).click();
 
@@ -29,6 +30,15 @@ test("inspect a frozen release and its downloadable artifacts", async ({ page },
   await expect(detail.getByText("Uygulanmaz", { exact: true })).toBeVisible();
   await expect(detail.getByRole("link", { name: "Manifest indir" })).toBeVisible();
   await expect(detail.getByTitle("Artifact indir")).toBeVisible();
+
+  const canonicalSmokeRow = page.getByRole("row").filter({ hasText: "Canonical Export Smoke" });
+  if (await canonicalSmokeRow.count() === 1) {
+    const smokeButton = canonicalSmokeRow.getByRole("button");
+    await expect(smokeButton).toHaveCount(1);
+    await smokeButton.click();
+    await expect(detail.getByRole("heading", { name: "Canonical Export Smoke" })).toBeVisible();
+    await expect(detail.getByText("~183 token", { exact: false })).toBeVisible();
+  }
 
   const screenshotDirectory = path.resolve("..", "var", "screenshots");
   await mkdir(screenshotDirectory, { recursive: true });

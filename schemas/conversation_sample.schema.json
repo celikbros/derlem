@@ -1,174 +1,138 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Turkce Veri Atolyesi Conversation Sample",
+  "$id": "https://derlem.local/schemas/conversation_sample.schema.json",
+  "title": "Derlem Canonical Conversation or Preference Sample",
   "type": "object",
   "required": [
+    "schema_version",
+    "record_type",
     "sample_id",
-    "content_purpose",
-    "messages",
-    "created_at"
+    "content_purpose"
   ],
   "properties": {
-    "sample_id": { "type": "string" },
-    "source_id": { "type": "string" },
-    "task_type": { "type": "string" },
+    "schema_version": { "const": "derlem.canonical-sample.v1" },
+    "record_type": { "enum": ["conversation", "preference"] },
+    "sample_id": { "type": "string", "minLength": 1 },
     "content_purpose": {
-      "type": "string",
-      "enum": [
-        "pretrain",
-        "instruction",
-        "preference",
-        "eval",
-        "holdout",
-        "post_training"
-      ]
+      "enum": ["pretrain", "instruction", "preference", "eval", "holdout", "post_training"]
     },
-    "language": { "type": "string" },
-    "domain": { "type": "string" },
+    "task_type": { "type": "string", "minLength": 1 },
+    "language": { "type": "string", "minLength": 1 },
+    "domain": { "type": "string", "minLength": 1 },
     "train_policy": {
-      "type": "string",
-      "enum": [
-        "assistant_only",
-        "full_dialogue",
-        "no_train",
-        "eval_only"
-      ]
+      "enum": ["assistant_only", "full_dialogue", "no_train", "eval_only"]
     },
     "messages": {
       "type": "array",
-      "minItems": 1,
-      "items": {
-        "type": "object",
-        "required": ["role"],
-        "properties": {
-          "message_id": { "type": "string" },
-          "role": {
-            "type": "string",
-            "enum": ["system", "developer", "user", "assistant", "tool", "other"]
-          },
-          "name": { "type": "string" },
-          "content": {
-            "oneOf": [
-              { "type": "string" },
-              {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "required": ["type"],
-                  "properties": {
-                    "type": {
-                      "type": "string",
-                      "enum": [
-                        "text",
-                        "image",
-                        "image_url",
-                        "video",
-                        "video_url",
-                        "audio",
-                        "audio_url",
-                        "tool_reference"
-                      ]
-                    },
-                    "text": { "type": "string" },
-                    "asset_ref": { "type": "string" },
-                    "url": { "type": "string" },
-                    "mime_type": { "type": "string" },
-                    "metadata": { "type": "object" }
-                  },
-                  "additionalProperties": true
-                }
-              }
-            ]
-          },
-          "reasoning_content": { "type": "string" },
-          "reasoning_visibility": {
-            "type": "string",
-            "enum": ["hidden", "review_only", "export_allowed"]
-          },
-          "tool_call_id": { "type": "string" },
-          "tool_calls": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "required": ["name", "arguments"],
-              "properties": {
-                "id": { "type": "string" },
-                "name": { "type": "string" },
-                "arguments": { "type": "object" }
-              },
-              "additionalProperties": true
-            }
-          },
-          "metadata": { "type": "object" }
-        },
-        "additionalProperties": false
-      }
+      "items": { "$ref": "#/$defs/message" }
     },
     "tools": {
       "type": "array",
-      "items": {
-        "type": "object",
-        "required": ["name", "schema"],
-        "properties": {
-          "name": { "type": "string" },
-          "schema": { "type": "object" },
-          "defer_loading": { "type": "boolean" },
-          "strict": { "type": "boolean" }
-        },
-        "additionalProperties": false
-      }
+      "items": { "$ref": "#/$defs/tool" }
     },
-    "renderings": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": ["adapter_id", "rendered_prompt_sha256"],
-        "properties": {
-          "adapter_id": { "type": "string" },
-          "render_config": { "type": "object" },
-          "rendered_prompt_sha256": { "type": "string" },
-          "rendered_prompt_object_uri": { "type": "string" },
-          "token_count": { "type": "integer", "minimum": 0 }
+    "preference": {
+      "type": "object",
+      "required": ["chosen", "rejected"],
+      "properties": {
+        "chosen": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/message" }
         },
-        "additionalProperties": false
-      }
+        "rejected": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/message" }
+        }
+      },
+      "additionalProperties": false
     },
-    "export_profiles": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": ["profile_id", "name", "purpose", "schema_version"],
-        "properties": {
-          "profile_id": { "type": "string" },
-          "name": {
-            "type": "string",
-            "enum": [
-              "canonical_messages",
-              "instruction_jsonl",
-              "preference_jsonl",
-              "eval_jsonl",
-              "pretrain_text"
-            ]
-          },
-          "purpose": {
-            "type": "string",
-            "enum": [
-              "pretrain",
-              "instruction",
-              "preference",
-              "eval",
-              "holdout",
-              "post_training"
-            ]
-          },
-          "schema_version": { "type": "string" },
-          "notes": { "type": "string" }
-        },
-        "additionalProperties": false
-      }
-    },
+    "metadata": { "type": "object" },
     "created_at": { "type": "string", "format": "date-time" },
-    "created_by": { "type": "string" }
+    "created_by": { "type": "string", "minLength": 1 }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "record_type": { "const": "conversation" } } },
+      "then": {
+        "required": ["messages"],
+        "properties": { "messages": { "minItems": 1 } },
+        "not": { "required": ["preference"] }
+      }
+    },
+    {
+      "if": { "properties": { "record_type": { "const": "preference" } } },
+      "then": {
+        "required": ["preference"],
+        "properties": { "content_purpose": { "const": "preference" } }
+      }
+    }
+  ],
+  "$defs": {
+    "message": {
+      "type": "object",
+      "required": ["role"],
+      "properties": {
+        "message_id": { "type": "string", "minLength": 1 },
+        "role": { "enum": ["system", "developer", "user", "assistant", "tool", "other"] },
+        "name": { "type": "string", "minLength": 1 },
+        "content": {
+          "oneOf": [
+            { "type": "string" },
+            {
+              "type": "array",
+              "items": { "$ref": "#/$defs/content_part" }
+            }
+          ]
+        },
+        "reasoning_content": { "type": "string", "minLength": 1 },
+        "reasoning_visibility": { "enum": ["hidden", "review_only", "export_allowed"] },
+        "tool_call_id": { "type": "string", "minLength": 1 },
+        "tool_calls": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/tool_call" }
+        },
+        "metadata": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    "content_part": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "enum": ["text", "image", "image_url", "video", "video_url", "audio", "audio_url", "tool_reference"]
+        },
+        "text": { "type": "string", "minLength": 1 },
+        "asset_ref": { "type": "string", "minLength": 1 },
+        "url": { "type": "string", "minLength": 1 },
+        "mime_type": { "type": "string", "minLength": 1 },
+        "metadata": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    "tool": {
+      "type": "object",
+      "required": ["name", "input_schema"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 },
+        "input_schema": { "type": "object" },
+        "strict": { "type": "boolean" },
+        "defer_loading": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "tool_call": {
+      "type": "object",
+      "required": ["id", "name", "arguments"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "arguments": { "type": "object" }
+      },
+      "additionalProperties": false
+    }
   },
   "additionalProperties": false
 }

@@ -1739,7 +1739,12 @@ class Worker:
                     UPDATE release_exports
                     SET status = 'ready', object_sha256 = %s,
                         manifest_object_sha256 = %s, record_count = %s,
-                        byte_size = %s, completed_at = now(), last_error = NULL
+                        byte_size = %s, estimated_token_count = %s,
+                        token_estimate_lower_bound = %s,
+                        token_estimate_upper_bound = %s,
+                        token_estimate_method = %s,
+                        record_type_counts = %s::jsonb,
+                        completed_at = now(), last_error = NULL
                     WHERE id = %s AND status = 'building'
                     """,
                     (
@@ -1747,6 +1752,11 @@ class Worker:
                         stored_manifest.sha256,
                         result.record_count,
                         result.byte_size,
+                        result.token_estimate.estimated_token_count,
+                        result.token_estimate.lower_bound,
+                        result.token_estimate.upper_bound,
+                        result.token_estimate.method,
+                        json.dumps(result.record_type_counts, ensure_ascii=False),
                         export_id,
                     ),
                 )
@@ -1767,7 +1777,12 @@ class Worker:
                             'object_sha256', %s::text,
                             'manifest_object_sha256', %s::text,
                             'record_count', %s::bigint,
-                            'byte_size', %s::bigint
+                            'byte_size', %s::bigint,
+                            'estimated_token_count', %s::bigint,
+                            'token_estimate_lower_bound', %s::bigint,
+                            'token_estimate_upper_bound', %s::bigint,
+                            'token_estimate_method', %s::text,
+                            'record_type_counts', %s::jsonb
                         )
                     )
                     """,
@@ -1780,6 +1795,11 @@ class Worker:
                         stored_manifest.sha256,
                         result.record_count,
                         result.byte_size,
+                        result.token_estimate.estimated_token_count,
+                        result.token_estimate.lower_bound,
+                        result.token_estimate.upper_bound,
+                        result.token_estimate.method,
+                        json.dumps(result.record_type_counts, ensure_ascii=False),
                     ),
                 )
                 connection.execute(
@@ -1794,7 +1814,12 @@ class Worker:
                             'object_sha256', %s::text,
                             'manifest_object_sha256', %s::text,
                             'record_count', %s::bigint,
-                            'byte_size', %s::bigint
+                            'byte_size', %s::bigint,
+                            'estimated_token_count', %s::bigint,
+                            'token_estimate_lower_bound', %s::bigint,
+                            'token_estimate_upper_bound', %s::bigint,
+                            'token_estimate_method', %s::text,
+                            'record_type_counts', %s::jsonb
                         ),
                         completed_at = now(), updated_at = now()
                     WHERE id = %s AND status = 'running'
@@ -1807,6 +1832,11 @@ class Worker:
                         stored_manifest.sha256,
                         result.record_count,
                         result.byte_size,
+                        result.token_estimate.estimated_token_count,
+                        result.token_estimate.lower_bound,
+                        result.token_estimate.upper_bound,
+                        result.token_estimate.method,
+                        json.dumps(result.record_type_counts, ensure_ascii=False),
                         job.id,
                     ),
                 )

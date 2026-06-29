@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://derlem.local/schemas/canonical_export_record.schema.json",
+  "title": "Derlem Canonical Structured Export Record",
+  "type": "object",
+  "required": ["export_schema_version", "id", "record_type", "sample", "lineage"],
+  "properties": {
+    "export_schema_version": { "const": "derlem.canonical-export-record.v1" },
+    "id": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "record_type": { "enum": ["conversation", "preference"] },
+    "sample": { "$ref": "conversation_sample.schema.json" },
+    "lineage": {
+      "type": "object",
+      "required": [
+        "canonical_payload_sha256",
+        "domain",
+        "language",
+        "license",
+        "source_document_sha256",
+        "source_id",
+        "source_ordinal",
+        "source_sha256"
+      ],
+      "properties": {
+        "canonical_payload_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "domain": { "type": "string" },
+        "language": { "type": "string" },
+        "license": { "type": "string" },
+        "source_document_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "source_id": { "type": "string" },
+        "source_ordinal": { "type": "integer", "minimum": 1 },
+        "source_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

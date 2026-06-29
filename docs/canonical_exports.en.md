@@ -1,6 +1,6 @@
 # Derlem Canonical Export Contract
 
-**Version:** `derlem.export-manifest.v1`
+**Version:** `derlem.export-manifest.v2`
 
 **Status:** Working MVP
 
@@ -18,7 +18,8 @@ be reviewed again. Only the consumer-side adapter changes.
 
 ## JSONL Record
 
-Each line contains one document:
+Each line contains one text, conversation, or preference record. Plain text
+keeps the backward-compatible document shape:
 
 ```json
 {
@@ -41,11 +42,18 @@ Each line contains one document:
 Keys are serialized in sorted compact JSON. UTF-8 characters are preserved and
 every record ends with `LF`.
 
+Structured records use a `derlem.canonical-export-record.v1` envelope that
+carries the source `derlem.canonical-sample.v1` sample unchanged. `messages`,
+`tools`, tool calls, multimodal content parts, and preference `chosen/rejected`
+branches are not rendered through a model template. Source SHA256 and line
+position are attached under the envelope's `lineage` field.
+
 ## TXT Output
 
 The TXT artifact writes one UTF-8 line per document. Embedded `CRLF`, `CR`, and
 `LF` characters are converted to a single space. TXT is a convenience format
 for simple pretraining consumers; consumers that need lineage use JSONL.
+Conversation and preference records hard-fail a TXT export.
 
 ## Determinism
 
@@ -53,7 +61,8 @@ The checksum contract is enforced by these rules:
 
 1. Sources are sorted by `source_id`.
 2. Documents retain their stable source-line order.
-3. A document id hashes `source_sha256`, source ordinal, and text SHA256.
+3. A record id hashes `source_sha256`, source ordinal, and exported canonical
+   payload SHA256.
 4. JSON keys are sorted and serialized without variable whitespace.
 5. The export manifest uses the frozen release timestamp and release-manifest
    checksum, never the current execution time.
@@ -95,10 +104,25 @@ in memory. Every 50,000 records it persists these counters in the job result:
 - `sources_completed`
 - `source_count`
 - `output_bytes_written`
+- `estimated_tokens`
 
 The Jobs view displays this progress. A Gardas clean-candidate export should be
 started only after checking available disk space because it is a large disk
 read/write operation.
+
+## Token Estimate
+
+The manifest `token_estimate` is not tokenizer output. Without selecting a
+model or tokenizer, Derlem aggregates semantic Unicode code points, UTF-8 bytes,
+and whitespace units. `unicode-codepoint-range-v1` reports:
+
+- lower bound: `max(whitespace_units, ceil(codepoints / 6))`
+- point estimate: `max(lower_bound, ceil(codepoints / 4))`
+- upper bound: `max(point_estimate, ceil(codepoints / 2))`
+
+This deliberately broad range is for capacity planning. The training team runs
+the exact count with its target tokenizer downstream; Derlem records do not need
+new approval.
 
 ## Permissions
 
@@ -106,9 +130,13 @@ read/write operation.
 - Download artifact and manifest: `admin`, `data_manager`, `consumer_team`
 - Other roles can inspect release metadata but cannot download artifacts
 
-## Next Extension
+## Canonical Structured Record
 
-The current contract covers text corpora. A later canonical schema version will
-add model-independent `messages`, `tools`, and `chosen/rejected` structures for
-instruction, tool-call, preference, and conversation data. Target-model Jinja
-or chat templates will remain outside the Derlem database.
+The active schema is `schemas/conversation_sample.schema.json`, with ingest-ready
+examples in `data_samples/example_canonical_conversations.jsonl` and
+`data_samples/example_canonical_preferences.jsonl`. Model names,
+`model_compatibility`, chat templates, special tokens, and rendered prompts are
+not accepted by this schema. They are downstream artifacts owned by the LLM or
+tokenizer team.
+The structured export envelope is independently validated by
+`schemas/canonical_export_record.schema.json`.

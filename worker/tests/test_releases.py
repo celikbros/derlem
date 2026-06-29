@@ -131,8 +131,17 @@ def test_jsonl_export_is_deterministic_model_independent_and_sorted(tmp_path: Pa
     assert "model" not in records[0]["metadata"]
 
     manifest = json.loads(build_export_manifest(release, sources, first))
+    assert manifest["schema_version"] == "derlem.export-manifest.v2"
     assert manifest["export"]["sha256"] == first.sha256
     assert manifest["export"]["record_count"] == 2
+    assert manifest["export"]["record_type_counts"] == {"text": 2}
+    assert manifest["export"]["token_estimate"]["method"] == "unicode-codepoint-range-v1"
+    assert manifest["export"]["token_estimate"]["lower_bound"] > 0
+    assert (
+        manifest["export"]["token_estimate"]["lower_bound"]
+        <= manifest["export"]["token_estimate"]["estimated_token_count"]
+        <= manifest["export"]["token_estimate"]["upper_bound"]
+    )
     assert [source["source_id"] for source in manifest["sources"]] == ["a", "b"]
 
 
@@ -162,3 +171,137 @@ def test_txt_export_flattens_embedded_newlines(tmp_path: Path) -> None:
 
     assert output_path.read_text(encoding="utf-8") == "birinci ikinci\n"
     assert result.record_count == 1
+
+
+def test_structured_conversation_export_preserves_canonical_fields(tmp_path: Path) -> None:
+    source_path = tmp_path / "conversation.jsonl"
+    sample = {
+        "schema_version": "derlem.canonical-sample.v1",
+        "record_type": "conversation",
+        "sample_id": "conv-1",
+        "content_purpose": "instruction",
+        "train_policy": "assistant_only",
+        "messages": [
+            {"role": "user", "content": "İki ile ikiyi topla."},
+            {"role": "assistant", "content": "Dört."},
+        ],
+        "metadata": {"difficulty": "easy"},
+    }
+    source_path.write_text(json.dumps(sample, ensure_ascii=False) + "\n", encoding="utf-8")
+    output_path = tmp_path / "conversation-export.jsonl"
+    release = {
+        "id": "release-id",
+        "name": "Instruction",
+        "version": "v1",
+        "content_purpose": "instruction",
+        "frozen_at": "2026-06-29T00:00:00Z",
+        "manifest_sha256": "f" * 64,
+    }
+    sources = [
+        {
+            "source_id": "a",
+            "source_sha256": "1" * 64,
+            "path": source_path,
+            "language": "tr",
+            "domain": "math",
+            "license": "internal",
+        }
+    ]
+
+    result = build_release_export(
+        release,
+        sources,
+        "jsonl",
+        output_path,
+        max_document_bytes=4096,
+    )
+
+    exported = json.loads(output_path.read_text(encoding="utf-8"))
+    assert exported["export_schema_version"] == "derlem.canonical-export-record.v1"
+    assert exported["record_type"] == "conversation"
+    assert exported["sample"]["schema_version"] == "derlem.canonical-sample.v1"
+    assert exported["sample"]["sample_id"] == "conv-1"
+    assert exported["sample"]["messages"] == sample["messages"]
+    assert exported["sample"]["metadata"] == {"difficulty": "easy"}
+    assert exported["lineage"]["source_id"] == "a"
+    assert len(exported["lineage"]["canonical_payload_sha256"]) == 64
+    assert result.record_type_counts == {"conversation": 1}
+    assert result.token_estimate.estimated_token_count > 0
+
+
+def test_structured_records_are_rejected_from_txt_export(tmp_path: Path) -> None:
+    source_path = tmp_path / "conversation.jsonl"
+    source_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "derlem.canonical-sample.v1",
+                "record_type": "conversation",
+                "sample_id": "conv-1",
+                "content_purpose": "instruction",
+                "messages": [{"role": "user", "content": "Merhaba"}],
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    sources = [
+        {
+            "source_id": "a",
+            "source_sha256": "1" * 64,
+            "path": source_path,
+            "language": "tr",
+            "domain": "general",
+            "license": "internal",
+        }
+    ]
+
+    with pytest.raises(ReleaseGateError) as captured:
+        build_release_export(
+            {"content_purpose": "instruction"},
+            sources,
+            "txt",
+            tmp_path / "invalid.txt",
+            max_document_bytes=4096,
+        )
+
+    assert captured.value.gate_results["export"]["reason"] == "structured_record_requires_jsonl"
+
+
+def test_canonical_purpose_mismatch_blocks_export(tmp_path: Path) -> None:
+    source_path = tmp_path / "mismatch.jsonl"
+    source_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "derlem.canonical-sample.v1",
+                "record_type": "conversation",
+                "sample_id": "eval-1",
+                "content_purpose": "eval",
+                "messages": [{"role": "user", "content": "Soru"}],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    sources = [
+        {
+            "source_id": "a",
+            "source_sha256": "1" * 64,
+            "path": source_path,
+            "language": "tr",
+            "domain": "general",
+            "license": "internal",
+        }
+    ]
+
+    with pytest.raises(ReleaseGateError) as captured:
+        build_release_export(
+            {"content_purpose": "instruction"},
+            sources,
+            "jsonl",
+            tmp_path / "invalid.jsonl",
+            max_document_bytes=4096,
+        )
+
+    assert captured.value.gate_results["export"]["reason"] == "invalid_canonical_sample"
+    assert captured.value.gate_results["export"]["validation_error"] == "content_purpose_mismatch"

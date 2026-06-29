@@ -54,8 +54,8 @@ akışları kurmak, export/shard üretmek, kalite skorlarını derinleştirmek v
 |---|---|---|---|
 | v0.1 | Tamamlandı | Güvenli çekirdek veri atölyesi | Kaynak -> kalite kapıları -> review -> frozen release |
 | v0.2 | Operasyon kapanışı | Büyük corpus ingest ve tam document indeks | Gardas/Faz 2 seed'i gerçek operasyon kaynağı olur |
-| v0.3 | Aktif | Toplu review, kalite skorları, export/shard | Eğitim ekiplerine kanonik JSONL/TXT paketleri |
-| v0.4 | Planlandı | Gelişmiş dedup/decontam ve veri karışımı | MinHash/SimHash, mixture raporu, risk bazlı örneklem |
+| v0.3 | Tamamlandı | Toplu review, kalite skorları, yapısal export ve token tahmini | Eğitim ekiplerine kanonik JSONL/TXT paketleri |
+| v0.4 | Aktif | Gelişmiş dedup/decontam ve veri karışımı | MinHash/SimHash, mixture raporu, risk bazlı örneklem |
 | v0.5 | Planlandı | Katkı, ajan ve servis hesabı pilotu | Açık/kapalı katkı kuyruğu ve ajan audit modeli |
 | v0.6 | Planlandı | Üretim altyapısı ve ölçek hazırlığı | S3/MinIO, Redis/NATS ölçümü, backup/restore, gözlemlenebilirlik |
 | v1.0 | Hedef | Üretim-ready Derlem | Hukuk/KVKK süreçleri, SLA, release sözleşmesi, model ekipleriyle resmi kullanım |
@@ -128,7 +128,7 @@ Kapanış kriteri:
 
 ## v0.3 - Toplu Review, Kalite Skoru ve Export
 
-**Durum:** Aktif; Export Builder, toplu review, beş boyutlu kalite rubric'i ve risk-stratified sampling çalışıyor.
+**Durum:** Teknik hedefler tamamlandı; Gardas operasyon kapanışı sürüyor.
 
 Amaç, veri yöneticisinin ve reviewer ekibinin tek tek örnek açmadan yüzlerce/binlerce
 örneği verimli inceleyebilmesi ve model ekiplerinin Derlem çıktısını doğrudan
@@ -140,8 +140,8 @@ Yapılacaklar:
 - Risk bazlı sample yoğunlaştırma: uzunluk, format, tekrar, kontrol karakteri ve kimlik/iletişim kalıbı. **Tamamlandı.** Cross-source domain/source-type mixture sonraki dilimde.
 - Çok boyutlu kalite rubric'i: genel, dil, tutarlılık, bilgi yoğunluğu ve temizlik; legacy review ayrımı ve kaynak ortalamaları. **Tamamlandı.**
 - Export Builder: frozen release'ten JSONL/TXT üret. **Tamamlandı.**
-- Export manifest: release id, source sha256, document count ve checksum. **Tamamlandı.** Token tahmini sonraki dilimde.
-- Modelden bağımsız canonical text formatı. **Tamamlandı.** Conversation/tool kayıtlarının geniş canonical şeması sonraki dilimde.
+- Export manifest: release id, source sha256, document count, checksum ve yöntem kimlikli token tahmin aralığı. **Tamamlandı.**
+- Modelden bağımsız canonical text, conversation, tool-call ve preference formatı. **Tamamlandı; `derlem.canonical-sample.v1` çalışıyor.**
 
 Kapanış kriteri:
 
@@ -149,6 +149,7 @@ Kapanış kriteri:
 - Yeni review'lar beş boyutlu rubric taşır; eski tek puanlı kayıtlar değiştirilmez. **Doğrulandı.**
 - Frozen release'ten indirilebilir JSONL/TXT export üretilir. **Doğrulandı.**
 - Export tekrar üretildiğinde checksum aynı çıkar. **Deterministik üretici testiyle doğrulandı.**
+- Yapısal kayıtlar model template'i uygulanmadan JSONL'e çıkar; TXT yapısal kaydı reddeder. **Doğrulandı.**
 
 ## v0.4 - Gelişmiş Dedup, Decontamination ve Mixture
 
@@ -253,5 +254,6 @@ Kapanış kriteri:
 ## Şu Anki Karar
 
 Derlem'in yönü doğru: güvenlik ve izlenebilirlik omurgası ile büyük corpus teknik
-hattı kuruldu. Şimdiki odak **v0.3 - kalite, paketleme ve ilk gerçek Gardas
-release'i**; v0.2 teknik olarak kapandı, Gardas insan/hak operasyonu sürer.
+hattı kuruldu. v0.3 teknik hedefleri tamamlandı. Şimdiki teknik odak **v0.4 -
+gelişmiş dedup, yaklaşık decontamination ve mixture raporu**; Gardas insan/hak
+operasyonu paralel sürer.

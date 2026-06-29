@@ -136,7 +136,9 @@ function progressDetail(jobType: string, progress: Progress, processedBytes: num
     return `${byteSummary} · ${lines} satır · ${numberFrom(progress, "findings_count").toLocaleString("tr-TR")} bulgu`;
   }
   if (jobType === "export_release") {
-    return `${byteSummary} · ${numberFrom(progress, "records_written").toLocaleString("tr-TR")} kayıt`;
+    const tokens = numberFrom(progress, "estimated_tokens");
+    const tokenSummary = tokens > 0 ? ` · ~${formatCount(tokens)} token` : "";
+    return `${byteSummary} · ${numberFrom(progress, "records_written").toLocaleString("tr-TR")} kayıt${tokenSummary}`;
   }
   return `${byteSummary} · ${lines} satır`;
 }
@@ -170,7 +172,9 @@ function resultSummary(job: BackgroundJob) {
   }
   if (job.job_type === "export_release" && job.status === "succeeded") {
     const records = Number(job.result?.record_count ?? 0).toLocaleString("tr-TR");
-    return `${String(job.result?.format ?? "").toUpperCase()} · ${records} kayıt`;
+    const tokens = Number(job.result?.estimated_token_count ?? 0);
+    const tokenSummary = tokens > 0 ? ` · ~${formatCount(tokens)} token` : "";
+    return `${String(job.result?.format ?? "").toUpperCase()} · ${records} kayıt${tokenSummary}`;
   }
   if (["ingest_local_file", "ingest_staged_file"].includes(job.job_type) && job.status === "succeeded") {
     const resumedBytes = Number(job.result?.resumed_from_bytes ?? 0);
@@ -191,6 +195,10 @@ function formatBytes(bytes: number) {
     unit = units[index];
   }
   return `${value.toLocaleString("tr-TR", { maximumFractionDigits: 1 })} ${unit}`;
+}
+
+function formatCount(value: number) {
+  return new Intl.NumberFormat("tr-TR", { notation: "compact", maximumFractionDigits: 1 }).format(value);
 }
 
 function formatDate(value: string) {

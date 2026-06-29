@@ -3,12 +3,14 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 import hashlib
 import json
+import math
 from pathlib import Path
 import sqlite3
 import tempfile
 from typing import Callable, Iterable, Iterator
 
 from derlem_worker.sampling import _bounded_lines, _document_from_line
+from derlem_worker.canonical import CanonicalSampleError, parse_canonical_sample
 
 
 @dataclass(frozen=True)
@@ -37,6 +39,20 @@ class DecontaminationResult:
 
 
 @dataclass(frozen=True)
+class TokenEstimate:
+    method: str
+    semantic_utf8_bytes: int
+    semantic_codepoints: int
+    whitespace_units: int
+    lower_bound: int
+    estimated_token_count: int
+    upper_bound: int
+
+    def to_dict(self) -> dict[str, object]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class ExportResult:
     format: str
     media_type: str
@@ -45,6 +61,8 @@ class ExportResult:
     record_count: int
     source_count: int
     source_record_counts: dict[str, int]
+    record_type_counts: dict[str, int]
+    token_estimate: TokenEstimate
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -54,6 +72,35 @@ class ReleaseGateError(RuntimeError):
     def __init__(self, message: str, gate_results: dict[str, object]) -> None:
         super().__init__(message)
         self.gate_results = gate_results
+
+
+@dataclass
+class _SemanticStatistics:
+    utf8_bytes: int = 0
+    codepoints: int = 0
+    whitespace_units: int = 0
+
+    def add(self, texts: Iterable[str]) -> None:
+        for text in texts:
+            if not text:
+                continue
+            self.utf8_bytes += len(text.encode("utf-8"))
+            self.codepoints += len(text)
+            self.whitespace_units += len(text.split())
+
+    def estimate(self) -> TokenEstimate:
+        lower_bound = max(self.whitespace_units, math.ceil(self.codepoints / 6))
+        estimated = max(lower_bound, math.ceil(self.codepoints / 4))
+        upper_bound = max(estimated, math.ceil(self.codepoints / 2))
+        return TokenEstimate(
+            method="unicode-codepoint-range-v1",
+            semantic_utf8_bytes=self.utf8_bytes,
+            semantic_codepoints=self.codepoints,
+            whitespace_units=self.whitespace_units,
+            lower_bound=lower_bound,
+            estimated_token_count=estimated,
+            upper_bound=upper_bound,
+        )
 
 
 def exact_decontamination(
@@ -180,6 +227,8 @@ def build_release_export(
     record_count = 0
     input_bytes_processed = 0
     source_record_counts: dict[str, int] = {}
+    record_type_counts: dict[str, int] = {}
+    semantic_statistics = _SemanticStatistics()
     sorted_sources = sorted(sources, key=lambda source: str(source["source_id"]))
 
     with output_path.open("wb") as output:
@@ -209,25 +258,58 @@ def build_release_export(
                 stripped = raw_line.strip()
                 if not stripped:
                     continue
-                text, external_id = _document_from_line(stripped)
-                if not text:
-                    continue
+                try:
+                    canonical = parse_canonical_sample(stripped, str(release["content_purpose"]))
+                except CanonicalSampleError as error:
+                    raise ReleaseGateError(
+                        f"Invalid canonical sample at line {ordinal}: {error}",
+                        {
+                            "export": {
+                                "status": "blocked",
+                                "reason": "invalid_canonical_sample",
+                                "source_id": source_id,
+                                "source_ordinal": ordinal,
+                                "validation_error": str(error),
+                            }
+                        },
+                    ) from error
 
-                document_sha256 = hashlib.sha256(text.encode("utf-8")).hexdigest()
-                stable_id = hashlib.sha256(
-                    f"{source_sha256}:{ordinal}:{document_sha256}".encode("ascii")
-                ).hexdigest()
-                if export_format == "jsonl":
+                if canonical is not None:
+                    if export_format != "jsonl":
+                        raise ReleaseGateError(
+                            "Structured canonical records require JSONL export",
+                            {
+                                "export": {
+                                    "status": "blocked",
+                                    "reason": "structured_record_requires_jsonl",
+                                    "source_id": source_id,
+                                    "source_ordinal": ordinal,
+                                    "record_type": canonical.record_type,
+                                }
+                            },
+                        )
+                    canonical_bytes = json.dumps(
+                        canonical.value,
+                        ensure_ascii=False,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ).encode("utf-8")
+                    canonical_sha256 = hashlib.sha256(canonical_bytes).hexdigest()
+                    source_document_sha256 = hashlib.sha256(stripped.encode("utf-8")).hexdigest()
+                    stable_id = hashlib.sha256(
+                        f"{source_sha256}:{ordinal}:{canonical_sha256}".encode("ascii")
+                    ).hexdigest()
                     record = {
+                        "export_schema_version": "derlem.canonical-export-record.v1",
                         "id": stable_id,
-                        "text": text,
-                        "metadata": {
-                            "content_purpose": str(release["content_purpose"]),
-                            "document_sha256": document_sha256,
+                        "record_type": canonical.record_type,
+                        "sample": canonical.value,
+                        "lineage": {
+                            "canonical_payload_sha256": canonical_sha256,
                             "domain": str(source["domain"]),
-                            "external_id": external_id,
                             "language": str(source["language"]),
                             "license": str(source["license"]),
+                            "source_document_sha256": source_document_sha256,
                             "source_id": source_id,
                             "source_ordinal": ordinal,
                             "source_sha256": source_sha256,
@@ -237,16 +319,50 @@ def build_release_export(
                         json.dumps(record, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
                         + "\n"
                     ).encode("utf-8")
+                    record_type = canonical.record_type
+                    semantic_statistics.add(canonical.semantic_texts)
                 else:
-                    single_line_text = text.replace("\r\n", "\n").replace("\r", "\n").replace("\n", " ")
-                    encoded = (single_line_text + "\n").encode("utf-8")
+                    text, external_id = _document_from_line(stripped)
+                    if not text:
+                        continue
+                    document_sha256 = hashlib.sha256(text.encode("utf-8")).hexdigest()
+                    stable_id = hashlib.sha256(
+                        f"{source_sha256}:{ordinal}:{document_sha256}".encode("ascii")
+                    ).hexdigest()
+                    if export_format == "jsonl":
+                        record = {
+                            "id": stable_id,
+                            "text": text,
+                            "metadata": {
+                                "content_purpose": str(release["content_purpose"]),
+                                "document_sha256": document_sha256,
+                                "domain": str(source["domain"]),
+                                "external_id": external_id,
+                                "language": str(source["language"]),
+                                "license": str(source["license"]),
+                                "source_id": source_id,
+                                "source_ordinal": ordinal,
+                                "source_sha256": source_sha256,
+                            },
+                        }
+                        encoded = (
+                            json.dumps(record, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+                            + "\n"
+                        ).encode("utf-8")
+                    else:
+                        single_line_text = text.replace("\r\n", "\n").replace("\r", "\n").replace("\n", " ")
+                        encoded = (single_line_text + "\n").encode("utf-8")
+                    record_type = "text"
+                    semantic_statistics.add((text,))
 
                 output.write(encoded)
                 digest.update(encoded)
                 byte_size += len(encoded)
                 record_count += 1
                 source_records += 1
+                record_type_counts[record_type] = record_type_counts.get(record_type, 0) + 1
                 if progress_callback is not None and record_count % progress_interval == 0:
+                    token_estimate = semantic_statistics.estimate()
                     progress_callback(
                         {
                             "input_bytes_processed": input_bytes_processed,
@@ -254,10 +370,12 @@ def build_release_export(
                             "sources_completed": source_index - 1,
                             "source_count": len(sorted_sources),
                             "output_bytes_written": byte_size,
+                            "estimated_tokens": token_estimate.estimated_token_count,
                         }
                     )
             source_record_counts[source_id] = source_records
             if progress_callback is not None:
+                token_estimate = semantic_statistics.estimate()
                 progress_callback(
                     {
                         "input_bytes_processed": input_bytes_processed,
@@ -265,6 +383,7 @@ def build_release_export(
                         "sources_completed": source_index,
                         "source_count": len(sorted_sources),
                         "output_bytes_written": byte_size,
+                        "estimated_tokens": token_estimate.estimated_token_count,
                     }
                 )
 
@@ -276,6 +395,8 @@ def build_release_export(
         record_count=record_count,
         source_count=len(sorted_sources),
         source_record_counts=source_record_counts,
+        record_type_counts=record_type_counts,
+        token_estimate=semantic_statistics.estimate(),
     )
 
 
@@ -298,7 +419,7 @@ def build_export_manifest(
             }
         )
     manifest = {
-        "schema_version": "derlem.export-manifest.v1",
+        "schema_version": "derlem.export-manifest.v2",
         "release": {
             "id": str(release["id"]),
             "name": str(release["name"]),
@@ -313,7 +434,9 @@ def build_export_manifest(
             "sha256": result.sha256,
             "byte_size": result.byte_size,
             "record_count": result.record_count,
-            "document_id_method": "source-sha256-ordinal-document-sha256-v1",
+            "document_id_method": "source-sha256-ordinal-payload-sha256-v2",
+            "record_type_counts": result.record_type_counts,
+            "token_estimate": result.token_estimate.to_dict(),
         },
         "sources": manifest_sources,
     }

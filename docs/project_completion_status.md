@@ -9,8 +9,9 @@ Derlem'in **çekirdek MVP'si tamamlandı**. Yani sistem artık yerel makinede ka
 kaydedebiliyor, dosyayı immutable store'a alıyor, PII/dedup kapılarını çalıştırıyor,
 örnek çıkarıyor, insan review zinciri tutuyor ve frozen release üretebiliyor.
 
-Ancak Derlem'in **gerçek büyük corpus üretim aracı** olarak tamamlanması için hâlâ
-v0.2 ve v0.3 işlerinin bitmesi gerekiyor. En pratik ifadeyle:
+Derlem'in v0.3 teknik hedefleri tamamlandı. **Gerçek büyük corpus üretim aracı**
+olarak operasyon kapanışı için Gardas insan/hak kapıları; üretim platformu için
+v0.4-v1.0 işleri gerekiyor. En pratik ifadeyle:
 
 | Hedef | Durum | Kalan |
 |---|---:|---|
@@ -85,6 +86,8 @@ ana kapılar artık teknik değil:
 - Büyük ingest işlerinde job UUID'sine bağlı, kaynak önekini yeniden doğrulayan resume/checkpoint desteği.
 - Gardas clean candidate nesil 2 risk örneklemi: 5.922.891 belge tarandı, 200 örneğin 115'i risk kotasından seçildi.
 - `multidimensional-v1` insan kalite rubric'i, tekil/toplu review ve kaynak ortalamaları.
+- `derlem.canonical-sample.v1` conversation/tool/preference doğrulaması ve yapısal JSONL export.
+- `unicode-codepoint-range-v1` yöntem kimlikli token tahmin aralığı, manifest/API/UI kaydı.
 
 ## Kalan Teknik İşler
 
@@ -92,10 +95,9 @@ ana kapılar artık teknik değil:
 
 - Gardas temiz adayının hak/lisans ve örnek review kapılarını kapatmak.
 
-### v0.3 İçin Kalanlar
+### v0.3 Durumu
 
-- Export manifestine token tahmini eklemek.
-- Conversation/tool veri tipleri için geniş canonical export şeması.
+- Teknik hedefler tamamlandı; Gardas'ın ilk büyük gerçek release/export operasyonu v0.2 insan/hak kapanışına bağlı.
 
 ### v1.0 İçin Kalanlar
 
@@ -114,7 +116,7 @@ Kod tarafında yakın hedef şudur:
 
 1. **Gardas clean candidate onayı:** hak/lisans + 200 örnek review tamamlanırsa aynı gün içinde kaynak onaylanabilir.
 2. **İlk gerçek export:** Tamamlandı; küçük frozen release ile JSONL/TXT artifact ve manifest checksum zinciri doğrulandı.
-3. **Pilot tamam:** v0.2 + v0.3 bittiğinde Derlem pratik veri fabrikası olur.
+3. **Pilot tamam:** v0.3 teknik olarak bitti; Gardas insan/hak kapıları kapanıp ilk büyük export üretildiğinde operasyon pilotu tamamlanır.
 
 Benim mühendislik değerlendirmem:
 

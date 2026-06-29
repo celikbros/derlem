@@ -190,7 +190,8 @@ artifact'leri indirebilir.
 Worker kaynak snapshot'larini `source_id` sirasinda, her kaynagi da satir
 sirasinda okur. Tum cikti bellekte tutulmaz; gecici dosyaya akis halinde
 yazilir. Her 50.000 kayitta `background_jobs.result.progress` icine okunan
-girdi byte'i, yazilan kayit, tamamlanan kaynak ve cikti byte'i kaydedilir.
+girdi byte'i, yazilan kayit, tamamlanan kaynak, cikti byte'i ve modelden
+bagimsiz yaklasik token sayisi kaydedilir.
 
 JSONL kaydi modelden bagimsizdir:
 
@@ -203,10 +204,19 @@ degeridir. Model adi, tokenizer adi veya chat template etiketi saklanmaz.
 Egitim katmani kanonik JSONL'i hedef modelin adapter'i ile donusturur. TXT
 ciktisi kolay tuketim icin belge basina tek UTF-8 satir uretir.
 
-Hazir artifact ve `derlem.export-manifest.v1` manifesti content-addressed
+`derlem.canonical-sample.v1` ile etiketli conversation ve preference satirlari
+JSONL export'ta `derlem.canonical-export-record.v1` zarfinin `sample` alaninda;
+`messages`, `tools`, tool call/result baglari ve `chosen/rejected` dallari
+korunarak yazilir. Kaydin `content_purpose` degeri
+release ile uyusmazsa veya model/template alani tasiyorsa export bloke edilir.
+Yapisal kayit TXT formatina indirgenmez.
+
+Hazir artifact ve `derlem.export-manifest.v2` manifesti content-addressed
 immutable store'a yazilir. Manifest; release kimligi ve manifest SHA256'si,
 format, medya tipi, kayit sayisi, byte boyutu, export SHA256'si ve kaynak
-dagilimini sabitler. Ayni frozen snapshot ve format icin siralama, JSON
+dagiliminin yaninda kayit tipi sayimlarini ve `unicode-codepoint-range-v1`
+token tahmin araligini sabitler. Bu tahmin tokenizer ciktisi degildir. Ayni
+frozen snapshot ve format icin siralama, JSON
 serilestirme ve belge kimligi deterministik oldugundan cikti checksum'i da
 deterministiktir.
 

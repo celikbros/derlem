@@ -229,13 +229,12 @@ Kanonik yaklaşım:
 - `message`: `system`, `user`, `assistant` veya `tool` rolü.
 - `message_part`: text, image, audio, video veya tool reference parçası.
 - `tool_definition`, `tool_call`, `tool_result`: araç sözleşmesi ve yürütme izi.
-- `export_profile`: kanonik örneğin uyduğu standart çıktı sözleşmesi.
-- `model_adapter`: model ailesinin render kuralları.
-- `prompt_rendering`: belirli adapter'dan üretilmiş türetilmiş artifact.
+- `preference`: aynı bağlam için `chosen` ve `rejected` mesaj dalları.
+- `schema_version`: çalışan sözleşme için `derlem.canonical-sample.v1`.
 
 Yeni model çıktığında veri tek tek yeniden onaylanmaz. Model ekibi kanonik
-export'u kendi adapter'ıyla dönüştürür. Model-spesifik render saklanacaksa büyük
-prompt blob'u DB'ye değil immutable object store'a yazılır.
+export'u kendi adapter'ıyla dönüştürür. Model adı, `model_compatibility`, chat
+template, özel token ve render edilmiş prompt kanonik kayda kabul edilmez.
 
 ## Teknoloji Seçimleri
 
@@ -433,9 +432,9 @@ sonra kanıtlanan darboğaza göre ayrıştırma yapılır.
 ## Yol Haritası
 
 Ayrıntılı versiyon hedefleri için [Derlem Versiyon Yol Haritası](docs/version_roadmap.md)
-belgesini izleyin. Özetle: **v0.1 Core MVP tamamlandı; v0.2'nin büyük corpus
-indeks, iş görünürlüğü ve kesintiden devam altyapısı çalışıyor; v0.3
-kalite/paketleme aktif hedef.**
+belgesini izleyin. Özetle: **v0.1 Core MVP ve v0.3 kalite/yapısal export
+hedefleri tamamlandı; v0.2'nin büyük corpus teknik altyapısı çalışıyor, Gardas
+insan/hak operasyonu sürüyor; sıradaki teknik hedef v0.4.**
 
 ### Tamamlanan çalışan dilim
 
@@ -463,13 +462,15 @@ kalite/paketleme aktif hedef.**
 - [x] Eval/holdout ile pretrain document exact decontamination
 - [x] Frozen release'ten deterministik, modelden bağımsız JSONL/TXT Export Builder
 - [x] Export artifact ve manifest SHA256 doğrulaması, ilerleme metrikleri ve rol kontrollü indirme
+- [x] Conversation/tool/preference için `derlem.canonical-sample.v1` doğrulama ve yapısal JSONL export
+- [x] Export manifestinde yöntem kimlikli, modelden bağımsız token tahmin aralığı
 - [x] Frozen manifest ve kaynak artifact indirme
 - [x] Next.js yönetim arayüzü
 - [x] GitHub Actions CI
 
 ### Sıradaki işler
 
-- [ ] Çoklu shard/Parquet paketleme ve token tahmini
+- [ ] Çoklu shard/Parquet paketleme
 - [ ] Near-dedup ve yaklaşık decontamination
 - [ ] S3/MinIO object store implementasyonu
 - [ ] Keycloak/OAuth ve servis hesapları

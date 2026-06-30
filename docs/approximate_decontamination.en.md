@@ -51,3 +51,5 @@ reordered, translated, or transformed leaks may escape detection. The pilot is
 therefore neither a legal conclusion nor a final quality decision. Threshold
 and band settings must be calibrated on real Derlem corpora before this can
 become a hard gate.
+The calibration workflow is defined in the
+[SimHash Calibration Report](similarity_calibration.en.md).

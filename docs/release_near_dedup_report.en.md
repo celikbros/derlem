@@ -50,3 +50,5 @@ byte or text equality. Positive pairs are never deleted automatically. A data
 manager reviews sample pairs and source context before making a separate dedup
 decision. The threshold is neither raised nor converted into a hard gate before
 calibration on real Derlem corpora.
+Use the [SimHash Calibration Report](similarity_calibration.en.md) for the
+calibration method and long Gardas command.

@@ -162,7 +162,7 @@ Amaç, büyük corpus kalitesini model eğitimine daha uygun hale getirmek.
 Yapılacaklar:
 
 - MinHash/SimHash near-dedup pilotu. **Tamamlandı; `derlem.release-near-dedup-report.v1`, Hamming 3 / 4x16, report-only.**
-- Near-dedup politikasını veri tipine göre ayır: pretrain, instruction, eval, holdout.
+- Near-dedup politikasını veri tipine göre ayır: pretrain, instruction, eval, holdout. **Purpose-aware kalibrasyon CLI'si tamamlandı; instruction smoke kısa belgelerde eşik 10'a kadar `%0` sentetik recall gösterdi. Gardas taraması ve insan etiketleri bekleniyor; aktif politika değiştirilmedi.**
 - Approximate decontamination: eval/holdout ile n-gram veya fingerprint overlap. **Tamamlandı; `normalized-word-3gram-simhash64-v1-hamming10-bands8x8-v1`, report-only pilot.**
 - Mixture raporu: dil, domain, kaynak tipi, lisans, hak durumu ve insan kalite örneklemi. **Tamamlandı; `derlem.mixture-report.v2` + `derlem.quality-mixture.v2`, coverage ve yöntem kimlikli review snapshot SHA256 dahil.**
 - Release içi tekrar ve kaynaklar arası tekrar oranları. **Tamamlandı; aday çift sayıları ayrı raporlanıyor.**

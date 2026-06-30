@@ -49,3 +49,5 @@ yanlış negatif üretebilir. Kısa belgeler indekslenmez. Sözcük sırası cid
 değiştirilmiş, çevrilmiş veya yoğun biçimde dönüştürülmüş sızıntılar kaçabilir.
 Bu nedenle pilot sonucu hukuki ya da nihai kalite kararı değildir. Eşik ve band
 ayarları gerçek Derlem corpus ölçümleriyle kalibre edilmeden hard gate yapılmaz.
+Kalibrasyon altyapısı [SimHash Kalibrasyon Raporu](similarity_calibration.md)
+belgesinde tanımlanır.

@@ -117,6 +117,19 @@ dosyalarda uzun surebilir. Hizli duman testi icin:
 Uretilen `.manifest.json` dosyasi ham metin veya PII degeri icermez; yalnizca
 hangi tur satirlarin kac adet cikarildigini ve cikti SHA256 bilgisini tutar.
 
+## SimHash Kalibrasyonu
+
+Kayitli bir kaynaktan deterministic, ham metinsiz esik raporu uretmek icin:
+
+```powershell
+.\.venv\Scripts\python.exe -m derlem_worker.similarity_calibration --source-id <SOURCE_ID> --sample-size 1000 --output-dir .\var\reports
+```
+
+Komut kaynagi bastan sona akis halinde tarar ve bellek kullanimini sample
+boyutuyla sinirlar. Buyuk corpuslarda uzun surebilir; ayrintili Gardas komutu ve
+rapor sozlesmesi icin [SimHash Kalibrasyon Raporu](similarity_calibration.md)
+belgesine bakin.
+
 ## Testler
 
 ```powershell

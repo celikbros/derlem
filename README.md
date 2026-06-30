@@ -462,6 +462,7 @@ insan/hak operasyonu sürüyor; sıradaki teknik hedef v0.4.**
 - [x] Eval/holdout ile pretrain document exact decontamination
 - [x] Eval/holdout ile report-only SimHash64 yaklaşık decontamination pilotu
 - [x] Tüm release amaçları için report-only kaynak içi/kaynaklar arası SimHash64 near-dedup raporu
+- [x] Purpose-aware, token uzunluk bantlı ve ham metinsiz SimHash kalibrasyon raporu CLI'si
 - [x] Frozen release'ten deterministik, modelden bağımsız JSONL/TXT Export Builder
 - [x] Export artifact ve manifest SHA256 doğrulaması, ilerleme metrikleri ve rol kontrollü indirme
 - [x] Conversation/tool/preference için `derlem.canonical-sample.v1` doğrulama ve yapısal JSONL export
@@ -474,7 +475,7 @@ insan/hak operasyonu sürüyor; sıradaki teknik hedef v0.4.**
 ### Sıradaki işler
 
 - [ ] Çoklu shard/Parquet paketleme
-- [ ] SimHash64 eşiklerinin gerçek corpus üzerinde kalibrasyonu ve insan karar politikası
+- [ ] Gardas kalibrasyon taraması, en yakın çiftlerin insan etiketleri ve purpose-specific eşik kararı
 - [ ] S3/MinIO object store implementasyonu
 - [ ] Keycloak/OAuth ve servis hesapları
 
@@ -500,6 +501,8 @@ insan/hak operasyonu sürüyor; sıradaki teknik hedef v0.4.**
 - [Approximate decontamination pilot (English)](docs/approximate_decontamination.en.md)
 - [Release yakın tekrar raporu](docs/release_near_dedup_report.md)
 - [Release near-duplicate report (English)](docs/release_near_dedup_report.en.md)
+- [SimHash kalibrasyon raporu](docs/similarity_calibration.md)
+- [SimHash calibration report (English)](docs/similarity_calibration.en.md)
 - [Pretraining data factory](docs/pretraining_data_factory.md)
 - [Model prompt format soyutlaması](docs/model_prompt_format_abstraction.md)
 - [Ölçeklenebilirlik mimarisi](docs/scalability_architecture.md)

@@ -93,6 +93,8 @@ ana kapılar artık teknik değil:
 - `unicode-codepoint-range-v1` yöntem kimlikli token tahmin aralığı, manifest/API/UI kaydı.
 - `derlem.mixture-report.v2` kaynak dağılımı ve `derlem.quality-mixture.v2` kalite bantları; coverage/yöntem kimlikli review snapshot SHA256 ve API/UI görünümü.
 - `Quality Mixture V2 Smoke` frozen release: 3 örnek, 1 multidimensional, 2 legacy, `%33,33` coverage, yöntem kimliği ve manifest SHA256 doğrulaması.
+- `derlem.similarity-calibration.v1` CLI: deterministic bottom-k örnek, token uzunluk bantları, sentetik varyant/corpus çift dağılımı ve ham metinsiz JSON/Markdown.
+- Instruction smoke: 3 belgenin tamamı 6 token; eşik 3 ve 10'da sentetik recall `%0`, bu nedenle aktif eşik değiştirilmedi.
 
 ## Kalan Teknik İşler
 
@@ -106,7 +108,7 @@ ana kapılar artık teknik değil:
 
 ### v0.4 İçin Kalanlar
 
-- SimHash64 yaklaşık eşiklerinin gerçek corpus üzerinde kalibrasyonu ve insan inceleme politikası.
+- Gardas clean candidate kalibrasyon taraması, en yakın doğal çiftlerin insan etiketleri ve purpose-specific eşik kararı.
 
 ### v1.0 İçin Kalanlar
 

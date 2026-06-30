@@ -50,3 +50,5 @@ Mesafe 0 aynı SimHash imzasıdır; tek başına byte veya metin eşitliği kan�
 değildir. Pozitif çiftler otomatik silinmez. Veri yöneticisi örnek çiftleri ve
 kaynak bağlamını inceleyerek ayrı bir dedup kararı verir. Eşik, gerçek Derlem
 corpus ölçümleri tamamlanmadan yükseltilmez ve hard gate yapılmaz.
+Kalibrasyon yöntemi ve uzun Gardas komutu için
+[SimHash Kalibrasyon Raporu](similarity_calibration.md) kullanılır.

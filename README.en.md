@@ -472,7 +472,7 @@ continues; v0.4 is the active technical target.**
 ### Next
 
 - [ ] Multi-shard/Parquet packaging
-- [ ] Import and independently label the closest 100 Gardas pairs, then decide the purpose-specific method and threshold
+- [ ] Independently label the 100 imported Gardas pairs, then decide the purpose-specific method and threshold
 - [ ] S3/MinIO storage implementation
 - [ ] Keycloak/OAuth and service accounts
 

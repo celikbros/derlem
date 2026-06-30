@@ -33,9 +33,9 @@ for a purpose-specific policy decision.
 Two or more independent reviews with one label produce `consensus`. Diverging
 labels produce `disagreement`. One review counts as reviewed but not consensus.
 
-## Gardas Import
+## Gardas Import - Completed
 
-After generating the calibration report, materialize the closest 100 pairs:
+Idempotent command that materializes the closest 100 pairs:
 
 ```powershell
 cd "C:\CELIK- DERLEM"
@@ -43,10 +43,18 @@ cd "C:\CELIK- DERLEM"
   --report .\var\reports\similarity_calibration_pretrain_ebe29279.json
 ```
 
-The command stores only referenced documents, but it must stream through the
-source to reach their ordinals. It can take time for Gardas and reports progress
-every 100,000 lines. The resulting `run_id` appears automatically in the web
-application's **Benzerlik** view.
+The command completed successfully on 2026-07-01. It materialized 178 unique
+documents referenced by 100 pairs and streamed through 5,918,983 source lines
+to reach the largest required ordinal. Result:
+
+- `run_id`: `769836b7-f121-4d9d-b6cb-42f3f6ab490f`
+- report SHA256: `365e67fa5bed3da7d670e53946542f5b6c77dab47fab4f7bcc45a75dadf0b3e1`
+- pairs / unique documents: `100 / 178`
+- initial review state: `0 / 100`
+
+Running the same command again returns `already_imported` without duplicating
+evidence. The run is listed as `pretrain` in the web application's
+**Benzerlik** view.
 
 ## Authorization and API
 

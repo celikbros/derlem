@@ -34,10 +34,9 @@ değiştirmez; purpose-specific politika kararı için bağımsız etiket üreti
 etiketler ayrışırsa `disagreement` olarak hesaplanır. Tek review tamamlanmış
 sayılır fakat uzlaşı değildir.
 
-## Gardas Importu
+## Gardas Importu - Tamamlandı
 
-Kalibrasyon raporu üretildikten sonra en yakın 100 çiftin metinlerini nesne
-deposuna çıkarmak için:
+En yakın 100 çiftin metinlerini nesne deposuna çıkaran idempotent komut:
 
 ```powershell
 cd "C:\CELIK- DERLEM"
@@ -45,10 +44,18 @@ cd "C:\CELIK- DERLEM"
   --report .\var\reports\similarity_calibration_pretrain_ebe29279.json
 ```
 
-Komut yalnızca raporda geçen ordinarları alır fakat ilgili satırlara ulaşmak
-için kaynak dosyayı akış halinde tarar. Gardas dosyasında uzun sürebilir ve her
-100.000 satırda ilerleme yazar. Sonuçtaki `run_id`, web arayüzündeki
-**Benzerlik** görünümünde otomatik listelenir.
+Komut 2026-07-01 tarihinde başarıyla tamamlandı. Rapordaki 100 çift için 178
+benzersiz belge çıkarıldı; en büyük gerekli ordinal nedeniyle kaynak 5.918.983
+satıra kadar tarandı. Sonuç:
+
+- `run_id`: `769836b7-f121-4d9d-b6cb-42f3f6ab490f`
+- rapor SHA256: `365e67fa5bed3da7d670e53946542f5b6c77dab47fab4f7bcc45a75dadf0b3e1`
+- çift / benzersiz belge: `100 / 178`
+- başlangıç review durumu: `0 / 100`
+
+Aynı komut tekrar çalıştırılırsa `already_imported` döner ve kayıtları
+çoğaltmaz. Koşu web arayüzündeki **Benzerlik** görünümünde `pretrain` amacıyla
+listelenir.
 
 ## Yetki ve API
 

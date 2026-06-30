@@ -16,23 +16,19 @@ test("inspect calibrated similarity pairs", async ({ page }, testInfo) => {
   await page.getByRole("button", { name: "Benzerlik", exact: true }).click();
 
   await expect(page.getByRole("heading", { name: "Benzerlik incelemesi" })).toBeVisible();
-  await expect(page.getByLabel("Kalibrasyon")).toContainText("instruction");
-  await expect(page.locator(".similarity-detail-header").getByText("Hamming 22", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Kalibrasyon")).not.toHaveValue("");
+  await expect(page.getByTestId("similarity-pair-1")).toBeVisible();
+  await expect(page.locator(".similarity-detail-header h2")).toContainText("Hamming");
   await expect(page.getByText("Belge A", { exact: true })).toBeVisible();
   await expect(page.getByText("Belge B", { exact: true })).toBeVisible();
-  await expect(page.getByText("Kararınız: Yakın tekrar", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Kararı kaydet" }).or(page.locator(".similarity-own-review")),
+  ).toBeVisible();
 
   const screenshotDirectory = path.resolve("..", "var", "screenshots");
   await mkdir(screenshotDirectory, { recursive: true });
   await page.screenshot({
     path: path.join(screenshotDirectory, `similarity-review-${testInfo.project.name}.png`),
-    fullPage: true,
-  });
-
-  await page.getByTestId("similarity-pair-2").click();
-  await expect(page.getByRole("button", { name: "Kararı kaydet" })).toBeVisible();
-  await page.screenshot({
-    path: path.join(screenshotDirectory, `similarity-review-form-${testInfo.project.name}.png`),
     fullPage: true,
   });
 

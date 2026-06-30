@@ -162,7 +162,7 @@ Amaç, büyük corpus kalitesini model eğitimine daha uygun hale getirmek.
 Yapılacaklar:
 
 - MinHash/SimHash near-dedup pilotu. **Tamamlandı; `derlem.release-near-dedup-report.v1`, Hamming 3 / 4x16, report-only.**
-- Near-dedup politikasını veri tipine göre ayır: pretrain, instruction, eval, holdout. **Purpose-aware kalibrasyon CLI'si ve Gardas 1.000 belge/499.500 doğal çift taraması tamamlandı. Hamming 3/10 sentetik recall `%32,69/%80,22`; doğal örnekte mesafe 10 altında çift yok, en yakın mesafe 15. Append-only çok kullanıcılı çift inceleme akışı hazır; Gardas'ın en yakın 100 çiftinin importu ve insan etiketleri bekleniyor. Aktif politika değiştirilmedi.**
+- Near-dedup politikasını veri tipine göre ayır: pretrain, instruction, eval, holdout. **Purpose-aware kalibrasyon CLI'si ve Gardas 1.000 belge/499.500 doğal çift taraması tamamlandı. Hamming 3/10 sentetik recall `%32,69/%80,22`; doğal örnekte mesafe 10 altında çift yok, en yakın mesafe 15. En yakın 100 çiftin 178 benzersiz belgesi append-only inceleme koşusuna import edildi; bağımsız insan etiketleri bekleniyor. Aktif politika değiştirilmedi.**
 - Approximate decontamination: eval/holdout ile n-gram veya fingerprint overlap. **Tamamlandı; `normalized-word-3gram-simhash64-v1-hamming10-bands8x8-v1`, report-only pilot.**
 - Mixture raporu: dil, domain, kaynak tipi, lisans, hak durumu ve insan kalite örneklemi. **Tamamlandı; `derlem.mixture-report.v2` + `derlem.quality-mixture.v2`, coverage ve yöntem kimlikli review snapshot SHA256 dahil.**
 - Release içi tekrar ve kaynaklar arası tekrar oranları. **Tamamlandı; aday çift sayıları ayrı raporlanıyor.**

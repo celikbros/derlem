@@ -476,7 +476,7 @@ insan/hak operasyonu sürüyor; sıradaki teknik hedef v0.4.**
 ### Sıradaki işler
 
 - [ ] Çoklu shard/Parquet paketleme
-- [ ] Gardas en yakın 100 çiftinin importu, bağımsız insan etiketleri ve purpose-specific yöntem/eşik kararı
+- [ ] İçe alınan 100 Gardas çiftinin bağımsız insan etiketleri ve purpose-specific yöntem/eşik kararı
 - [ ] S3/MinIO object store implementasyonu
 - [ ] Keycloak/OAuth ve servis hesapları
 

@@ -461,7 +461,7 @@ continues; v0.4 is the active technical target.**
 - [x] Report-only SimHash64 approximate decontamination pilot against eval/holdout
 - [x] Report-only SimHash64 near-duplicate report within and across release sources
 - [x] Purpose-aware SimHash calibration CLI with token-length buckets and no raw text
-- [x] Append-only multi-reviewer similarity-pair importer, API, and web workflow
+- [x] Server-blinded, append-only multi-reviewer similarity-pair importer, API, and web workflow
 - [x] Model-independent structured conversation/tool/preference JSONL exports
 - [x] Method-identified model-independent token estimate ranges
 - [x] Frozen mixture v2 report with source distribution, quality bands, coverage, and review snapshot SHA256

@@ -2291,6 +2291,17 @@ textarea:focus {
   background: #eaf4ef;
 }
 
+.similarity-list-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  padding: 18px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
 .similarity-pair-list > button.active {
   box-shadow: inset 3px 0 var(--green);
 }

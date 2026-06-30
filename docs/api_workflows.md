@@ -260,6 +260,12 @@ append-only `similarity_pair_reviews` satırlarıdır ve bir reviewer aynı çif
 yalnızca bir karar ekleyebilir. İki bağımsız karar aynıysa uzlaşı, farklıysa
 uyuşmazlık hesaplanır.
 
+Karar yetkisi olan kullanıcı kendi review'unu eklemeden önce diğer reviewer
+etiketleri, gerekçeleri, review sayısı, uzlaşı ve uyuşmazlık alanları API
+yanıtında körlenir. Körleme handler katmanında uygulanır; yalnızca frontend'e
+güvenilmez. Kendi kararı eklendikten sonra kanıt görünür olur. Salt-okuma
+rolleri tamamlanmış kanıtı raporlama amacıyla görebilir.
+
 - `GET /api/v1/similarity-calibrations`
 - `GET /api/v1/similarity-calibrations/{id}/pairs`
 - `GET /api/v1/similarity-pairs/{id}`

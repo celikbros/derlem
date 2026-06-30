@@ -3,6 +3,7 @@ package httpapi
 import (
 	"errors"
 	"net/http"
+	"slices"
 
 	"github.com/celikbros/derlem/internal/auth"
 	"github.com/celikbros/derlem/internal/domain"
@@ -36,6 +37,9 @@ func (s *Server) listSimilarityReviewPairs(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusNotFound, "similarity_run_not_found", "Benzerlik kalibrasyonu bulunamadi.")
 		return
 	}
+	for index := range pairs {
+		pairs[index] = blindSimilarityPair(pairs[index], principal.Roles)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": pairs})
 }
 
@@ -63,15 +67,39 @@ func (s *Server) getSimilarityReviewPair(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusInternalServerError, "similarity_object_unavailable", "Sag belge okunamadi.")
 		return
 	}
-	reviews, err := s.similarities.ListPairReviews(r.Context(), pair.ID)
-	if err != nil {
-		s.logger.Error("list similarity pair reviews failed", "pair_id", pair.ID, "error", err)
-		writeError(w, http.StatusInternalServerError, "internal_error", "Benzerlik incelemeleri getirilemedi.")
-		return
+	reviews := []domain.SimilarityPairReview{}
+	if !similarityEvidenceIsBlinded(pair, principal.Roles) {
+		reviews, err = s.similarities.ListPairReviews(r.Context(), pair.ID)
+		if err != nil {
+			s.logger.Error("list similarity pair reviews failed", "pair_id", pair.ID, "error", err)
+			writeError(w, http.StatusInternalServerError, "internal_error", "Benzerlik incelemeleri getirilemedi.")
+			return
+		}
 	}
+	pair = blindSimilarityPair(pair, principal.Roles)
 	writeJSON(w, http.StatusOK, domain.SimilarityPairDetail{
 		Pair: pair, LeftContent: leftContent, RightContent: rightContent, Reviews: reviews,
 	})
+}
+
+func similarityEvidenceIsBlinded(pair domain.SimilarityReviewPair, roles []string) bool {
+	return pair.CurrentReviewerLabel == nil && similarityReviewerEligible(roles)
+}
+
+func similarityReviewerEligible(roles []string) bool {
+	return slices.Contains(roles, "admin") ||
+		slices.Contains(roles, "moderator") ||
+		slices.Contains(roles, "expert_reviewer")
+}
+
+func blindSimilarityPair(pair domain.SimilarityReviewPair, roles []string) domain.SimilarityReviewPair {
+	if !similarityEvidenceIsBlinded(pair, roles) {
+		return pair
+	}
+	pair.ReviewCount = 0
+	pair.ConsensusLabel = nil
+	pair.HasDisagreement = false
+	return pair
 }
 
 func (s *Server) reviewSimilarityPair(w http.ResponseWriter, r *http.Request) {

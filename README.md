@@ -463,7 +463,7 @@ insan/hak operasyonu sürüyor; sıradaki teknik hedef v0.4.**
 - [x] Eval/holdout ile report-only SimHash64 yaklaşık decontamination pilotu
 - [x] Tüm release amaçları için report-only kaynak içi/kaynaklar arası SimHash64 near-dedup raporu
 - [x] Purpose-aware, token uzunluk bantlı ve ham metinsiz SimHash kalibrasyon raporu CLI'si
-- [x] Append-only, çok kullanıcılı benzerlik çifti inceleme importer/API/web akışı
+- [x] Sunucu taraflı körleme ve append-only çok kullanıcılı benzerlik çifti inceleme akışı
 - [x] Frozen release'ten deterministik, modelden bağımsız JSONL/TXT Export Builder
 - [x] Export artifact ve manifest SHA256 doğrulaması, ilerleme metrikleri ve rol kontrollü indirme
 - [x] Conversation/tool/preference için `derlem.canonical-sample.v1` doğrulama ve yapısal JSONL export

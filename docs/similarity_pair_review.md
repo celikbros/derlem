@@ -34,6 +34,12 @@ değiştirmez; purpose-specific politika kararı için bağımsız etiket üreti
 etiketler ayrışırsa `disagreement` olarak hesaplanır. Tek review tamamlanmış
 sayılır fakat uzlaşı değildir.
 
+Bağımsızlık sunucu tarafında kör review ile korunur. Karar verme yetkisi olan
+bir kullanıcı kendi etiketini kaydedene kadar aynı çiftteki review sayısını,
+etiketleri, gerekçeleri, uzlaşıyı veya uyuşmazlığı API'den göremez. Karar
+kaydedilince bu kanıtlar görünür olur. Hiçbir etiket varsayılan seçili gelmez;
+kayıt sonrasında arayüz sıradaki bekleyen çifte geçer.
+
 ## Gardas Importu - Tamamlandı
 
 En yakın 100 çiftin metinlerini nesne deposuna çıkaran idempotent komut:
@@ -59,8 +65,10 @@ listelenir.
 
 ## Yetki ve API
 
-- Tüm oturum açmış kullanıcılar koşuları, çiftleri ve mevcut kararları okuyabilir.
+- Tüm oturum açmış kullanıcılar koşuları ve çiftleri okuyabilir.
 - `admin`, `moderator` ve `expert_reviewer` karar ekleyebilir.
+- Karar yetkili kullanıcı için diğer kararlar kendi review'una kadar körlenir.
+- Salt-okuma rolleri tamamlanmış karar ve uzlaşı kanıtlarını okuyabilir.
 - `GET /api/v1/similarity-calibrations`
 - `GET /api/v1/similarity-calibrations/{id}/pairs`
 - `GET /api/v1/similarity-pairs/{id}`

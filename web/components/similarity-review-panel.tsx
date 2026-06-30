@@ -36,7 +36,10 @@ type Props = {
   onNotice: (message: string | null) => void;
 };
 
+type PairFilter = "pending" | "mine" | "all";
+
 export function SimilarityReviewPanel({ user, onNotice }: Props) {
+  const canReview = user.roles.some((role) => ["admin", "moderator", "expert_reviewer"].includes(role));
   const [runs, setRuns] = useState<SimilarityCalibrationRun[]>([]);
   const [selectedRunID, setSelectedRunID] = useState("");
   const [pairs, setPairs] = useState<SimilarityReviewPair[]>([]);
@@ -45,13 +48,18 @@ export function SimilarityReviewPanel({ user, onNotice }: Props) {
   const [loading, setLoading] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [label, setLabel] = useState<SimilarityReviewLabel>("near_duplicate");
+  const [label, setLabel] = useState<SimilarityReviewLabel | "">("");
+  const [pairFilter, setPairFilter] = useState<PairFilter>(canReview ? "pending" : "all");
 
   const selectedRun = useMemo(
     () => runs.find((run) => run.id === selectedRunID) ?? null,
     [runs, selectedRunID],
   );
-  const canReview = user.roles.some((role) => ["admin", "moderator", "expert_reviewer"].includes(role));
+  const filteredPairs = useMemo(() => pairs.filter((pair) => {
+    if (pairFilter === "pending") return !pair.current_reviewer_label;
+    if (pairFilter === "mine") return Boolean(pair.current_reviewer_label);
+    return true;
+  }), [pairFilter, pairs]);
 
   const loadRuns = useCallback(async () => {
     setLoading(true);
@@ -69,7 +77,7 @@ export function SimilarityReviewPanel({ user, onNotice }: Props) {
   const loadPairs = useCallback(async (runID: string) => {
     if (!runID) {
       setPairs([]);
-      return;
+      return [];
     }
     setLoading(true);
     try {
@@ -80,8 +88,10 @@ export function SimilarityReviewPanel({ user, onNotice }: Props) {
       setSelectedPairID((current) =>
         payload.items.some((pair) => pair.id === current) ? current : payload.items[0]?.id || "",
       );
+      return payload.items;
     } catch (error) {
       onNotice(messageFrom(error));
+      return [];
     } finally {
       setLoading(false);
     }
@@ -108,10 +118,14 @@ export function SimilarityReviewPanel({ user, onNotice }: Props) {
   useEffect(() => { void loadRuns(); }, [loadRuns]);
   useEffect(() => { void loadPairs(selectedRunID); }, [loadPairs, selectedRunID]);
   useEffect(() => { void loadDetail(selectedPairID); }, [loadDetail, selectedPairID]);
+  useEffect(() => {
+    if (filteredPairs.some((pair) => pair.id === selectedPairID)) return;
+    setSelectedPairID(filteredPairs[0]?.id ?? "");
+  }, [filteredPairs, selectedPairID]);
 
   async function submitReview(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!detail || detail.pair.current_reviewer_label) return;
+    if (!detail || detail.pair.current_reviewer_label || !label) return;
     const form = event.currentTarget;
     const reason = String(new FormData(form).get("reason") ?? "").trim();
     setSubmitting(true);
@@ -122,8 +136,15 @@ export function SimilarityReviewPanel({ user, onNotice }: Props) {
         body: JSON.stringify({ label, reason: reason || null }),
       });
       form.reset();
+      const currentIndex = pairs.findIndex((pair) => pair.id === detail.pair.id);
+      const nextPending = [
+        ...pairs.slice(currentIndex + 1),
+        ...pairs.slice(0, Math.max(currentIndex, 0)),
+      ].find((pair) => !pair.current_reviewer_label);
+      setLabel("");
       onNotice("Benzerlik kararı kaydedildi.");
-      await Promise.all([loadRuns(), loadPairs(selectedRunID), loadDetail(detail.pair.id)]);
+      await Promise.all([loadRuns(), loadPairs(selectedRunID)]);
+      setSelectedPairID(nextPending?.id ?? detail.pair.id);
     } catch (error) {
       onNotice(messageFrom(error));
     } finally {
@@ -153,6 +174,14 @@ export function SimilarityReviewPanel({ user, onNotice }: Props) {
             ))}
           </select>
         </label>
+        <label>
+          <span>Çiftler</span>
+          <select value={pairFilter} onChange={(event) => setPairFilter(event.target.value as PairFilter)}>
+            {canReview && <option value="pending">Bekleyen ({pairs.filter((pair) => !pair.current_reviewer_label).length})</option>}
+            {canReview && <option value="mine">İncelediklerim ({pairs.filter((pair) => pair.current_reviewer_label).length})</option>}
+            <option value="all">Tümü ({pairs.length})</option>
+          </select>
+        </label>
         <button className="icon-button" type="button" title="Benzerlik verilerini yenile" onClick={() => void loadRuns()}>
           <RefreshCw className={loading ? "spin" : ""} size={18} aria-hidden="true" />
         </button>
@@ -170,7 +199,7 @@ export function SimilarityReviewPanel({ user, onNotice }: Props) {
 
       <div className="similarity-layout">
         <div className="similarity-pair-list" aria-label="Benzerlik çiftleri">
-          {pairs.map((pair) => (
+          {filteredPairs.map((pair) => (
             <button
               key={pair.id}
               data-testid={`similarity-pair-${pair.pair_rank}`}
@@ -187,6 +216,9 @@ export function SimilarityReviewPanel({ user, onNotice }: Props) {
               <ChevronRight size={16} aria-hidden="true" />
             </button>
           ))}
+          {!loading && filteredPairs.length === 0 && (
+            <div className="similarity-list-empty">Bu görünümde çift yok.</div>
+          )}
         </div>
 
         <div className="similarity-detail">
@@ -230,7 +262,7 @@ export function SimilarityReviewPanel({ user, onNotice }: Props) {
                         const Icon = item.icon;
                         return (
                           <label key={value} className={label === value ? "selected" : undefined}>
-                            <input type="radio" name="label" value={value} checked={label === value} onChange={() => setLabel(value)} />
+                            <input type="radio" name="label" value={value} checked={label === value} required onChange={() => setLabel(value)} />
                             <Icon size={16} aria-hidden="true" />
                             <span>{item.label}</span>
                           </label>
@@ -239,7 +271,7 @@ export function SimilarityReviewPanel({ user, onNotice }: Props) {
                     </div>
                   </fieldset>
                   <label className="similarity-reason">Gerekçe<textarea name="reason" maxLength={2000} required={label === "uncertain"} /></label>
-                  <button className="primary-button" type="submit" disabled={submitting}>
+                  <button className="primary-button" type="submit" disabled={submitting || !label}>
                     {submitting ? <LoaderCircle className="spin" size={17} /> : <Check size={17} />}Kararı kaydet
                   </button>
                 </form>

@@ -24,13 +24,19 @@ test("inspect calibrated similarity pairs", async ({ page }, testInfo) => {
   await expect(
     page.getByRole("button", { name: "Kararı kaydet" }).or(page.locator(".similarity-own-review")),
   ).toBeVisible();
-
   const screenshotDirectory = path.resolve("..", "var", "screenshots");
   await mkdir(screenshotDirectory, { recursive: true });
   await page.screenshot({
     path: path.join(screenshotDirectory, `similarity-review-${testInfo.project.name}.png`),
     fullPage: true,
   });
+
+  const saveButton = page.getByRole("button", { name: "Kararı kaydet" });
+  if (await saveButton.isVisible()) {
+    await expect(saveButton).toBeDisabled();
+    await page.getByLabel("Farklı", { exact: true }).check();
+    await expect(saveButton).toBeEnabled();
+  }
 
   const hasHorizontalOverflow = await page.evaluate(
     () => document.documentElement.scrollWidth > document.documentElement.clientWidth,

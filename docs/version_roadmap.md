@@ -1,6 +1,6 @@
 # Derlem Versiyon Yol Haritasi
 
-**Tarih:** 2026-06-29
+**Tarih:** 2026-06-30
 **Kapsam:** Derlem veri atölyesinin versiyon versiyon hedefleri, mevcut konumu ve sonraki işler.
 
 Bu belge Derlem'i LLM/tokenizer projelerinden bağımsız, modelden bağımsız ve
@@ -155,7 +155,7 @@ Kapanış kriteri:
 
 ## v0.4 - Gelişmiş Dedup, Decontamination ve Mixture
 
-**Durum:** Aktif; mixture snapshot, release near-dedup ve yaklaşık decontamination pilotları tamamlandı.
+**Durum:** Aktif; mixture v2 kalite bantları, release near-dedup ve yaklaşık decontamination pilotları tamamlandı.
 
 Amaç, büyük corpus kalitesini model eğitimine daha uygun hale getirmek.
 
@@ -164,7 +164,7 @@ Yapılacaklar:
 - MinHash/SimHash near-dedup pilotu. **Tamamlandı; `derlem.release-near-dedup-report.v1`, Hamming 3 / 4x16, report-only.**
 - Near-dedup politikasını veri tipine göre ayır: pretrain, instruction, eval, holdout.
 - Approximate decontamination: eval/holdout ile n-gram veya fingerprint overlap. **Tamamlandı; `normalized-word-3gram-simhash64-v1-hamming10-bands8x8-v1`, report-only pilot.**
-- Mixture raporu: dil, domain, kaynak tipi, lisans ve hak durumu. **Kaynak snapshot katmanı tamamlandı; `derlem.mixture-report.v1`. Kalite bandı export katmanında sonraki dilim.**
+- Mixture raporu: dil, domain, kaynak tipi, lisans, hak durumu ve insan kalite örneklemi. **Tamamlandı; `derlem.mixture-report.v2` + `derlem.quality-mixture.v2`, coverage ve yöntem kimlikli review snapshot SHA256 dahil.**
 - Release içi tekrar ve kaynaklar arası tekrar oranları. **Tamamlandı; aday çift sayıları ayrı raporlanıyor.**
 - Dedup kararlarını geri alınabilir rapor olarak sakla; ham dosyayı değiştirme.
 
@@ -172,7 +172,7 @@ Kapanış kriteri:
 
 - Büyük corpus release'i near-dedup raporu üretir. **Teknik hat tamamlandı; `Near Dedup Smoke` frozen manifestinde checksum zinciriyle doğrulandı. Büyük Gardas ölçümü insan/hak kapanışına bağlı.**
 - Eval/holdout sızıntısı approximate kontrolle de raporlanır. **Tamamlandı.**
-- Mixture raporu model ekipleri için anlaşılırdır.
+- Mixture raporu model ekipleri için anlaşılırdır. **Tamamlandı; kaynak dağılımı ve beş boyutlu kalite bantları UI/manifestte ayrıdır. `Quality Mixture V2 Smoke` ile partial coverage, yöntem kimliği ve manifest checksum zinciri doğrulandı.**
 
 ## v0.5 - Katkı, Ajan ve Servis Hesapları
 

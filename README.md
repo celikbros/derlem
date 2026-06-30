@@ -466,7 +466,7 @@ insan/hak operasyonu sürüyor; sıradaki teknik hedef v0.4.**
 - [x] Export artifact ve manifest SHA256 doğrulaması, ilerleme metrikleri ve rol kontrollü indirme
 - [x] Conversation/tool/preference için `derlem.canonical-sample.v1` doğrulama ve yapısal JSONL export
 - [x] Export manifestinde yöntem kimlikli, modelden bağımsız token tahmin aralığı
-- [x] Frozen release için dil/alan/kaynak tipi/lisans/hak ağırlıklı mixture raporu
+- [x] Frozen release için kaynak dağılımı, kalite bantları, coverage ve review snapshot SHA256 içeren mixture v2 raporu
 - [x] Frozen manifest ve kaynak artifact indirme
 - [x] Next.js yönetim arayüzü
 - [x] GitHub Actions CI

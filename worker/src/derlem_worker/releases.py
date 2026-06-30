@@ -13,6 +13,22 @@ from derlem_worker.sampling import _bounded_lines, _document_from_line
 from derlem_worker.canonical import CanonicalSampleError, parse_canonical_sample
 
 
+QUALITY_BASIS = "active-current-sample-document-review-v1"
+QUALITY_RUBRIC = "multidimensional-v1"
+QUALITY_DIMENSIONS = (
+    ("overall", "quality_score"),
+    ("language", "language_quality_score"),
+    ("coherence", "coherence_score"),
+    ("information_density", "information_density_score"),
+    ("cleanliness", "cleanliness_score"),
+)
+QUALITY_BANDS = (
+    ("low", 1, 2),
+    ("medium", 3, 3),
+    ("high", 4, 5),
+)
+
+
 @dataclass(frozen=True)
 class DecontaminationMatch:
     source_sha256: str
@@ -206,8 +222,15 @@ def build_release_manifest(
     ).encode("utf-8")
 
 
-def build_mixture_report(sources: Iterable[dict[str, object]]) -> dict[str, object]:
+def build_mixture_report(
+    sources: Iterable[dict[str, object]],
+    quality_reviews: Iterable[dict[str, object]] = (),
+) -> dict[str, object]:
     source_list = sorted(sources, key=lambda source: str(source["source_id"]))
+    quality_review_list = sorted(
+        (dict(review) for review in quality_reviews),
+        key=lambda review: (str(review.get("source_id", "")), str(review.get("document_id", ""))),
+    )
     total_bytes = sum(_non_negative_int(source.get("byte_size")) for source in source_list)
     total_lines = sum(_non_negative_int(source.get("line_count")) for source in source_list)
     dimensions: dict[str, list[dict[str, object]]] = {}
@@ -238,7 +261,7 @@ def build_mixture_report(sources: Iterable[dict[str, object]]) -> dict[str, obje
         dimensions[dimension] = entries
 
     return {
-        "schema_version": "derlem.mixture-report.v1",
+        "schema_version": "derlem.mixture-report.v2",
         "status": "reported",
         "totals": {
             "source_count": len(source_list),
@@ -248,7 +271,145 @@ def build_mixture_report(sources: Iterable[dict[str, object]]) -> dict[str, obje
             "missing_line_count": sum(source.get("line_count") is None for source in source_list),
         },
         "dimensions": dimensions,
+        "quality": _build_quality_mixture(quality_review_list),
     }
+
+
+def _build_quality_mixture(reviews: list[dict[str, object]]) -> dict[str, object]:
+    snapshot = hashlib.sha256()
+    seen_documents: set[str] = set()
+    multidimensional: list[dict[str, object]] = []
+    legacy_document_count = 0
+    missing_review_document_count = 0
+
+    for review in reviews:
+        source_id = str(review.get("source_id") or "").strip()
+        document_id = str(review.get("document_id") or "").strip()
+        if not source_id or not document_id:
+            raise ValueError("Quality snapshot rows require source_id and document_id")
+        if document_id in seen_documents:
+            raise ValueError("Quality snapshot contains duplicate document_id")
+        seen_documents.add(document_id)
+
+        rubric_version = str(review.get("rubric_version") or "").strip()
+        normalized: dict[str, object] = {
+            "source_id": source_id,
+            "document_id": document_id,
+            "document_version": _positive_int(review.get("document_version"), "document_version"),
+            "sample_generation": _positive_int(
+                review.get("sample_generation"),
+                "sample_generation",
+            ),
+            "object_sha256": str(review.get("object_sha256") or ""),
+            "review_id": str(review.get("review_id") or "") or None,
+            "decision": str(review.get("decision") or "") or None,
+            "rubric_version": rubric_version or None,
+        }
+
+        if rubric_version == QUALITY_RUBRIC:
+            if normalized["review_id"] is None:
+                raise ValueError("Multidimensional quality row requires review_id")
+            if normalized["decision"] != "approved":
+                raise ValueError("Multidimensional quality row must be approved")
+            for _, field in QUALITY_DIMENSIONS:
+                normalized[field] = _quality_score(review.get(field), field)
+            multidimensional.append(normalized)
+        elif rubric_version == "overall-v1":
+            if normalized["review_id"] is None:
+                raise ValueError("Legacy quality row requires review_id")
+            if normalized["decision"] != "approved":
+                raise ValueError("Legacy quality row must be approved")
+            normalized["quality_score"] = _quality_score(
+                review.get("quality_score"),
+                "quality_score",
+            )
+            for _, field in QUALITY_DIMENSIONS[1:]:
+                normalized[field] = None
+            legacy_document_count += 1
+        elif not rubric_version:
+            for _, field in QUALITY_DIMENSIONS:
+                normalized[field] = None
+            missing_review_document_count += 1
+        else:
+            raise ValueError(f"Unsupported quality rubric: {rubric_version}")
+
+        snapshot.update(
+            (
+                json.dumps(
+                    normalized,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+                + "\n"
+            ).encode("utf-8")
+        )
+
+    sample_document_count = len(reviews)
+    scored_document_count = len(multidimensional)
+    if scored_document_count == sample_document_count and sample_document_count > 0:
+        coverage_status = "complete"
+    elif scored_document_count > 0:
+        coverage_status = "partial"
+    else:
+        coverage_status = "unavailable"
+
+    dimensions: dict[str, dict[str, object]] = {}
+    for dimension, field in QUALITY_DIMENSIONS:
+        scores = [int(review[field]) for review in multidimensional]
+        score_sum = sum(scores)
+        bands = []
+        for band, minimum, maximum in QUALITY_BANDS:
+            document_count = sum(minimum <= score <= maximum for score in scores)
+            bands.append(
+                {
+                    "band": band,
+                    "score_min": minimum,
+                    "score_max": maximum,
+                    "document_count": document_count,
+                    "document_share_bps": _share_bps(document_count, scored_document_count),
+                }
+            )
+        dimensions[dimension] = {
+            "score_sum": score_sum,
+            "average_score_milli": (
+                (score_sum * 1_000 + scored_document_count // 2) // scored_document_count
+                if scored_document_count
+                else None
+            ),
+            "bands": bands,
+        }
+
+    return {
+        "schema_version": "derlem.quality-mixture.v2",
+        "basis": QUALITY_BASIS,
+        "rubric_version": QUALITY_RUBRIC,
+        "coverage_status": coverage_status,
+        "review_snapshot_method": "ordered-sample-review-json-sha256-v2",
+        "review_snapshot_sha256": snapshot.hexdigest(),
+        "sample_document_count": sample_document_count,
+        "scored_document_count": scored_document_count,
+        "coverage_bps": _share_bps(scored_document_count, sample_document_count),
+        "legacy_document_count": legacy_document_count,
+        "missing_review_document_count": missing_review_document_count,
+        "dimensions": dimensions,
+    }
+
+
+def _positive_int(value: object, field: str) -> int:
+    parsed = int(value or 0)
+    if parsed <= 0:
+        raise ValueError(f"{field} must be positive")
+    return parsed
+
+
+def _quality_score(value: object, field: str) -> int:
+    if value is None:
+        raise ValueError(f"{field} is required")
+    parsed = int(value)
+    if not 1 <= parsed <= 5:
+        raise ValueError(f"{field} must be between 1 and 5")
+    return parsed
 
 
 def _non_negative_int(value: object) -> int:

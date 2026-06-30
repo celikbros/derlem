@@ -196,10 +196,15 @@ Frozen release ve release-source satirlari veritabani trigger'lariyla
 degistirilemez. Manifest ve kaynak artifact'leri consumer endpointlerinden
 salt-okunur indirilir.
 
-Freeze ayrica `derlem.mixture-report.v1` raporunu
+Freeze ayrica `derlem.mixture-report.v2` raporunu
 `gate_results.mixture_report` altina yazar. Dil, alan, kaynak tipi, lisans ve
 hak durumu dagilimlari kaynak sayisi, byte ve satir basis-point paylariyla
-API ve frozen manifestte ayni snapshot'a baglanir.
+API ve frozen manifestte ayni snapshot'a baglanir. `quality` bolumu aktif ornek
+belgelerin guncel `multidimensional-v1` review'larini dusuk/orta/yuksek bantlarda
+bes rubric boyutuyla `derlem.quality-mixture.v2` olarak raporlar; coverage,
+legacy, eksik review ve sirali review
+snapshot SHA256 kanitini tasir. Commit transaction'i kalite snapshot'ini kaynak
+kilitleri altinda yeniden dogrular.
 
 ## Kanonik Export
 

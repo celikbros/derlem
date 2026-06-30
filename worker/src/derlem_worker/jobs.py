@@ -1362,6 +1362,7 @@ class Worker:
                 """,
                 (release_id,),
             ).fetchall()
+            quality_rows = self._release_quality_rows(connection, release_id)
             reference_rows = []
             if release is not None and release["content_purpose"] == "pretrain":
                 reference_rows = connection.execute(
@@ -1410,7 +1411,10 @@ class Worker:
             for source in source_rows
         ]
         manifest_sources = [self._manifest_source(source) for source in source_rows]
-        mixture_report = build_mixture_report(manifest_sources)
+        mixture_report = build_mixture_report(
+            manifest_sources,
+            [dict(review) for review in quality_rows],
+        )
         with psycopg.connect(self.config.database_url) as progress_connection:
             near_duplicates = release_near_duplicates(
                 release_paths,
@@ -1543,6 +1547,24 @@ class Worker:
                     raise ReleaseGateError(
                         "Release sources changed before freeze commit",
                         {"source_gate": {"status": "blocked", "reason": "source_changed"}},
+                    )
+
+                locked_quality_report = build_mixture_report(
+                    manifest_sources,
+                    [
+                        dict(review)
+                        for review in self._release_quality_rows(connection, release_id)
+                    ],
+                )["quality"]
+                if locked_quality_report != mixture_report["quality"]:
+                    raise ReleaseGateError(
+                        "Release quality reviews changed before freeze commit",
+                        {
+                            "quality_mixture": {
+                                "status": "blocked",
+                                "reason": "quality_snapshot_changed",
+                            }
+                        },
                     )
 
                 connection.execute(
@@ -1887,6 +1909,52 @@ class Worker:
         path = (self.config.storage_root / storage_key).resolve(strict=True)
         path.relative_to(self.config.storage_root)
         return path
+
+    @staticmethod
+    def _release_quality_rows(
+        connection: psycopg.Connection,
+        release_id: str,
+    ) -> list[dict[str, object]]:
+        return connection.execute(
+            """
+            SELECT release_source.source_id::text AS source_id,
+                document.id::text AS document_id,
+                document.current_version AS document_version,
+                document.sample_generation,
+                document.current_object_sha256 AS object_sha256,
+                current_review.review_id,
+                current_review.decision,
+                current_review.rubric_version,
+                current_review.quality_score,
+                current_review.language_quality_score,
+                current_review.coherence_score,
+                current_review.information_density_score,
+                current_review.cleanliness_score
+            FROM release_sources AS release_source
+            JOIN documents AS document
+              ON document.source_id = release_source.source_id
+             AND document.is_active
+            LEFT JOIN LATERAL (
+                SELECT review.id::text AS review_id,
+                    review.decision,
+                    review.rubric_version,
+                    review.quality_score,
+                    review.language_quality_score,
+                    review.coherence_score,
+                    review.information_density_score,
+                    review.cleanliness_score
+                FROM document_reviews AS review
+                WHERE review.document_id = document.id
+                  AND review.document_version = document.current_version
+                  AND review.object_sha256 = document.current_object_sha256
+                ORDER BY review.created_at DESC, review.id DESC
+                LIMIT 1
+            ) AS current_review ON true
+            WHERE release_source.release_id = %s
+            ORDER BY release_source.source_id, document.id
+            """,
+            (release_id,),
+        ).fetchall()
 
     @staticmethod
     def _release_source_is_current(source: dict[str, object]) -> bool:

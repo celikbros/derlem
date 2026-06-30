@@ -63,6 +63,21 @@ test("inspect a frozen release and its downloadable artifacts", async ({ page },
     await expect(detail.getByText("0 taşma", { exact: true })).toBeVisible();
   }
 
+  const qualityMixtureSmokeRow = page.getByRole("row").filter({ hasText: "Quality Mixture V2 Smoke" });
+  if (await qualityMixtureSmokeRow.count() === 1) {
+    const qualityMixtureButton = qualityMixtureSmokeRow.getByRole("button");
+    await expect(qualityMixtureButton).toHaveCount(1);
+    await qualityMixtureButton.click();
+    await expect(detail.getByRole("heading", { name: "Quality Mixture V2 Smoke" })).toBeVisible();
+    const qualityPanel = detail.locator(".quality-mixture");
+    await expect(qualityPanel.getByText("Kalite örneklemi", { exact: true })).toBeVisible();
+    await expect(qualityPanel.getByText("1 / 3 · 33,33%", { exact: true })).toBeVisible();
+    await expect(qualityPanel.getByText("Legacy 2 · Eksik 0", { exact: true })).toBeVisible();
+    const overallRow = qualityPanel.locator(".quality-dimension-row").filter({ hasText: "Genel" });
+    await expect(overallRow).toHaveCount(1);
+    await expect(overallRow.locator("b")).toHaveText("4");
+  }
+
   const screenshotDirectory = path.resolve("..", "var", "screenshots");
   await mkdir(screenshotDirectory, { recursive: true });
   await page.screenshot({

@@ -278,6 +278,7 @@ export function ReleasePanel({
                 <MixtureDimension label="Alan" entries={selectedMixture.dimensions.domain} />
                 <MixtureDimension label="Kaynak tipi" entries={selectedMixture.dimensions.source_type} />
                 <MixtureDimension label="Lisans" entries={selectedMixture.dimensions.license} />
+                {selectedMixture.quality && <QualityMixtureSummary quality={selectedMixture.quality} />}
               </div>
             </section>
           )}
@@ -471,16 +472,42 @@ function releaseSourceLabel(release: Release, sha256: string) {
 }
 
 type MixtureReport = {
-  schema_version: "derlem.mixture-report.v1";
+  schema_version: "derlem.mixture-report.v1" | "derlem.mixture-report.v2";
   totals: { source_count: number; byte_size: number; line_count: number };
   dimensions: Record<"language" | "domain" | "source_type" | "license" | "rights_status", MixtureEntry[]>;
+  quality?: QualityMixture;
+};
+
+type QualityBand = {
+  band: "low" | "medium" | "high";
+  score_min: number;
+  score_max: number;
+  document_count: number;
+  document_share_bps: number;
+};
+
+type QualityDimension = {
+  score_sum: number;
+  average_score_milli: number | null;
+  bands: QualityBand[];
+};
+
+type QualityMixture = {
+  schema_version: "derlem.quality-mixture.v1" | "derlem.quality-mixture.v2";
+  coverage_status: "complete" | "partial" | "unavailable";
+  sample_document_count: number;
+  scored_document_count: number;
+  coverage_bps: number;
+  legacy_document_count: number;
+  missing_review_document_count: number;
+  dimensions: Record<"overall" | "language" | "coherence" | "information_density" | "cleanliness", QualityDimension>;
 };
 
 function mixtureReport(release: Release): MixtureReport | undefined {
   const candidate = release.gate_results?.mixture_report;
   if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return undefined;
   const report = candidate as Partial<MixtureReport>;
-  if (report.schema_version !== "derlem.mixture-report.v1" || !report.totals || !report.dimensions) return undefined;
+  if (!["derlem.mixture-report.v1", "derlem.mixture-report.v2"].includes(report.schema_version ?? "") || !report.totals || !report.dimensions) return undefined;
   return report as MixtureReport;
 }
 
@@ -499,6 +526,51 @@ function MixtureDimension({ label, entries }: { label: string; entries: MixtureE
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function QualityMixtureSummary({ quality }: { quality: QualityMixture }) {
+  const dimensions: Array<[keyof QualityMixture["dimensions"], string]> = [
+    ["overall", "Genel"],
+    ["language", "Dil"],
+    ["coherence", "Tutarlılık"],
+    ["information_density", "Bilgi"],
+    ["cleanliness", "Temizlik"],
+  ];
+  return (
+    <div className="quality-mixture">
+      <div className="quality-mixture-header">
+        <strong>Kalite örneklemi</strong>
+        <span>{quality.scored_document_count.toLocaleString("tr-TR")} / {quality.sample_document_count.toLocaleString("tr-TR")} · {formatBasisPoints(quality.coverage_bps)}</span>
+      </div>
+      <div className="quality-band-legend" aria-label="Kalite bantları">
+        <span className="low">Düşük 1-2</span><span className="medium">Orta 3</span><span className="high">Yüksek 4-5</span>
+      </div>
+      <div className="quality-dimensions">
+        {dimensions.map(([key, label]) => {
+          const dimension = quality.dimensions[key];
+          return (
+            <div className="quality-dimension-row" key={key}>
+              <span>{label}</span>
+              <div className="quality-band-bar" role="img" aria-label={`${label} kalite bantları`}>
+                {dimension.bands.map((band) => (
+                  <i
+                    className={band.band}
+                    key={band.band}
+                    style={{ width: `${band.document_share_bps / 100}%` }}
+                    title={`${band.document_count.toLocaleString("tr-TR")} belge · ${formatBasisPoints(band.document_share_bps)}`}
+                  />
+                ))}
+              </div>
+              <b>{dimension.average_score_milli === null ? "-" : (dimension.average_score_milli / 1000).toLocaleString("tr-TR", { maximumFractionDigits: 2 })}</b>
+            </div>
+          );
+        })}
+      </div>
+      {(quality.legacy_document_count > 0 || quality.missing_review_document_count > 0) && (
+        <small>Legacy {quality.legacy_document_count.toLocaleString("tr-TR")} · Eksik {quality.missing_review_document_count.toLocaleString("tr-TR")}</small>
+      )}
     </div>
   );
 }

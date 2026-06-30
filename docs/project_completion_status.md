@@ -1,6 +1,6 @@
 # Derlem Proje Tamamlanma Durumu
 
-**Tarih:** 2026-06-29
+**Tarih:** 2026-06-30
 **Kapsam:** Derlem veri atölyesinin mevcut gerçek durumu, kalan işler ve tamamlanma yorumu.
 
 ## Kısa Cevap
@@ -91,7 +91,8 @@ ana kapılar artık teknik değil:
 - `multidimensional-v1` insan kalite rubric'i, tekil/toplu review ve kaynak ortalamaları.
 - `derlem.canonical-sample.v1` conversation/tool/preference doğrulaması ve yapısal JSONL export.
 - `unicode-codepoint-range-v1` yöntem kimlikli token tahmin aralığı, manifest/API/UI kaydı.
-- `derlem.mixture-report.v1` release karışım snapshot'ı ve API/UI görünümü.
+- `derlem.mixture-report.v2` kaynak dağılımı ve `derlem.quality-mixture.v2` kalite bantları; coverage/yöntem kimlikli review snapshot SHA256 ve API/UI görünümü.
+- `Quality Mixture V2 Smoke` frozen release: 3 örnek, 1 multidimensional, 2 legacy, `%33,33` coverage, yöntem kimliği ve manifest SHA256 doğrulaması.
 
 ## Kalan Teknik İşler
 
@@ -106,7 +107,6 @@ ana kapılar artık teknik değil:
 ### v0.4 İçin Kalanlar
 
 - SimHash64 yaklaşık eşiklerinin gerçek corpus üzerinde kalibrasyonu ve insan inceleme politikası.
-- Mixture raporuna kalite bandı dağılımı eklenmesi.
 
 ### v1.0 İçin Kalanlar
 

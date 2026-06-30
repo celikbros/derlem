@@ -462,7 +462,7 @@ continues; v0.4 is the active technical target.**
 - [x] Report-only SimHash64 near-duplicate report within and across release sources
 - [x] Model-independent structured conversation/tool/preference JSONL exports
 - [x] Method-identified model-independent token estimate ranges
-- [x] Frozen release mixture report by language/domain/source type/license/rights
+- [x] Frozen mixture v2 report with source distribution, quality bands, coverage, and review snapshot SHA256
 - [x] Frozen manifest and source-artifact downloads
 - [x] Next.js operations UI
 - [x] GitHub Actions CI

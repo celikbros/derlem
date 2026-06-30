@@ -64,8 +64,29 @@ cd "C:\CELIK- DERLEM"
 ```
 
 Progress is written to stderr every 100,000 documents. On completion, stdout
-returns the JSON and Markdown paths. The next step is to inspect token-length
-buckets and label closest pairs before deciding the pretrain policy.
+returns the JSON and Markdown paths.
+
+## Gardas Result - 2026-06-30
+
+- Source object: `ebe292793d87ec067076bbb86f39801e6ed5fae18761dfcfa3506c4503c0d989`
+- JSON report SHA256: `365e67fa5bed3da7d670e53946542f5b6c77dab47fab4f7bcc45a75dadf0b3e1`
+- Scanned / eligible documents: `5,922,891 / 5,900,610`
+- Sampled documents / natural pairs / synthetic variants: `1,000 / 499,500 / 3,998`
+- Token min / p50 / p90 / max: `5 / 132 / 603 / 6,329`
+- Hamming 3 synthetic recall: `32.69%`; natural pairs: `0`
+- Hamming 10 synthetic recall: `80.22%`; natural pairs: `0`
+- Closest natural distance: `15`; median natural-pair distance: `32`
+- There were `5` natural pairs at distance 15 and `165` at distance 18 or lower.
+
+The length buckets show that one universal threshold is not appropriate.
+Hamming 3 recall for `5-7`, `8-15`, `16-31`, and `32+` tokens was `0%`, `0%`,
+`0.26%`, and `40.71%`; Hamming 10 recall was `0%`, `3.26%`, `39.32%`, and
+`94.89%`. The 4x16 LSH index is candidate-complete only through Hamming 3, so
+this report does not activate threshold 10. Short documents need a non-SimHash
+method, and the closest natural pairs still require human labels.
+
+See [Similarity Pair Review](similarity_pair_review.en.md) for the import command
+and human-review workflow.
 
 ## Local File Experiment
 

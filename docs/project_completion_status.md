@@ -95,6 +95,9 @@ ana kapılar artık teknik değil:
 - `Quality Mixture V2 Smoke` frozen release: 3 örnek, 1 multidimensional, 2 legacy, `%33,33` coverage, yöntem kimliği ve manifest SHA256 doğrulaması.
 - `derlem.similarity-calibration.v1` CLI: deterministic bottom-k örnek, token uzunluk bantları, sentetik varyant/corpus çift dağılımı ve ham metinsiz JSON/Markdown.
 - Instruction smoke: 3 belgenin tamamı 6 token; eşik 3 ve 10'da sentetik recall `%0`, bu nedenle aktif eşik değiştirilmedi.
+- Gardas pretrain kalibrasyonu: 5.922.891 satır tarandı, 5.900.610 belge uygun bulundu; 1.000 belgede 499.500 doğal çift ölçüldü. Hamming 3/10 sentetik recall `%32,69/%80,22`, doğal en yakın mesafe `15` ve doğal çift medyanı `32` oldu.
+- `calibration-closest-pair-materialization-v1`: kalibrasyon JSON'unu ve seçilmiş belge nesnelerini SHA256 ile doğrulayan idempotent importer; append-only koşu/çift/review tabloları, RBAC API ve Benzerlik web görünümü.
+- Çok kullanıcılı benzerlik smoke: 3 instruction çifti import edildi; admin + moderator aynı çifte `near_duplicate` vererek 2 bağımsız kararla 1 uzlaşı üretti. Desktop/Pixel 7 E2E taşmasız geçti.
 
 ## Kalan Teknik İşler
 
@@ -108,7 +111,7 @@ ana kapılar artık teknik değil:
 
 ### v0.4 İçin Kalanlar
 
-- Gardas clean candidate kalibrasyon taraması, en yakın doğal çiftlerin insan etiketleri ve purpose-specific eşik kararı.
+- Gardas kalibrasyonundaki en yakın 100 çiftin importu, bağımsız insan etiketleri ve kısa/uzun metin için purpose-specific yöntem/eşik kararı.
 
 ### v1.0 İçin Kalanlar
 

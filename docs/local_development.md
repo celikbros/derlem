@@ -130,6 +130,18 @@ boyutuyla sinirlar. Buyuk corpuslarda uzun surebilir; ayrintili Gardas komutu ve
 rapor sozlesmesi icin [SimHash Kalibrasyon Raporu](similarity_calibration.md)
 belgesine bakin.
 
+Kalibrasyon raporundaki en yakin ciftleri insan incelemesine almak icin:
+
+```powershell
+.\.venv\Scripts\python.exe -m derlem_worker.similarity_review_import --report .\var\reports\similarity_calibration_pretrain_ebe29279.json
+```
+
+Importer kaynak ve rapor SHA256 degerlerini, ordinal belgeleri ve Hamming
+mesafelerini yeniden dogrular. Buyuk kaynaklarda ilgili en buyuk ordinal
+satirina kadar akacagi icin uzun surebilir. Tamamlanan kosu web arayuzundeki
+`Benzerlik` gorunumunde listelenir; admin, moderator ve expert reviewer rolleri
+bagimsiz karar ekleyebilir.
+
 ## Testler
 
 ```powershell

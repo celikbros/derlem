@@ -7,6 +7,7 @@ import {
   Database,
   FilePlus2,
   FileText,
+  GitCompareArrows,
   Library,
   ListTodo,
   LoaderCircle,
@@ -23,6 +24,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "re
 
 import { JobsPanel } from "@/components/jobs-panel";
 import { ReleasePanel } from "@/components/release-panel";
+import { SimilarityReviewPanel } from "@/components/similarity-review-panel";
 import { SourceInspector } from "@/components/source-inspector";
 import { messageFrom, requestJSON } from "@/lib/client-api";
 import type { Source, User } from "@/lib/types";
@@ -64,7 +66,7 @@ export function DerlemApp() {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Source | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [activeView, setActiveView] = useState<"sources" | "review" | "releases" | "jobs">("sources");
+  const [activeView, setActiveView] = useState<"sources" | "review" | "similarity" | "releases" | "jobs">("sources");
   const createDialog = useRef<HTMLDialogElement>(null);
 
   const loadSources = useCallback(async () => {
@@ -178,6 +180,11 @@ export function DerlemApp() {
             İnceleme
             <span>{sources.filter((source) => reviewStatuses.includes(source.approval_status)).length}</span>
           </button>
+          <button aria-label="Benzerlik" aria-pressed={activeView === "similarity"} className={`nav-item${activeView === "similarity" ? " active" : ""}`} type="button" onClick={() => { setActiveView("similarity"); setSelected(null); }}>
+            <GitCompareArrows size={18} aria-hidden="true" />
+            Benzerlik
+            <span>›</span>
+          </button>
           <button aria-label="Sürümler" aria-pressed={activeView === "releases"} className={`nav-item${activeView === "releases" ? " active" : ""}`} type="button" onClick={() => { setActiveView("releases"); setSelected(null); }}>
             <PackageCheck size={18} aria-hidden="true" />
             Sürümler
@@ -203,8 +210,8 @@ export function DerlemApp() {
       <main className="workspace">
         <header className="page-header">
           <div>
-            <p className="eyebrow">{activeView === "review" ? "Moderasyon" : activeView === "releases" ? "Release Builder" : activeView === "jobs" ? "Worker kuyruğu" : "Kaynak kataloğu"}</p>
-            <h1>{activeView === "review" ? "İnceleme kuyruğu" : activeView === "releases" ? "Sürümler" : activeView === "jobs" ? "Arka plan işleri" : "Veri kaynakları"}</h1>
+            <p className="eyebrow">{activeView === "review" ? "Moderasyon" : activeView === "similarity" ? "Kalibrasyon" : activeView === "releases" ? "Release Builder" : activeView === "jobs" ? "Worker kuyruğu" : "Kaynak kataloğu"}</p>
+            <h1>{activeView === "review" ? "İnceleme kuyruğu" : activeView === "similarity" ? "Benzerlik incelemesi" : activeView === "releases" ? "Sürümler" : activeView === "jobs" ? "Arka plan işleri" : "Veri kaynakları"}</h1>
           </div>
           {canCreateSource && (activeView === "sources" || activeView === "review") && (
             <button className="primary-button" type="button" onClick={() => createDialog.current?.showModal()}>
@@ -213,7 +220,7 @@ export function DerlemApp() {
           )}
         </header>
 
-        <section className="summary-strip" aria-label={activeView === "review" ? "İnceleme özeti" : "Kaynak özeti"}>
+        {activeView !== "similarity" && <section className="summary-strip" aria-label={activeView === "review" ? "İnceleme özeti" : "Kaynak özeti"}>
           {activeView === "review" ? (
             <>
               <Summary icon={<ClipboardCheck />} label="Kuyruktaki kaynak" value={reviewQueueSources.length} tone="blue" />
@@ -228,7 +235,7 @@ export function DerlemApp() {
               <Summary icon={<CheckCircle2 />} label="Dosyası alınan" value={ingestedCount} tone="blue" />
             </>
           )}
-        </section>
+        </section>}
 
         {notice && (
           <div className="notice" role="status">
@@ -239,7 +246,7 @@ export function DerlemApp() {
           </div>
         )}
 
-        {activeView === "jobs" ? <JobsPanel onNotice={setNotice} /> : activeView === "releases" ? <ReleasePanel sources={sources} user={user} onNotice={setNotice} /> : <section className={`catalog-layout${selected ? " with-inspector" : ""}`}>
+        {activeView === "jobs" ? <JobsPanel onNotice={setNotice} /> : activeView === "releases" ? <ReleasePanel sources={sources} user={user} onNotice={setNotice} /> : activeView === "similarity" ? <SimilarityReviewPanel user={user} onNotice={setNotice} /> : <section className={`catalog-layout${selected ? " with-inspector" : ""}`}>
           <div className="catalog-panel">
             <div className="table-toolbar">
               <label className="search-field">

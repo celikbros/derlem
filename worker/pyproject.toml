@@ -20,6 +20,7 @@ derlem-clean-candidate = "derlem_worker.clean_candidate:main"
 derlem-seed-gardas = "derlem_worker.seed_gardas:main"
 derlem-source-triage = "derlem_worker.triage:main"
 derlem-similarity-calibration = "derlem_worker.similarity_calibration:main"
+derlem-similarity-review-import = "derlem_worker.similarity_review_import:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

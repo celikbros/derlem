@@ -119,6 +119,79 @@ export type Review = {
   created_at: string;
 };
 
+export type SimilarityCalibrationSource = {
+  source_id: string;
+  name: string;
+  sha256: string;
+};
+
+export type SimilarityCalibrationRun = {
+  id: string;
+  report_object_sha256: string;
+  schema_version: string;
+  method: string;
+  content_purpose: Source["content_purpose"];
+  source_snapshot: SimilarityCalibrationSource[];
+  sampled_document_count: number;
+  eligible_document_count: number;
+  simhash_version: string;
+  threshold_max: number;
+  pair_count: number;
+  reviewed_pair_count: number;
+  independent_review_count: number;
+  consensus_pair_count: number;
+  disagreement_pair_count: number;
+  created_at: string;
+};
+
+export type SimilarityReviewLabel =
+  | "exact_duplicate"
+  | "near_duplicate"
+  | "related"
+  | "different"
+  | "uncertain";
+
+export type SimilarityReviewPair = {
+  id: string;
+  run_id: string;
+  pair_rank: number;
+  hamming_distance: number;
+  left_source_id: string;
+  left_source_sha256: string;
+  left_source_ordinal: number;
+  left_object_sha256: string;
+  left_text_preview: string;
+  left_token_count: number;
+  right_source_id: string;
+  right_source_sha256: string;
+  right_source_ordinal: number;
+  right_object_sha256: string;
+  right_text_preview: string;
+  right_token_count: number;
+  review_count: number;
+  consensus_label?: SimilarityReviewLabel;
+  has_disagreement: boolean;
+  current_reviewer_label?: SimilarityReviewLabel;
+  created_at: string;
+};
+
+export type SimilarityPairReview = {
+  id: string;
+  pair_id: string;
+  reviewer_id: string;
+  reviewer: string;
+  label: SimilarityReviewLabel;
+  reason?: string;
+  created_at: string;
+};
+
+export type SimilarityPairDetail = {
+  pair: SimilarityReviewPair;
+  left_content: string;
+  right_content: string;
+  reviews: SimilarityPairReview[];
+};
+
 export type ReleaseSource = {
   source_id: string;
   source_sha256: string;

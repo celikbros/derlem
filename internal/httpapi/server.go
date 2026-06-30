@@ -17,6 +17,7 @@ type Server struct {
 	sources        *repository.Sources
 	documents      *repository.Documents
 	releases       *repository.Releases
+	similarities   *repository.SimilarityReviews
 	objectStore    storage.Store
 	tokens         *auth.TokenManager
 	logger         *slog.Logger
@@ -31,6 +32,7 @@ func NewServer(pool *pgxpool.Pool, objectStore storage.Store, tokens *auth.Token
 		sources:        repository.NewSources(pool),
 		documents:      repository.NewDocuments(pool),
 		releases:       repository.NewReleases(pool),
+		similarities:   repository.NewSimilarityReviews(pool),
 		objectStore:    objectStore,
 		tokens:         tokens,
 		logger:         logger,
@@ -75,6 +77,10 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/releases/{id}/exports/{format}/artifact", s.authenticate(requireRoles("admin", "data_manager", "consumer_team")(http.HandlerFunc(s.downloadReleaseExport))))
 	mux.Handle("GET /api/v1/releases/{id}/exports/{format}/manifest", s.authenticate(requireRoles("admin", "data_manager", "consumer_team")(http.HandlerFunc(s.downloadReleaseExportManifest))))
 	mux.Handle("GET /api/v1/releases/{id}/sources/{source_id}/artifact", s.authenticate(requireRoles("admin", "data_manager", "consumer_team")(http.HandlerFunc(s.downloadReleaseSource))))
+	mux.Handle("GET /api/v1/similarity-calibrations", s.authenticate(http.HandlerFunc(s.listSimilarityCalibrationRuns)))
+	mux.Handle("GET /api/v1/similarity-calibrations/{id}/pairs", s.authenticate(http.HandlerFunc(s.listSimilarityReviewPairs)))
+	mux.Handle("GET /api/v1/similarity-pairs/{id}", s.authenticate(http.HandlerFunc(s.getSimilarityReviewPair)))
+	mux.Handle("POST /api/v1/similarity-pairs/{id}/reviews", s.authenticate(requireRoles("admin", "moderator", "expert_reviewer")(http.HandlerFunc(s.reviewSimilarityPair))))
 	return s.middleware(mux)
 }
 

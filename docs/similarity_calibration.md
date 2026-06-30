@@ -64,8 +64,29 @@ cd "C:\CELIK- DERLEM"
 ```
 
 Tarama her 100.000 belgede ilerlemeyi stderr'e yazar. Tamamlandığında JSON ve
-Markdown yollarını stdout'ta döndürür. Sonraki adım, rapordaki token uzunluk
-bantlarını ve en yakın çiftleri inceleyerek pretrain politikasını kararlaştırmaktır.
+Markdown yollarını stdout'ta döndürür.
+
+## Gardas Sonucu - 2026-06-30
+
+- Kaynak nesnesi: `ebe292793d87ec067076bbb86f39801e6ed5fae18761dfcfa3506c4503c0d989`
+- JSON rapor SHA256: `365e67fa5bed3da7d670e53946542f5b6c77dab47fab4f7bcc45a75dadf0b3e1`
+- Taranan / uygun belge: `5.922.891 / 5.900.610`
+- Örnek belge / doğal çift / sentetik varyant: `1.000 / 499.500 / 3.998`
+- Token min / p50 / p90 / max: `5 / 132 / 603 / 6.329`
+- Hamming 3 sentetik recall: `%32,69`; doğal çift: `0`
+- Hamming 10 sentetik recall: `%80,22`; doğal çift: `0`
+- En yakın doğal mesafe: `15`; doğal çift medyanı: `32`
+- Mesafe 15'te `5`, mesafe 18 veya altında toplam `165` doğal çift bulundu.
+
+Uzunluk bandı sonucu tek evrensel eşiğin uygun olmadığını gösterir. Hamming 3
+recall'u `5-7`, `8-15`, `16-31`, `32+` bantlarında sırasıyla `%0`, `%0`, `%0,26`
+ve `%40,71`; Hamming 10 recall'u `%0`, `%3,26`, `%39,32` ve `%94,89` oldu.
+4x16 LSH yalnızca Hamming 3'e kadar tam aday garantisi verdiğinden eşik 10 bu
+raporla etkinleştirilmedi. Kısa metinler için SimHash dışı yöntem ve en yakın
+doğal çiftler için insan etiketi gerekir.
+
+İnsan inceleme akışı ve import komutu için
+[Benzerlik Çifti İncelemesi](similarity_pair_review.md) belgesine bakın.
 
 ## Yerel Dosya Deneyi
 

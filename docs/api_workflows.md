@@ -246,11 +246,34 @@ frozen snapshot ve format icin siralama, JSON
 serilestirme ve belge kimligi deterministik oldugundan cikti checksum'i da
 deterministiktir.
 
+## Benzerlik Çifti İncelemesi
+
+`derlem.similarity-calibration.v1` raporundaki `closest_pairs` kayıtları
+`derlem_worker.similarity_review_import` ile içe alınır. Importer raporun ve
+kaynakların SHA256 değerlerini, ordinal belgeleri ve raporlanan Hamming
+mesafelerini yeniden doğrular. Kalibrasyon JSON'u ile seçilmiş tam metinler
+content-addressed store'a yazılır; PostgreSQL yalnızca nesne kimliği, ordinal,
+token sayısı ve 500 karakterlik önizleme tutar.
+
+Koşu ve çift kayıtları update/delete/truncate kabul etmez. İnsan kararları
+append-only `similarity_pair_reviews` satırlarıdır ve bir reviewer aynı çifte
+yalnızca bir karar ekleyebilir. İki bağımsız karar aynıysa uzlaşı, farklıysa
+uyuşmazlık hesaplanır.
+
+- `GET /api/v1/similarity-calibrations`
+- `GET /api/v1/similarity-calibrations/{id}/pairs`
+- `GET /api/v1/similarity-pairs/{id}`
+- `POST /api/v1/similarity-pairs/{id}/reviews`
+
+Okuma tüm authenticated rollere; karar ekleme `admin`, `moderator` ve
+`expert_reviewer` rollerine açıktır. Bu kararlar otomatik olarak release
+eşiğini değiştirmez.
+
 ## Denetim
 
 Her create, metadata update, ingest queue, ingest completion, PII scan, exact
 duplicate kontrolu, normalized dedup kontrolu, login, belge review, kaynak
 review, release create, freeze queue, freeze, export queue, export ready/fail
-ve freeze-block islemi
+freeze-block, similarity calibration import ve similarity pair review islemi
 `audit_events` tablosuna eklenir.
 Tablo update, delete ve truncate islemlerini trigger ile reddeder.

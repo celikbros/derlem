@@ -461,6 +461,7 @@ continues; v0.4 is the active technical target.**
 - [x] Report-only SimHash64 approximate decontamination pilot against eval/holdout
 - [x] Report-only SimHash64 near-duplicate report within and across release sources
 - [x] Purpose-aware SimHash calibration CLI with token-length buckets and no raw text
+- [x] Append-only multi-reviewer similarity-pair importer, API, and web workflow
 - [x] Model-independent structured conversation/tool/preference JSONL exports
 - [x] Method-identified model-independent token estimate ranges
 - [x] Frozen mixture v2 report with source distribution, quality bands, coverage, and review snapshot SHA256
@@ -471,7 +472,7 @@ continues; v0.4 is the active technical target.**
 ### Next
 
 - [ ] Multi-shard/Parquet packaging
-- [ ] Gardas calibration scan, human labels for closest pairs, and purpose-specific threshold decision
+- [ ] Import and independently label the closest 100 Gardas pairs, then decide the purpose-specific method and threshold
 - [ ] S3/MinIO storage implementation
 - [ ] Keycloak/OAuth and service accounts
 
@@ -493,6 +494,7 @@ continues; v0.4 is the active technical target.**
 - [Approximate decontamination pilot](docs/approximate_decontamination.en.md)
 - [Release near-duplicate report](docs/release_near_dedup_report.en.md)
 - [SimHash calibration report](docs/similarity_calibration.en.md)
+- [Similarity pair review](docs/similarity_pair_review.en.md)
 - [Pretraining data factory](docs/pretraining_data_factory.md)
 - [Model prompt format abstraction](docs/model_prompt_format_abstraction.md)
 - [Scalability architecture](docs/scalability_architecture.md)

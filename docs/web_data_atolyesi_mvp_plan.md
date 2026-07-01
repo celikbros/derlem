@@ -56,7 +56,8 @@ sonra onayli seed kaynak sayilir.
 
 Not: Python request path'in ana backend'i degil, veri isleme worker katmani
 olarak kullanilir. Docker gelistirme icin zorunlu degildir. Milyonlarca
-kullanici hedefi icin core API stateless Go servisi olarak tasarlanir.
+kullanici hedefi icin core API proses-local state tutmayan, ortak session ve
+rate-limit state'ini PostgreSQL'de saklayan Go servisi olarak tasarlanir.
 Ayrinti: `docs/scalability_architecture.md`.
 
 ## Roller

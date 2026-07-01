@@ -124,8 +124,9 @@ flowchart LR
 ### Request path
 
 The Go API handles authentication, role checks, source CRUD, optimistic
-locking, upload streaming, review decisions, and audit writes. It is stateless
-so multiple API instances can be placed behind a load balancer.
+locking, upload streaming, review decisions, and audit writes. It keeps no
+process-local session state; shared session and rate-limit state lives in
+PostgreSQL, allowing multiple API instances behind a load balancer.
 
 ### Metadata and work queue
 
@@ -356,6 +357,8 @@ See [docs/local_development.md](docs/local_development.md) for details.
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
 | `POST` | `/api/v1/auth/login` | Open a JWT session |
+| `POST` | `/api/v1/auth/logout` | Revoke the current server session |
+| `POST` | `/api/v1/auth/logout-all` | Revoke every server session for the user |
 | `GET` | `/api/v1/me` | Return the active user and roles |
 | `GET/POST` | `/api/v1/sources` | List or create sources |
 | `GET/PATCH` | `/api/v1/sources/{id}` | Source detail and optimistic update |
@@ -414,7 +417,8 @@ The mutating upload scenario also requires explicit `E2E_MUTATING=1`.
 Supporting millions of users is not solved by a programming language alone.
 Derlem preserves these scaling boundaries:
 
-- The API is stateless and can run as multiple Go instances.
+- The API keeps no process-local state; shared PostgreSQL session/rate-limit
+  state allows multiple Go instances.
 - Large uploads are streamed instead of buffered in API memory.
 - File data lives in object storage rather than the metadata database.
 - Job consumers scale horizontally with `SKIP LOCKED`.
@@ -485,6 +489,7 @@ continues; v0.4 is the active technical target.**
 - [Local role test users](docs/local_role_testing.md)
 - [Production deployment](docs/production_deployment.md)
 - [API authorization matrix](docs/api_authorization_matrix.en.md)
+- [Session and login security](docs/session_security.en.md)
 - [Security hardening backlog](docs/security_hardening_backlog.en.md)
 - [API and workflows](docs/api_workflows.md)
 - [Risk-based sampling](docs/risk_sampling.en.md)

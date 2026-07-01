@@ -75,6 +75,11 @@ Başlamadan önce mutlaka değiştirilecek alanlar:
 - `WEB_ORIGIN`
 - `DATABASE_URL`
 - `JWT_SECRET`
+- `SESSION_IDLE_TTL`
+- `LOGIN_FAILURE_WINDOW`
+- `LOGIN_LOCKOUT_DURATION`
+- `LOGIN_ACCOUNT_FAILURE_LIMIT`
+- `LOGIN_IP_FAILURE_LIMIT`
 - `BOOTSTRAP_ADMIN_EMAIL`
 - `BOOTSTRAP_ADMIN_PASSWORD`
 
@@ -83,6 +88,9 @@ Başlamadan önce mutlaka değiştirilecek alanlar:
 ```bash
 openssl rand -base64 48
 ```
+
+Varsayılan session/rate-limit değerleri ve proxy IP güven sınırı için
+[`session_security.md`](session_security.md) belgesini izleyin.
 
 İlk başarılı girişten sonra `BOOTSTRAP_ADMIN_PASSWORD` değerini boşalt veya
 vault/secret manager tarafına taşı. Local login bilgilerini ekranda gösteren

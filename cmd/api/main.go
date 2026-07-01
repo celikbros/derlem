@@ -52,7 +52,14 @@ func main() {
 	}
 
 	tokens := auth.NewTokenManager(cfg.JWTSecret, cfg.JWTIssuer, cfg.JWTTTL)
-	api := httpapi.NewServer(pool, objectStore, tokens, logger, cfg.WebOrigin, cfg.StagingRoot, cfg.MaxUploadBytes)
+	sessions := auth.NewSessionStore(pool, cfg.SessionIdleTTL)
+	loginLimiter := auth.NewLoginLimiter(pool, auth.LoginRatePolicy{
+		AccountFailureLimit: cfg.LoginAccountLimit,
+		IPFailureLimit:      cfg.LoginIPLimit,
+		FailureWindow:       cfg.LoginFailureWindow,
+		LockoutDuration:     cfg.LoginLockoutDuration,
+	}, cfg.JWTSecret)
+	api := httpapi.NewServer(pool, objectStore, tokens, sessions, loginLimiter, logger, cfg.WebOrigin, cfg.StagingRoot, cfg.MaxUploadBytes)
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           api.Handler(),

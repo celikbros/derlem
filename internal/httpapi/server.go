@@ -20,13 +20,15 @@ type Server struct {
 	similarities   *repository.SimilarityReviews
 	objectStore    storage.Store
 	tokens         *auth.TokenManager
+	sessions       *auth.SessionStore
+	loginLimiter   *auth.LoginLimiter
 	logger         *slog.Logger
 	webOrigin      string
 	stagingRoot    string
 	maxUploadBytes int64
 }
 
-func NewServer(pool *pgxpool.Pool, objectStore storage.Store, tokens *auth.TokenManager, logger *slog.Logger, webOrigin, stagingRoot string, maxUploadBytes int64) *Server {
+func NewServer(pool *pgxpool.Pool, objectStore storage.Store, tokens *auth.TokenManager, sessions *auth.SessionStore, loginLimiter *auth.LoginLimiter, logger *slog.Logger, webOrigin, stagingRoot string, maxUploadBytes int64) *Server {
 	return &Server{
 		pool:           pool,
 		sources:        repository.NewSources(pool),
@@ -35,6 +37,8 @@ func NewServer(pool *pgxpool.Pool, objectStore storage.Store, tokens *auth.Token
 		similarities:   repository.NewSimilarityReviews(pool),
 		objectStore:    objectStore,
 		tokens:         tokens,
+		sessions:       sessions,
+		loginLimiter:   loginLimiter,
 		logger:         logger,
 		webOrigin:      webOrigin,
 		stagingRoot:    stagingRoot,

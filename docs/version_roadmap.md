@@ -215,7 +215,8 @@ Yapılacaklar:
 
 - [Güvenlik Hardening Backlog'u](security_hardening_backlog.md) içindeki tüm P0 maddelerini kapat.
 - [x] Raw/karantina içerik için default-deny endpoint rol matrisi ve negatif yetki testleri (`SEC-P0-01`, 2026-07-01).
-- Login throttling, session revoke, production fail-closed ve audit attribution hardening.
+- [x] Login throttling, server-side session revoke ve auth-version invalidation (`SEC-P0-02`, 2026-07-01).
+- Production fail-closed ve audit attribution hardening.
 - Storage interface'in S3/MinIO implementasyonu.
 - Object lock veya WORM benzeri değişmezlik politikası.
 - PostgreSQL backup/restore prosedürü.

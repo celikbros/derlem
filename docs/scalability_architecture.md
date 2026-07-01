@@ -42,8 +42,8 @@ gerektiginde eklenebilir.
 
 ## Milyonlarca Kullanici Icin Temel Prensipler
 
-1. **API stateless olur.**
-   - Session state Redis/PostgreSQL tarafinda tutulur.
+1. **API proses-local state tutmaz.**
+   - Session ve login rate-limit state PostgreSQL tarafinda tutulur.
    - API replica sayisi yatay artar.
 
 2. **Dosya yukleme API uzerinden akmaz.**
@@ -151,7 +151,7 @@ Buyume asamasi:
 
 | Katman | Dil | Gerekce |
 | --- | --- | --- |
-| Core API | Go | Yuksek concurrency, sade deploy, stateless API |
+| Core API | Go | Yuksek concurrency, sade deploy, proses-disinda ortak state |
 | Data workers | Python | Polars, DuckDB, Presidio, NLP/veri ekosistemi |
 | Frontend | TypeScript | Next.js ve guvenli UI gelistirme |
 | Hot-path CLI | Rust, opsiyonel | Dedup/hash/parser gibi dar performans isleri |

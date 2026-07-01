@@ -50,6 +50,8 @@ type protectedRoute struct {
 // at least one role before it can be registered.
 func protectedRoutes(s *Server) []protectedRoute {
 	return []protectedRoute{
+		{"POST /api/v1/auth/logout", applicationRoles, s.logout},
+		{"POST /api/v1/auth/logout-all", applicationRoles, s.logoutAll},
 		{"GET /api/v1/sources", sourceWorkspaceRoles, s.listSources},
 		{"POST /api/v1/sources", sourceManagerRoles, s.createSource},
 		{"GET /api/v1/sources/{id}", sourceWorkspaceRoles, s.getSource},

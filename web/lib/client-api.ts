@@ -2,6 +2,10 @@ export async function requestJSON<T>(path: string, init?: RequestInit): Promise<
   const response = await fetch(path, { ...init, cache: "no-store" });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
+    if (response.status === 401 && typeof window !== "undefined" && !path.startsWith("/api/session/")) {
+      await fetch("/api/session/logout", { method: "POST" });
+      window.location.reload();
+    }
     const reasons = Array.isArray(payload?.error?.reasons)
       ? ` (${payload.error.reasons.map((reason: string) => gateReasonLabels[reason] ?? reason).join(", ")})`
       : "";

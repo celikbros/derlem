@@ -18,6 +18,11 @@ type Config struct {
 	JWTSecret              string
 	JWTIssuer              string
 	JWTTTL                 time.Duration
+	SessionIdleTTL         time.Duration
+	LoginFailureWindow     time.Duration
+	LoginLockoutDuration   time.Duration
+	LoginAccountLimit      int
+	LoginIPLimit           int
 	BootstrapAdminEmail    string
 	BootstrapAdminPassword string
 	StorageRoot            string
@@ -35,6 +40,18 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	sessionIdleTTL, err := durationEnv("SESSION_IDLE_TTL", 30*time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
+	loginFailureWindow, err := durationEnv("LOGIN_FAILURE_WINDOW", 15*time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
+	loginLockoutDuration, err := durationEnv("LOGIN_LOCKOUT_DURATION", 15*time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
 	workerPollInterval, err := durationEnv("WORKER_POLL_INTERVAL", 2*time.Second)
 	if err != nil {
 		return Config{}, err
@@ -48,6 +65,9 @@ func Load() (Config, error) {
 		JWTSecret:              os.Getenv("JWT_SECRET"),
 		JWTIssuer:              envOr("JWT_ISSUER", "derlem"),
 		JWTTTL:                 jwtTTL,
+		SessionIdleTTL:         sessionIdleTTL,
+		LoginFailureWindow:     loginFailureWindow,
+		LoginLockoutDuration:   loginLockoutDuration,
 		BootstrapAdminEmail:    strings.ToLower(strings.TrimSpace(os.Getenv("BOOTSTRAP_ADMIN_EMAIL"))),
 		BootstrapAdminPassword: os.Getenv("BOOTSTRAP_ADMIN_PASSWORD"),
 		StorageRoot:            envOr("STORAGE_ROOT", "./var/storage"),
@@ -58,12 +78,23 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	cfg.LoginAccountLimit, err = intEnv("LOGIN_ACCOUNT_FAILURE_LIMIT", 5)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.LoginIPLimit, err = intEnv("LOGIN_IP_FAILURE_LIMIT", 30)
+	if err != nil {
+		return Config{}, err
+	}
 
 	if cfg.DatabaseURL == "" {
 		return Config{}, errors.New("DATABASE_URL is required")
 	}
 	if len(cfg.JWTSecret) < 32 {
 		return Config{}, errors.New("JWT_SECRET must contain at least 32 characters")
+	}
+	if cfg.JWTTTL <= 0 || cfg.SessionIdleTTL <= 0 || cfg.LoginFailureWindow <= 0 || cfg.LoginLockoutDuration <= 0 {
+		return Config{}, errors.New("JWT and login/session durations must be positive")
 	}
 	if cfg.BootstrapAdminEmail != "" && cfg.BootstrapAdminPassword == "" {
 		return Config{}, errors.New("BOOTSTRAP_ADMIN_PASSWORD is required when BOOTSTRAP_ADMIN_EMAIL is set")
@@ -73,6 +104,17 @@ func Load() (Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func intEnv(key string, fallback int) (int, error) {
+	value, err := int64Env(key, int64(fallback))
+	if err != nil {
+		return 0, err
+	}
+	if value > int64(^uint(0)>>1) {
+		return 0, fmt.Errorf("parse %s: value is too large", key)
+	}
+	return int(value), nil
 }
 
 func int64Env(key string, fallback int64) (int64, error) {

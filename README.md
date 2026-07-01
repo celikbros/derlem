@@ -126,8 +126,9 @@ flowchart LR
 ### İstek yolu
 
 Go API; auth, rol kontrolü, kaynak CRUD, optimistic locking, upload akışı,
-inceleme kararları ve audit işlemlerini yürütür. API stateless tasarlanır;
-yatay ölçekleme için oturum durumu proses belleğinde tutulmaz.
+inceleme kararları ve audit işlemlerini yürütür. API proses belleğinde session
+state tutmaz; ortak oturum ve rate-limit durumu PostgreSQL'dedir. Bu nedenle
+API instance'ları yatay çoğaltılabilir.
 
 ### Metadata ve iş kuyruğu
 
@@ -359,6 +360,8 @@ Ayrıntılı yönergeler: [docs/local_development.md](docs/local_development.md)
 | Method | Endpoint | Amaç |
 | --- | --- | --- |
 | `POST` | `/api/v1/auth/login` | JWT oturumu açar |
+| `POST` | `/api/v1/auth/logout` | Geçerli sunucu oturumunu revoke eder |
+| `POST` | `/api/v1/auth/logout-all` | Kullanıcının tüm sunucu oturumlarını revoke eder |
 | `GET` | `/api/v1/me` | Aktif kullanıcı ve rolleri |
 | `GET/POST` | `/api/v1/sources` | Kaynakları listeler veya oluşturur |
 | `GET/PATCH` | `/api/v1/sources/{id}` | Kaynak ayrıntısı ve optimistic update |
@@ -417,7 +420,8 @@ Mutating upload senaryosu ayrıca `E2E_MUTATING=1` ile açıkça etkinleştirili
 Milyonlarca kullanıcı yalnızca programlama dili seçimiyle çözülmez. Derlem şu
 ölçekleme sınırlarını korur:
 
-- API stateless'tir ve birden fazla Go instance'ı çalıştırılabilir.
+- API proses-local state tutmaz; ortak session/rate-limit state PostgreSQL'de
+  olduğu için birden fazla Go instance'ı çalıştırılabilir.
 - Büyük upload API belleğine alınmadan stream edilir.
 - Dosya verisi DB yerine object storage'da tutulur.
 - Job tüketicileri `SKIP LOCKED` ile yatay çoğaltılabilir.
@@ -489,6 +493,7 @@ insan/hak operasyonu sürüyor; sıradaki teknik hedef v0.4.**
 - [Local rol test kullanıcıları](docs/local_role_testing.md)
 - [Production deployment](docs/production_deployment.md)
 - [API yetkilendirme matrisi](docs/api_authorization_matrix.md)
+- [Oturum ve login güvenliği](docs/session_security.md)
 - [Güvenlik hardening backlog'u](docs/security_hardening_backlog.md)
 - [Security hardening backlog (English)](docs/security_hardening_backlog.en.md)
 - [API ve iş akışları](docs/api_workflows.md)

@@ -157,7 +157,11 @@ export function DerlemApp() {
   const canAccessJobs = hasAnyRole(user, jobRoles);
 
   async function logout() {
-    await fetch("/api/session/logout", { method: "POST" });
+    const response = await fetch("/api/session/logout", { method: "POST" });
+    if (!response.ok) {
+      setNotice("Oturum sunucuda kapatılamadı. Lütfen yeniden deneyin.");
+      return;
+    }
     setUser(null);
     setSources([]);
   }

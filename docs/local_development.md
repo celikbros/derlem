@@ -31,10 +31,19 @@ Zorunlu ana ayarlar:
 ```text
 DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/derlem?sslmode=disable
 JWT_SECRET=at-least-32-random-characters
+JWT_TTL=8h
+SESSION_IDLE_TTL=30m
+LOGIN_FAILURE_WINDOW=15m
+LOGIN_LOCKOUT_DURATION=15m
+LOGIN_ACCOUNT_FAILURE_LIMIT=5
+LOGIN_IP_FAILURE_LIMIT=30
 BOOTSTRAP_ADMIN_EMAIL=admin@derlem.local
 BOOTSTRAP_ADMIN_PASSWORD=strong-local-password
 STORAGE_ROOT=./var/storage
 ```
+
+Oturum ve brute-force korumasının ayrıntıları
+[`session_security.md`](session_security.md) belgesindedir.
 
 ## Ilk Kurulum
 

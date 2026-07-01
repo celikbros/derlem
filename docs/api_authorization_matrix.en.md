@@ -25,6 +25,7 @@ there without an explicit, non-empty role list.
 | API group | Allowed roles | Additional boundary |
 |---|---|---|
 | `/api/v1/me` | Every authenticated role | Active user's identity and roles only |
+| Auth logout/logout-all | Every authenticated role | Revokes the current or all server-side sessions |
 | Source catalog/detail | `admin`, `data_manager`, `editor`, `moderator`, `expert_reviewer` | Closed to contributors and consumers |
 | PII scans, sampled documents, quality, review history | `admin`, `data_manager`, `editor`, `moderator`, `expert_reviewer` | Raw/quarantined text uses the same boundary |
 | Source creation, ingest, upload | `admin`, `data_manager` | Write operations are audited |

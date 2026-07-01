@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"runtime/debug"
 	"time"
@@ -21,6 +22,15 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 		claims, err := s.tokens.Parse(token)
 		if err != nil {
 			writeError(w, http.StatusUnauthorized, "invalid_token", "Oturum süresi dolmuş veya token geçersiz.")
+			return
+		}
+		if err := s.sessions.Validate(r.Context(), claims); err != nil {
+			if errors.Is(err, auth.ErrInvalidSession) || errors.Is(err, auth.ErrExpiredSession) || errors.Is(err, auth.ErrRevokedSession) || errors.Is(err, auth.ErrStalePrincipal) {
+				writeError(w, http.StatusUnauthorized, "invalid_session", "Oturum sona ermiş veya yetkiler değişmiş. Yeniden giriş yapın.")
+				return
+			}
+			s.logger.Error("session validation failed", "error", err)
+			writeError(w, http.StatusServiceUnavailable, "auth_unavailable", "Oturum doğrulama servisi geçici olarak kullanılamıyor.")
 			return
 		}
 		ctx := context.WithValue(r.Context(), principalKey{}, claims)

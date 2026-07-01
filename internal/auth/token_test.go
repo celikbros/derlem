@@ -10,7 +10,7 @@ func TestTokenRoundTripAndExpiry(t *testing.T) {
 	now := time.Date(2026, 6, 23, 12, 0, 0, 0, time.UTC)
 	manager.now = func() time.Time { return now }
 
-	token, expiresAt, err := manager.Issue("user-id", "admin@example.com", []string{"admin"})
+	token, expiresAt, err := manager.Issue("user-id", "admin@example.com", []string{"admin"}, "session-id", 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -21,7 +21,7 @@ func TestTokenRoundTripAndExpiry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if claims.Subject != "user-id" || claims.Email != "admin@example.com" || len(claims.Roles) != 1 {
+	if claims.Subject != "user-id" || claims.Email != "admin@example.com" || len(claims.Roles) != 1 || claims.JWTID != "session-id" || claims.AuthVersion != 3 {
 		t.Fatalf("unexpected claims: %#v", claims)
 	}
 
@@ -33,11 +33,21 @@ func TestTokenRoundTripAndExpiry(t *testing.T) {
 
 func TestTokenRejectsTampering(t *testing.T) {
 	manager := NewTokenManager("01234567890123456789012345678901", "derlem-test", time.Hour)
-	token, _, err := manager.Issue("user-id", "admin@example.com", []string{"admin"})
+	token, _, err := manager.Issue("user-id", "admin@example.com", []string{"admin"}, "session-id", 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := manager.Parse(token + "x"); err == nil {
 		t.Fatal("expected tampered token to fail")
+	}
+}
+
+func TestTokenRequiresSessionIdentity(t *testing.T) {
+	manager := NewTokenManager("01234567890123456789012345678901", "derlem-test", time.Hour)
+	if _, _, err := manager.Issue("user-id", "admin@example.com", []string{"admin"}, "", 1); err == nil {
+		t.Fatal("expected empty session identity to fail")
+	}
+	if _, _, err := manager.Issue("user-id", "admin@example.com", []string{"admin"}, "session-id", 0); err == nil {
+		t.Fatal("expected invalid auth version to fail")
 	}
 }

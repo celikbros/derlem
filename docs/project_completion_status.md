@@ -20,7 +20,7 @@ v0.4-v1.0 işleri gerekiyor. En pratik ifadeyle:
 | Model ekiplerine düzenli JSONL/TXT export vermek | %85-90 | Gardas onayı + ilk büyük release |
 | Büyük corpus pilotu | %85-90 | Gardas review/export kapanışı |
 | Üretim-ready v1.0 | %45-50 | v0.4-v0.6 + hukuk/KVKK + prod altyapı |
-| Internet-facing production güvenliği | Bloklu | `SEC-P0-02..08` güvenlik kapıları; `SEC-P0-01` kapandı |
+| Internet-facing production güvenliği | Bloklu | `SEC-P0-03..08` güvenlik kapıları; `SEC-P0-01..02` kapandı |
 
 Bu yüzden "proje bitti mi?" sorusunun cevabı hedefe göre değişir:
 
@@ -143,8 +143,10 @@ Benim mühendislik değerlendirmem:
 - **Büyük corpus pilotu:** teknik hat ve kesintiden devam hazır; Gardas insan/hak kapanışı kaldı.
 - **Model ekiplerine üretilebilir veri teslimi:** temel JSONL/TXT teslim hattı hazır; Gardas temiz adayının kapıları kapanınca büyük gerçek corpus export edilebilir.
 - **Tam üretim platformu:** ayrıca altyapı, hukuk ve operasyon gerekir.
-- **Production güvenliği:** yerel pilot kontrolleri mevcut; kalan P0 session,
-  TLS/CSRF, audit, secret, WORM/backup, upload/DoS ve supply-chain maddeleri
-  kapanmadan dış erişim açılmamalıdır.
+- **Production güvenliği:** yerel pilot kontrolleri mevcut; kalan P0 TLS/CSRF,
+  audit, secret, WORM/backup, upload/DoS ve supply-chain maddeleri kapanmadan
+  dış erişim açılmamalıdır.
 - **Authorization:** `SEC-P0-01` kapandı; tüm veri GET uçları rol matrisine
   bağlıdır, consumer yalnız frozen release görür ve negatif rol testleri vardır.
+- **Session güvenliği:** `SEC-P0-02` kapandı; login throttling, server-side
+  revoke, idle/absolute timeout ve rol/status değişiminde token invalidation vardır.

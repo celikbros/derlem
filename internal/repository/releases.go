@@ -126,13 +126,14 @@ func (r *Releases) Create(ctx context.Context, input domain.CreateReleaseInput, 
 	return release, nil
 }
 
-func (r *Releases) List(ctx context.Context, limit int) ([]domain.Release, error) {
+func (r *Releases) List(ctx context.Context, limit int, status string) ([]domain.Release, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT `+releaseColumns+`
 		FROM releases
+		WHERE ($2 = '' OR status = $2)
 		ORDER BY created_at DESC, id DESC
 		LIMIT $1
-	`, limit)
+	`, limit, status)
 	if err != nil {
 		return nil, err
 	}

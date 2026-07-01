@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"runtime/debug"
-	"slices"
 	"time"
 
 	"github.com/celikbros/derlem/internal/auth"
@@ -37,11 +36,9 @@ func requireRoles(roles ...string) func(http.Handler) http.Handler {
 				writeError(w, http.StatusUnauthorized, "unauthorized", "Oturum açmanız gerekiyor.")
 				return
 			}
-			for _, role := range roles {
-				if slices.Contains(principal.Roles, role) {
-					next.ServeHTTP(w, r)
-					return
-				}
+			if hasAnyRole(principal.Roles, roles) {
+				next.ServeHTTP(w, r)
+				return
 			}
 			writeError(w, http.StatusForbidden, "forbidden", "Bu işlem için yetkiniz bulunmuyor.")
 		})

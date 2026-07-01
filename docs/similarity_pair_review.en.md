@@ -64,10 +64,10 @@ evidence. The run is listed as `pretrain` in the web application's
 
 ## Authorization and API
 
-- Every authenticated user can read runs and pairs.
-- `admin`, `moderator`, and `expert_reviewer` can append decisions.
+- Only `admin`, `moderator`, and `expert_reviewer` can read runs, pairs, and
+  full text or append decisions.
 - Existing decisions are blinded for an eligible user until their own review.
-- Read-only roles can inspect completed decision and consensus evidence.
+- Other roles cannot access similarity endpoints.
 - `GET /api/v1/similarity-calibrations`
 - `GET /api/v1/similarity-calibrations/{id}/pairs`
 - `GET /api/v1/similarity-pairs/{id}`

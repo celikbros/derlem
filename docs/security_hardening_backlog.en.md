@@ -1,7 +1,7 @@
 # Derlem Security Hardening Backlog
 
 **Date:** 2026-07-01
-**Status:** Open production security gate
+**Status:** Open production security gate; 7/8 P0 items open
 **Target baseline:** OWASP ASVS Level 2
 
 This register prevents known security gaps from disappearing inside general
@@ -33,7 +33,7 @@ These controls do not close the production risks below.
 
 | ID | Current gap | Risk | Completion evidence |
 |---|---|---|---|
-| `SEC-P0-01` | Most source, PII scan, sampled-document, document-review, job, and similarity full-text GET routes require authentication but no explicit role. | Roles such as `contributor` or `consumer_team` may read raw, quarantined, or review data beyond need. | Default-deny endpoint matrix; raw/quarantined content limited to operations/reviewer roles; consumers limited to frozen approved artifacts; source/project scope and negative API tests. |
+| `SEC-P0-01` | **Closed, 2026-07-01.** Every data route is registered fail-closed with an explicit non-empty role policy; raw/quarantined workspaces are limited to operations roles, similarity full text to reviewers, jobs to admin/data manager, and consumers to frozen releases. | A future endpoint may be opened to the wrong role or rely on frontend hiding. | [`api_authorization_matrix.en.md`](api_authorization_matrix.en.md), positive/negative tests for every protected GET route across seven roles, and the consumer draft-release filter. Source/project ACLs remain under `SEC-P1-02` before public multi-tenant contribution. |
 | `SEC-P0-02` | No login throttling or lockout. JWTs are stateless for eight hours; logout only removes the cookie. Disabled users and role changes do not invalidate old tokens. | Brute force, stolen-token replay, and stale privilege. | Per-IP/account rate limits and `429`; failed-login audit/alerts; `jti` session store and revocation; idle/absolute timeout; user-status/role-version checks; MFA/SSO plan for admins. |
 | `SEC-P0-03` | Nginx listens on HTTP with HTTPS redirect commented out; no HSTS/CSP/Permissions-Policy. Sensitive API responses lack global `Cache-Control: no-store`; state-changing BFF routes have no explicit CSRF control. The production DB example uses `sslmode=disable`. | Token/data interception, downgrade, amplified XSS impact, cache leakage, and CSRF. | Fail-closed production startup; HTTPS-only TLS 1.2/1.3 and HSTS; verified Secure cookie; CSP, Permissions-Policy, `no-store`, logout `Clear-Site-Data`; Origin/CSRF validation; DB TLS or documented private-network exception. |
 | `SEC-P0-04` | Audit is append-only by trigger, but migration and runtime DB privileges are not separated. No actor email/role snapshot; `request_id` is not an HTTP correlation ID; CLI imports appear as `system`; most sensitive reads/downloads are not audited. | A privileged DB account can weaken evidence; historical attribution and exfiltration investigation are incomplete. | Separate migration-owner/runtime DB roles; runtime audit mutation denial; real request correlation, actor email/role snapshot, hashed session ID, controlled IP/user-agent metadata; CLI service/operator identity; sensitive read/download audit; off-host append-only/WORM or hash-chained audit; retention/redaction policy. |
@@ -63,11 +63,12 @@ These controls do not close the production risks below.
 
 ## Delivery Order
 
-1. `SEC-P0-01`, `SEC-P0-02`, `SEC-P0-03`: external access and identity boundary.
-2. `SEC-P0-04`, `SEC-P0-05`: evidence and secret protection.
-3. `SEC-P0-06`, `SEC-P0-07`: data resilience and DoS resistance.
-4. `SEC-P0-08`: supply-chain gate.
-5. After P0, implement P1 centralized identity, observability, and policy work.
+1. `SEC-P0-01`: complete.
+2. `SEC-P0-02`, `SEC-P0-03`: session, external access, and transport boundary.
+3. `SEC-P0-04`, `SEC-P0-05`: evidence and secret protection.
+4. `SEC-P0-06`, `SEC-P0-07`: data resilience and DoS resistance.
+5. `SEC-P0-08`: supply-chain gate.
+6. After P0, implement P1 centralized identity, observability, and policy work.
 
 An item is not complete without code, negative tests, production runbook
 evidence, and a restore exercise where applicable. Documentation or “the

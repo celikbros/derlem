@@ -34,6 +34,13 @@ type SourceList = {
   next_cursor?: string;
 };
 
+type ActiveView = "sources" | "review" | "similarity" | "releases" | "jobs" | "restricted";
+
+const sourceWorkspaceRoles = ["admin", "data_manager", "editor", "moderator", "expert_reviewer"];
+const reviewerRoles = ["admin", "moderator", "expert_reviewer"];
+const releaseRoles = ["admin", "data_manager", "consumer_team"];
+const jobRoles = ["admin", "data_manager"];
+
 const purposeLabels: Record<string, string> = {
   pretrain: "Pretrain",
   instruction: "Instruction",
@@ -66,7 +73,7 @@ export function DerlemApp() {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Source | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [activeView, setActiveView] = useState<"sources" | "review" | "similarity" | "releases" | "jobs">("sources");
+  const [activeView, setActiveView] = useState<ActiveView>("sources");
   const createDialog = useRef<HTMLDialogElement>(null);
 
   const loadSources = useCallback(async () => {
@@ -89,7 +96,10 @@ export function DerlemApp() {
       try {
         const currentUser = await requestJSON<User>("/api/session/me");
         setUser(currentUser);
-        await loadSources();
+        setActiveView(defaultViewFor(currentUser));
+        if (hasAnyRole(currentUser, sourceWorkspaceRoles)) {
+          await loadSources();
+        }
       } catch {
         setUser(null);
       } finally {
@@ -123,7 +133,15 @@ export function DerlemApp() {
   }
 
   if (!user) {
-    return <Login onLogin={(loggedInUser) => { setUser(loggedInUser); void loadSources(); }} />;
+    return <Login onLogin={(loggedInUser) => {
+      setUser(loggedInUser);
+      setActiveView(defaultViewFor(loggedInUser));
+      if (hasAnyRole(loggedInUser, sourceWorkspaceRoles)) {
+        void loadSources();
+      } else {
+        setSources([]);
+      }
+    }} />;
   }
 
   const clearedCount = sources.filter((source) => source.rights_status === "cleared").length;
@@ -133,6 +151,10 @@ export function DerlemApp() {
   const flaggedSampleCount = sources.reduce((total, source) => total + source.flagged_document_count, 0);
   const approvalReadyCount = sources.filter((source) => nextStepFor(source).key === "source_approval").length;
   const canCreateSource = user.roles.some((role) => ["admin", "data_manager"].includes(role));
+  const canAccessSources = hasAnyRole(user, sourceWorkspaceRoles);
+  const canAccessReview = hasAnyRole(user, reviewerRoles);
+  const canAccessReleases = hasAnyRole(user, releaseRoles);
+  const canAccessJobs = hasAnyRole(user, jobRoles);
 
   async function logout() {
     await fetch("/api/session/logout", { method: "POST" });
@@ -170,31 +192,41 @@ export function DerlemApp() {
           <span>Derlem</span>
         </div>
         <nav aria-label="Ana menü">
-          <button aria-label="Kaynaklar" aria-pressed={activeView === "sources"} className={`nav-item${activeView === "sources" ? " active" : ""}`} type="button" onClick={() => { setActiveView("sources"); setSelected(null); }}>
-            <Library size={18} aria-hidden="true" />
-            Kaynaklar
-            <span>{sources.length}</span>
-          </button>
-          <button aria-label="İnceleme" aria-pressed={activeView === "review"} className={`nav-item${activeView === "review" ? " active" : ""}`} type="button" onClick={() => { setActiveView("review"); setSelected(null); }}>
-            <ClipboardCheck size={18} aria-hidden="true" />
-            İnceleme
-            <span>{sources.filter((source) => reviewStatuses.includes(source.approval_status)).length}</span>
-          </button>
-          <button aria-label="Benzerlik" aria-pressed={activeView === "similarity"} className={`nav-item${activeView === "similarity" ? " active" : ""}`} type="button" onClick={() => { setActiveView("similarity"); setSelected(null); }}>
-            <GitCompareArrows size={18} aria-hidden="true" />
-            Benzerlik
-            <span>›</span>
-          </button>
-          <button aria-label="Sürümler" aria-pressed={activeView === "releases"} className={`nav-item${activeView === "releases" ? " active" : ""}`} type="button" onClick={() => { setActiveView("releases"); setSelected(null); }}>
-            <PackageCheck size={18} aria-hidden="true" />
-            Sürümler
-            <span>›</span>
-          </button>
-          <button aria-label="İşler" aria-pressed={activeView === "jobs"} className={`nav-item${activeView === "jobs" ? " active" : ""}`} type="button" onClick={() => { setActiveView("jobs"); setSelected(null); }}>
-            <ListTodo size={18} aria-hidden="true" />
-            İşler
-            <span>›</span>
-          </button>
+          {canAccessSources && (
+            <button aria-label="Kaynaklar" aria-pressed={activeView === "sources"} className={`nav-item${activeView === "sources" ? " active" : ""}`} type="button" onClick={() => { setActiveView("sources"); setSelected(null); }}>
+              <Library size={18} aria-hidden="true" />
+              Kaynaklar
+              <span>{sources.length}</span>
+            </button>
+          )}
+          {canAccessReview && (
+            <button aria-label="İnceleme" aria-pressed={activeView === "review"} className={`nav-item${activeView === "review" ? " active" : ""}`} type="button" onClick={() => { setActiveView("review"); setSelected(null); }}>
+              <ClipboardCheck size={18} aria-hidden="true" />
+              İnceleme
+              <span>{sources.filter((source) => reviewStatuses.includes(source.approval_status)).length}</span>
+            </button>
+          )}
+          {canAccessReview && (
+            <button aria-label="Benzerlik" aria-pressed={activeView === "similarity"} className={`nav-item${activeView === "similarity" ? " active" : ""}`} type="button" onClick={() => { setActiveView("similarity"); setSelected(null); }}>
+              <GitCompareArrows size={18} aria-hidden="true" />
+              Benzerlik
+              <span>›</span>
+            </button>
+          )}
+          {canAccessReleases && (
+            <button aria-label="Sürümler" aria-pressed={activeView === "releases"} className={`nav-item${activeView === "releases" ? " active" : ""}`} type="button" onClick={() => { setActiveView("releases"); setSelected(null); }}>
+              <PackageCheck size={18} aria-hidden="true" />
+              Sürümler
+              <span>›</span>
+            </button>
+          )}
+          {canAccessJobs && (
+            <button aria-label="İşler" aria-pressed={activeView === "jobs"} className={`nav-item${activeView === "jobs" ? " active" : ""}`} type="button" onClick={() => { setActiveView("jobs"); setSelected(null); }}>
+              <ListTodo size={18} aria-hidden="true" />
+              İşler
+              <span>›</span>
+            </button>
+          )}
         </nav>
         <div className="sidebar-footer">
           <div className="user-block">
@@ -210,8 +242,8 @@ export function DerlemApp() {
       <main className="workspace">
         <header className="page-header">
           <div>
-            <p className="eyebrow">{activeView === "review" ? "Moderasyon" : activeView === "similarity" ? "Kalibrasyon" : activeView === "releases" ? "Release Builder" : activeView === "jobs" ? "Worker kuyruğu" : "Kaynak kataloğu"}</p>
-            <h1>{activeView === "review" ? "İnceleme kuyruğu" : activeView === "similarity" ? "Benzerlik incelemesi" : activeView === "releases" ? "Sürümler" : activeView === "jobs" ? "Arka plan işleri" : "Veri kaynakları"}</h1>
+            <p className="eyebrow">{viewHeading(activeView).eyebrow}</p>
+            <h1>{viewHeading(activeView).title}</h1>
           </div>
           {canCreateSource && (activeView === "sources" || activeView === "review") && (
             <button className="primary-button" type="button" onClick={() => createDialog.current?.showModal()}>
@@ -220,7 +252,7 @@ export function DerlemApp() {
           )}
         </header>
 
-        {activeView !== "similarity" && <section className="summary-strip" aria-label={activeView === "review" ? "İnceleme özeti" : "Kaynak özeti"}>
+        {(activeView === "sources" || activeView === "review") && <section className="summary-strip" aria-label={activeView === "review" ? "İnceleme özeti" : "Kaynak özeti"}>
           {activeView === "review" ? (
             <>
               <Summary icon={<ClipboardCheck />} label="Kuyruktaki kaynak" value={reviewQueueSources.length} tone="blue" />
@@ -246,7 +278,12 @@ export function DerlemApp() {
           </div>
         )}
 
-        {activeView === "jobs" ? <JobsPanel onNotice={setNotice} /> : activeView === "releases" ? <ReleasePanel sources={sources} user={user} onNotice={setNotice} /> : activeView === "similarity" ? <SimilarityReviewPanel user={user} onNotice={setNotice} /> : <section className={`catalog-layout${selected ? " with-inspector" : ""}`}>
+        {activeView === "restricted" ? (
+          <section className="empty-state" aria-label="Yetkili çalışma alanı bulunamadı">
+            <ShieldCheck size={24} aria-hidden="true" />
+            <p>Bu rol için etkin bir çalışma alanı bulunmuyor.</p>
+          </section>
+        ) : activeView === "jobs" ? <JobsPanel onNotice={setNotice} /> : activeView === "releases" ? <ReleasePanel sources={sources} user={user} onNotice={setNotice} /> : activeView === "similarity" ? <SimilarityReviewPanel user={user} onNotice={setNotice} /> : <section className={`catalog-layout${selected ? " with-inspector" : ""}`}>
           <div className="catalog-panel">
             <div className="table-toolbar">
               <label className="search-field">
@@ -428,6 +465,28 @@ function parseLocalAccounts(value: string | undefined) {
       return { label, email, password };
     })
     .filter((account) => account.label && account.email && account.password);
+}
+
+function hasAnyRole(user: User, allowedRoles: string[]) {
+  return user.roles.some((role) => allowedRoles.includes(role));
+}
+
+function defaultViewFor(user: User): ActiveView {
+  if (hasAnyRole(user, sourceWorkspaceRoles)) return "sources";
+  if (hasAnyRole(user, releaseRoles)) return "releases";
+  return "restricted";
+}
+
+function viewHeading(view: ActiveView) {
+  const headings: Record<ActiveView, { eyebrow: string; title: string }> = {
+    sources: { eyebrow: "Kaynak kataloğu", title: "Veri kaynakları" },
+    review: { eyebrow: "Moderasyon", title: "İnceleme kuyruğu" },
+    similarity: { eyebrow: "Kalibrasyon", title: "Benzerlik incelemesi" },
+    releases: { eyebrow: "Release Builder", title: "Sürümler" },
+    jobs: { eyebrow: "Worker kuyruğu", title: "Arka plan işleri" },
+    restricted: { eyebrow: "Yetkilendirme", title: "Çalışma alanı" },
+  };
+  return headings[view];
 }
 
 function Summary({ icon, label, value, tone = "neutral" }: { icon: React.ReactElement; label: string; value: number; tone?: string }) {

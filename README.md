@@ -488,6 +488,7 @@ insan/hak operasyonu sürüyor; sıradaki teknik hedef v0.4.**
 - [Yerel geliştirme](docs/local_development.md)
 - [Local rol test kullanıcıları](docs/local_role_testing.md)
 - [Production deployment](docs/production_deployment.md)
+- [API yetkilendirme matrisi](docs/api_authorization_matrix.md)
 - [Güvenlik hardening backlog'u](docs/security_hardening_backlog.md)
 - [Security hardening backlog (English)](docs/security_hardening_backlog.en.md)
 - [API ve iş akışları](docs/api_workflows.md)

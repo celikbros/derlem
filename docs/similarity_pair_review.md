@@ -65,10 +65,10 @@ listelenir.
 
 ## Yetki ve API
 
-- Tüm oturum açmış kullanıcılar koşuları ve çiftleri okuyabilir.
-- `admin`, `moderator` ve `expert_reviewer` karar ekleyebilir.
+- Yalnız `admin`, `moderator` ve `expert_reviewer` koşu, çift ve tam metin
+  okuyabilir ve karar ekleyebilir.
 - Karar yetkili kullanıcı için diğer kararlar kendi review'una kadar körlenir.
-- Salt-okuma rolleri tamamlanmış karar ve uzlaşı kanıtlarını okuyabilir.
+- Diğer roller benzerlik endpoint'lerine erişemez.
 - `GET /api/v1/similarity-calibrations`
 - `GET /api/v1/similarity-calibrations/{id}/pairs`
 - `GET /api/v1/similarity-pairs/{id}`

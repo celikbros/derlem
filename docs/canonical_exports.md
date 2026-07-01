@@ -129,7 +129,9 @@ sayimi kendi katmaninda yapar; Derlem verisi yeniden onaylanmaz.
 
 - Export baslatma: `admin`, `data_manager`
 - Artifact ve manifest indirme: `admin`, `data_manager`, `consumer_team`
-- Diger roller: release metadata'sini gorebilir, artifact indiremez
+- Release metadata: `admin`, `data_manager`, `consumer_team`; consumer yalniz
+  frozen release'leri gorebilir
+- Diger roller release metadata veya artifact erisimi alamaz
 
 ## Kanonik Yapisal Kayit
 

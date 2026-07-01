@@ -21,7 +21,12 @@ func (s *Server) listReleases(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_limit", "Limit pozitif bir sayı olmalıdır.")
 		return
 	}
-	releases, err := s.releases.List(r.Context(), limit)
+	principal, _ := principalFrom(r.Context())
+	status := ""
+	if !canReadDraftReleases(principal.Roles) {
+		status = "frozen"
+	}
+	releases, err := s.releases.List(r.Context(), limit, status)
 	if err != nil {
 		s.logger.Error("list releases failed", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal_error", "Sürümler getirilemedi.")
@@ -39,6 +44,11 @@ func (s *Server) getRelease(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.logger.Error("get release failed", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal_error", "Sürüm getirilemedi.")
+		return
+	}
+	principal, _ := principalFrom(r.Context())
+	if release.Status != "frozen" && !canReadDraftReleases(principal.Roles) {
+		writeError(w, http.StatusNotFound, "release_not_found", "Sürüm bulunamadı.")
 		return
 	}
 	writeJSON(w, http.StatusOK, release)

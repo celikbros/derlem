@@ -128,7 +128,9 @@ new approval.
 
 - Start an export: `admin`, `data_manager`
 - Download artifact and manifest: `admin`, `data_manager`, `consumer_team`
-- Other roles can inspect release metadata but cannot download artifacts
+- Release metadata: `admin`, `data_manager`, `consumer_team`; consumers see
+  frozen releases only
+- Other roles cannot access release metadata or artifacts
 
 ## Canonical Structured Record
 

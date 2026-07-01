@@ -1,7 +1,7 @@
 # Derlem Güvenlik Hardening Backlog'u
 
 **Tarih:** 2026-07-01
-**Durum:** Açık, production güvenlik kapısı
+**Durum:** Açık, production güvenlik kapısı; 7/8 P0 açık
 **Referans seviye:** OWASP ASVS Level 2 hedefi
 
 Bu belge bilinen güvenlik eksiklerinin sohbet veya genel yol haritası içinde
@@ -33,7 +33,7 @@ Bu kontroller önemlidir fakat aşağıdaki production açıklarını tek başı
 
 | ID | Açık / mevcut kanıt | Risk | Kapanış kriteri |
 |---|---|---|---|
-| `SEC-P0-01` | Kaynak, PII scan, sample document, document review, job ve similarity tam-metin GET uçlarının çoğu yalnızca authenticated kullanıcı ister. | `contributor` veya `consumer_team` gibi roller ham, karantina veya review verisini gereğinden fazla okuyabilir. | Default-deny endpoint matrisi; ham/karantina içerik yalnızca operasyon/reviewer rolleri; consumer yalnızca frozen/onaylı artifact; kaynak/proje kapsamlı yetki ve negatif API testleri. |
+| `SEC-P0-01` | **Kapandı, 2026-07-01.** Tüm veri route'ları açık ve boş olmayan rol politikasıyla fail-closed kaydediliyor; ham/karantina çalışma alanı operasyon rollerine, similarity tam metni reviewer rollerine, job verisi admin/data manager'a kapalı; consumer yalnız frozen release görür. | Yeni endpoint'in yanlış role açılması veya frontend kontrolüne güvenilmesi. | [`api_authorization_matrix.md`](api_authorization_matrix.md), yedi rolün tüm korumalı GET uçlarındaki pozitif/negatif testleri ve consumer draft-release filtresi. Kaynak/proje ACL'si public multi-tenant katkı öncesi `SEC-P1-02` kapsamındadır. |
 | `SEC-P0-02` | Login throttling/lockout yok. JWT 8 saat stateless; logout yalnızca cookie siler. Kullanıcı devre dışı veya rolü değişmiş olsa da eski token süresi bitene kadar çalışabilir. | Brute force, çalınmış token tekrar kullanımı ve eski yetkiyle işlem. | IP+hesap rate limit ve `429`; başarısız login audit/uyarı; `jti`/session store, server-side revoke, idle+absolute timeout; kullanıcı status/role sürüm kontrolü; admin için MFA/SSO planı. |
 | `SEC-P0-03` | Nginx örneği HTTP dinliyor ve HTTPS redirect yorum satırında; HSTS/CSP/Permissions-Policy yok. Hassas API yanıtlarında genel `Cache-Control: no-store` ve state-changing BFF uçlarında açık CSRF kontrolü yok. Production DB örneği `sslmode=disable`. | Token/veri dinleme, downgrade, XSS etkisinin büyümesi, cache sızıntısı ve CSRF. | Production startup fail-closed; HTTPS-only TLS 1.2/1.3, HSTS; `Secure` cookie doğrulaması; CSP, Permissions-Policy, `no-store`, logout `Clear-Site-Data`; Origin/CSRF doğrulaması; DB TLS veya belgelenmiş private-network istisnası. |
 | `SEC-P0-04` | Audit DB trigger ile append-only; fakat runtime/migration DB yetkileri ayrılmamış. Actor email/rol snapshot'ı yok; `request_id` HTTP isteğiyle korele değil; CLI import `system` görünür; hassas read/download olaylarının çoğu audit edilmez. | Yetkili DB hesabı logu bozabilir; geçmiş kimlik ve olay zinciri ispatı zayıflar; veri sızıntısı izlenemez. | Ayrı migration-owner/runtime DB rolleri; runtime için audit mutation kesin yasak; gerçek request correlation, actor email/rol snapshot, hashed session ID ve kontrollü IP/user-agent metadata; CLI service/operator identity; raw/sensitive read ve download audit'i; off-host append-only/WORM veya hash-zincirli audit; retention/redaction politikası. |
@@ -63,11 +63,12 @@ Bu kontroller önemlidir fakat aşağıdaki production açıklarını tek başı
 
 ## Uygulama Sırası
 
-1. `SEC-P0-01`, `SEC-P0-02`, `SEC-P0-03`: dış erişim ve kimlik sınırı.
-2. `SEC-P0-04`, `SEC-P0-05`: kanıt ve secret güvenliği.
-3. `SEC-P0-06`, `SEC-P0-07`: veri dayanıklılığı ve DoS direnci.
-4. `SEC-P0-08`: supply-chain kapısı.
-5. P0 kapandıktan sonra P1 merkezi kimlik, gözlemlenebilirlik ve resmi politika.
+1. `SEC-P0-01`: tamamlandı.
+2. `SEC-P0-02`, `SEC-P0-03`: oturum, dış erişim ve taşıma sınırı.
+3. `SEC-P0-04`, `SEC-P0-05`: kanıt ve secret güvenliği.
+4. `SEC-P0-06`, `SEC-P0-07`: veri dayanıklılığı ve DoS direnci.
+5. `SEC-P0-08`: supply-chain kapısı.
+6. P0 kapandıktan sonra P1 merkezi kimlik, gözlemlenebilirlik ve resmi politika.
 
 Her madde kod, negatif test, production runbook kanıtı ve gerekiyorsa restore
 tatbikatı olmadan tamamlandı sayılmaz. Sadece doküman veya “operatör dikkat

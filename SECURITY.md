@@ -31,6 +31,10 @@ Gerekirse redakte edilmiş ve sentetik bir örnek kullanın.
 
 ### Öncelikli güvenlik alanları
 
+Bilinen hardening açıkları, öncelikleri ve kapanış kanıtları
+[`docs/security_hardening_backlog.md`](docs/security_hardening_backlog.md)
+belgesinde tutulur. Açık P0 varken internet-facing production açılmaz.
+
 - Auth bypass, rol yükseltme ve self-review ihlali.
 - Upload path traversal, staging kaçışı ve sınırsız bellek/disk tüketimi.
 - Immutable object veya frozen release'in değiştirilebilmesi.
@@ -66,6 +70,10 @@ Never attach real passwords, JWTs, API keys, personal data, or corpus samples.
 Use redacted and synthetic examples where necessary.
 
 ### Priority security areas
+
+Known hardening gaps, priorities, and closure evidence are tracked in
+[`docs/security_hardening_backlog.en.md`](docs/security_hardening_backlog.en.md).
+Internet-facing production remains blocked while any P0 item is open.
 
 - Authentication bypass, privilege escalation, and self-review violations.
 - Upload path traversal, staging escape, and unbounded memory/disk consumption.

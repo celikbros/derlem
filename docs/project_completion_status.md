@@ -1,6 +1,6 @@
 # Derlem Proje Tamamlanma Durumu
 
-**Tarih:** 2026-06-30
+**Tarih:** 2026-07-01
 **Kapsam:** Derlem veri atölyesinin mevcut gerçek durumu, kalan işler ve tamamlanma yorumu.
 
 ## Kısa Cevap
@@ -20,6 +20,7 @@ v0.4-v1.0 işleri gerekiyor. En pratik ifadeyle:
 | Model ekiplerine düzenli JSONL/TXT export vermek | %85-90 | Gardas onayı + ilk büyük release |
 | Büyük corpus pilotu | %85-90 | Gardas review/export kapanışı |
 | Üretim-ready v1.0 | %45-50 | v0.4-v0.6 + hukuk/KVKK + prod altyapı |
+| Internet-facing production güvenliği | Bloklu | `SEC-P0-01..08` güvenlik kapıları |
 
 Bu yüzden "proje bitti mi?" sorusunun cevabı hedefe göre değişir:
 
@@ -27,6 +28,7 @@ Bu yüzden "proje bitti mi?" sorusunun cevabı hedefe göre değişir:
 - **Gardas temiz verisini onaylı release yapmak için:** az kaldı, ama insan/hak kapıları bekliyor.
 - **LLM/tokenizer ekiplerinin rahatça kullanacağı temel veri fabrikası için:** Export Builder ve toplu review hazır; Gardas kapılarının kapanması ve risk bazlı kalite katmanı sırada.
 - **Milyonlarca kullanıcı/üretim sistemi için:** daha erken aşamadayız; mimari doğru ama prod işleri bitmedi.
+- **İnternete açık deployment için:** P0 güvenlik backlog'u kapanmadan hazır değil.
 
 ## Veritabanındaki Güncel Durum
 
@@ -117,6 +119,7 @@ ana kapılar artık teknik değil:
 
 ### v1.0 İçin Kalanlar
 
+- [Güvenlik Hardening Backlog'u](security_hardening_backlog.md) içindeki P0/P1 maddeleri.
 - Hukuk/KVKK/telif sürecinin resmi karara bağlanması.
 - Takedown/delete policy.
 - S3/MinIO veya production object storage.
@@ -140,3 +143,6 @@ Benim mühendislik değerlendirmem:
 - **Büyük corpus pilotu:** teknik hat ve kesintiden devam hazır; Gardas insan/hak kapanışı kaldı.
 - **Model ekiplerine üretilebilir veri teslimi:** temel JSONL/TXT teslim hattı hazır; Gardas temiz adayının kapıları kapanınca büyük gerçek corpus export edilebilir.
 - **Tam üretim platformu:** ayrıca altyapı, hukuk ve operasyon gerekir.
+- **Production güvenliği:** yerel pilot kontrolleri mevcut; P0 authorization,
+  session, TLS/CSRF, audit, secret, WORM/backup, upload/DoS ve supply-chain
+  maddeleri kapanmadan dış erişim açılmamalıdır.

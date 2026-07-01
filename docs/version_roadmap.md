@@ -1,6 +1,6 @@
 # Derlem Versiyon Yol Haritasi
 
-**Tarih:** 2026-06-30
+**Tarih:** 2026-07-01
 **Kapsam:** Derlem veri atölyesinin versiyon versiyon hedefleri, mevcut konumu ve sonraki işler.
 
 Bu belge Derlem'i LLM/tokenizer projelerinden bağımsız, modelden bağımsız ve
@@ -37,10 +37,10 @@ Sistem artık tek dosya/tek kaynak ölçeğinde güvenli bir uçtan uca akış �
 - Next.js web arayüzünde kaynak katalogu, inceleme, işler ve sürümler ekranları çalışıyor.
 - GitHub Actions CI backend/worker/web için yeşil.
 
-Eksik olan şey artık temel güvenlik omurgası değil; **ölçekli corpus operasyonu**:
-Gardas/Faz 2 gibi büyük kaynakları tam corpus seviyesinde indekslemek, toplu review
-akışları kurmak, export/shard üretmek, kalite skorlarını derinleştirmek ve üretim
-ölçeğine taşımak.
+Yerel kapalı pilotun temel güvenlik omurgası hazırdır; fakat bu durum production
+hardening'in tamamlandığı anlamına gelmez. Ölçekli corpus operasyonuna ek olarak
+[Güvenlik Hardening Backlog'u](security_hardening_backlog.md) içindeki P0
+maddeleri internet-facing staging/production için bloklayıcıdır.
 
 ## Versiyon İlkeleri
 
@@ -49,6 +49,15 @@ akışları kurmak, export/shard üretmek, kalite skorlarını derinleştirmek v
 - Her versiyon bir "çıktı" üretmelidir: çalışan kod, migration, UI akışı, test ve doküman.
 - Donmuş release değişmez; hata düzeltmesi yeni release/version olarak çıkar.
 - Yeni model çıktığında Derlem verisi model bazlı yeniden onaylanmaz. Model uyarlaması eğitim/export katmanının işidir.
+
+## Yatay Güvenlik Kapısı
+
+- Yerel ve kapalı Gardas review/release pilotu devam edebilir.
+- P0 güvenlik maddeleri kapanmadan internet-facing staging/production açılamaz.
+- Açık katkı veya dış kullanıcı erişimi P0 auth, authorization, upload ve audit
+  maddeleri tamamlanmadan etkinleştirilemez.
+- `v1.0`, açık P0/P1 güvenlik maddesi varken tamamlandı sayılamaz.
+- Güvenlik maddesi yalnızca kod, negatif test ve production/restore kanıtıyla kapanır.
 
 ## Sürüm Özeti
 
@@ -59,7 +68,7 @@ akışları kurmak, export/shard üretmek, kalite skorlarını derinleştirmek v
 | v0.3 | Tamamlandı | Toplu review, kalite skorları, yapısal export ve token tahmini | Eğitim ekiplerine kanonik JSONL/TXT paketleri |
 | v0.4 | Aktif | Gelişmiş dedup/decontam ve veri karışımı | MinHash/SimHash, mixture raporu, risk bazlı örneklem |
 | v0.5 | Planlandı | Katkı, ajan ve servis hesabı pilotu | Açık/kapalı katkı kuyruğu ve ajan audit modeli |
-| v0.6 | Planlandı | Üretim altyapısı ve ölçek hazırlığı | S3/MinIO, Redis/NATS ölçümü, backup/restore, gözlemlenebilirlik |
+| v0.6 | Planlandı | P0 güvenlik, üretim altyapısı ve ölçek hazırlığı | RBAC hardening, session/audit, S3/MinIO, backup/restore, gözlemlenebilirlik |
 | v1.0 | Hedef | Üretim-ready Derlem | Hukuk/KVKK süreçleri, SLA, release sözleşmesi, model ekipleriyle resmi kullanım |
 
 ## v0.1 - Core MVP
@@ -204,6 +213,9 @@ Amaç, yerel MVP garantilerini üretim ortamına taşımak.
 
 Yapılacaklar:
 
+- [Güvenlik Hardening Backlog'u](security_hardening_backlog.md) içindeki tüm P0 maddelerini kapat.
+- Raw/karantina içerik için default-deny endpoint rol matrisi ve negatif yetki testleri.
+- Login throttling, session revoke, production fail-closed ve audit attribution hardening.
 - Storage interface'in S3/MinIO implementasyonu.
 - Object lock veya WORM benzeri değişmezlik politikası.
 - PostgreSQL backup/restore prosedürü.
@@ -214,6 +226,7 @@ Yapılacaklar:
 
 Kapanış kriteri:
 
+- Açık P0 güvenlik maddesi yoktur.
 - Staging ortamı sıfırdan kurulabilir.
 - Backup'tan geri dönüş denenmiştir.
 - Büyük ingest job'u izlenebilir ve yeniden başlatılabilir.
@@ -236,6 +249,7 @@ Yapılacaklar:
 
 Kapanış kriteri:
 
+- Açık P0 veya P1 güvenlik maddesi yoktur; ASVS Level 2 kontrol matrisi kanıtlıdır.
 - En az bir gerçek büyük corpus release'i frozen olur.
 - LLM/tokenizer ekipleri bu release'i manifest ve checksum ile tüketir.
 - Geriye dönük izlenebilirlik audit + manifest + storage hash ile kanıtlanır.
@@ -252,10 +266,12 @@ Kapanış kriteri:
 6. Büyük dosya ingest ve index job'larında progress/result raporunu derinleştir. **Tamamlandı.**
 7. Büyük ingest için resume/checkpoint desteği ekle. **Tamamlandı.**
 8. Gardas nesil 2 örneklerini hak/lisans kararıyla birlikte insan review'dan geçir.
+9. Public/staging açmadan önce P0 güvenlik backlog'unu sırayla kapat.
 
 ## Şu Anki Karar
 
 Derlem'in yönü doğru: güvenlik ve izlenebilirlik omurgası ile büyük corpus teknik
 hattı kuruldu. v0.3 teknik hedefleri tamamlandı. Şimdiki teknik odak **v0.4 -
 gelişmiş dedup, yaklaşık decontamination ve mixture raporu**; Gardas insan/hak
-operasyonu paralel sürer.
+operasyonu paralel sürer. Bu çalışma yerel kapalı pilot içindir; production
+deployment P0 güvenlik kapısı kapanana kadar blokludur.

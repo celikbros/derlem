@@ -3,6 +3,11 @@
 **Durum:** ilk canlı sunucu runbook'u
 **Hedef:** Docker kullanmadan tek Linux VPS üzerinde ilk canlı kurulum
 
+> **Güvenlik blokajı:** Bu belge kurulum taslağıdır; production-ready onayı
+> değildir. [Güvenlik Hardening Backlog'u](security_hardening_backlog.md)
+> içindeki tüm P0 maddeleri kapanmadan internet-facing staging/production
+> açılmamalıdır.
+
 Bu runbook ilk canlıya alma için sistemi sade tutar: PostgreSQL, Go API, Python
 worker, Next.js web ve Nginx aynı sunucuda çalışır. İlk canlı kesitte Docker,
 Kubernetes, Redis, Kafka ve MinIO zorunlu değildir.
@@ -170,6 +175,7 @@ kaydı oluşturulup upload akışı denenir.
 
 ## 10. İlk Canlı Kesit Checklist
 
+- [ ] Güvenlik backlog'unda açık P0 kalmadı.
 - [ ] Domain sunucu IP'sine gidiyor.
 - [ ] TLS sertifikası kuruldu.
 - [ ] `/etc/derlem/derlem.env` production değerleriyle dolduruldu.

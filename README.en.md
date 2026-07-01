@@ -484,6 +484,7 @@ continues; v0.4 is the active technical target.**
 - [Local development](docs/local_development.md)
 - [Local role test users](docs/local_role_testing.md)
 - [Production deployment](docs/production_deployment.md)
+- [Security hardening backlog](docs/security_hardening_backlog.en.md)
 - [API and workflows](docs/api_workflows.md)
 - [Risk-based sampling](docs/risk_sampling.en.md)
 - [Controlled document resampling](docs/document_resampling.en.md)

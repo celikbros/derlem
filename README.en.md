@@ -482,6 +482,7 @@ continues; v0.4 is the active technical target.**
 
 ## Documentation
 
+- [Comprehensive project and handover report (Turkish)](docs/derlem_kapsamli_proje_raporu.md)
 - [MVP plan](docs/web_data_atolyesi_mvp_plan.md)
 - [Version roadmap](docs/version_roadmap.md)
 - [Project completion status](docs/project_completion_status.md)

@@ -36,7 +36,7 @@ export function ReleasePanel({
   const [selected, setSelected] = useState<Release | null>(null);
   const [purpose, setPurpose] = useState("instruction");
   const [selectedSourceIDs, setSelectedSourceIDs] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [freezing, setFreezing] = useState<string | null>(null);
   const [exporting, setExporting] = useState<string | null>(null);
   const createDialog = useRef<HTMLDialogElement>(null);
@@ -45,7 +45,6 @@ export function ReleasePanel({
   const canDownload = user.roles.some((role) => ["admin", "data_manager", "consumer_team"].includes(role));
 
   const loadReleases = useCallback(async () => {
-    setLoading(true);
     try {
       const payload = await requestJSON<{ items: Release[] }>("/api/releases");
       setReleases(payload.items);
@@ -60,7 +59,8 @@ export function ReleasePanel({
   }, [onNotice]);
 
   useEffect(() => {
-    void loadReleases();
+    const timer = window.setTimeout(() => { void loadReleases(); }, 0);
+    return () => window.clearTimeout(timer);
   }, [loadReleases]);
 
   const eligibleSources = useMemo(
@@ -179,7 +179,7 @@ export function ReleasePanel({
             <span>{releases.length} sürüm</span>
           </div>
           <div className="toolbar-actions">
-            <button className="icon-button" type="button" title="Sürümleri yenile" onClick={() => void loadReleases()}>
+            <button className="icon-button" type="button" title="Sürümleri yenile" onClick={() => { setLoading(true); void loadReleases(); }}>
               <RefreshCw className={loading ? "spin" : ""} size={18} />
             </button>
             {canManage && (

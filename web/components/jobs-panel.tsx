@@ -22,8 +22,7 @@ export function JobsPanel({ onNotice }: { onNotice: (message: string) => void })
   const [jobs, setJobs] = useState<BackgroundJob[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
+  const load = useCallback(async () => {
     try {
       const payload = await requestJSON<{ items: BackgroundJob[] }>("/api/jobs?limit=200");
       setJobs(payload.items);
@@ -34,11 +33,14 @@ export function JobsPanel({ onNotice }: { onNotice: (message: string) => void })
     }
   }, [onNotice]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void load(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
   const hasActiveJobs = jobs.some((job) => job.status === "queued" || job.status === "running");
   useEffect(() => {
     if (!hasActiveJobs) return;
-    const timer = window.setInterval(() => { void load(true); }, 2_000);
+    const timer = window.setInterval(() => { void load(); }, 2_000);
     return () => window.clearInterval(timer);
   }, [hasActiveJobs, load]);
 
@@ -49,7 +51,7 @@ export function JobsPanel({ onNotice }: { onNotice: (message: string) => void })
           <span>{jobs.length.toLocaleString("tr-TR")} iş</span>
           <small>Kuyruk ve worker sonuçları</small>
         </div>
-        <button className="icon-button" type="button" title="İşleri yenile" onClick={() => void load()}>
+        <button className="icon-button" type="button" title="İşleri yenile" onClick={() => { setLoading(true); void load(); }}>
           <RefreshCw className={loading ? "spin" : ""} size={18} aria-hidden="true" />
         </button>
       </div>

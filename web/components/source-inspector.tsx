@@ -91,13 +91,12 @@ export function SourceInspector({
   const [selectedDocumentIDs, setSelectedDocumentIDs] = useState<Set<string>>(new Set());
   const [bulkReviewing, setBulkReviewing] = useState(false);
   const [resampling, setResampling] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const editDialog = useRef<HTMLDialogElement>(null);
   const documentDialog = useRef<HTMLDialogElement>(null);
 
   const loadActivity = useCallback(async () => {
-    setLoading(true);
     try {
       const [reviewPayload, scanPayload, jobPayload, documentPayload, generationPayload, qualityPayload] = await Promise.all([
         requestJSON<{ items: Review[] }>(`/api/sources/${source.id}/reviews`),
@@ -140,11 +139,21 @@ export function SourceInspector({
     }
   }, [onNotice, onRefresh, source.document_sampling_status, source.duplicate_status, source.id, source.normalized_dedup_status, source.object_sha256, source.pii_status]);
 
-  useEffect(() => { void loadActivity(); }, [loadActivity, source.version]);
   useEffect(() => {
+    const timer = window.setTimeout(() => { void loadActivity(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadActivity, source.version]);
+
+  // Kaynak değişince seçim/özet render sırasında sıfırlanır ve yükleme
+  // göstergesi açılır (effect içinde senkron setState yerine React'in
+  // "adjust state during render" deseni).
+  const [prevSourceID, setPrevSourceID] = useState(source.id);
+  if (prevSourceID !== source.id) {
+    setPrevSourceID(source.id);
     setSelectedDocumentIDs(new Set());
     setQualitySummary(null);
-  }, [source.id]);
+    setLoading(true);
+  }
   useEffect(() => {
     if (!jobs.some((job) => job.status === "queued" || job.status === "running")) return;
     const timer = window.setTimeout(() => { void loadActivity(); }, 1500);
@@ -571,7 +580,7 @@ export function SourceInspector({
       <section className="inspector-section">
         <div className="section-heading">
           <h3><ShieldAlert size={16} /> Onay kapısı</h3>
-          <button className="icon-button compact" type="button" title="Ayrıntıları yenile" onClick={() => void loadActivity()}>
+          <button className="icon-button compact" type="button" title="Ayrıntıları yenile" onClick={() => { setLoading(true); void loadActivity(); }}>
             <RefreshCw className={loading ? "spin" : ""} size={15} />
           </button>
         </div>

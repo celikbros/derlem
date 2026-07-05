@@ -62,7 +62,6 @@ export function SimilarityReviewPanel({ user, onNotice }: Props) {
   }), [pairFilter, pairs]);
 
   const loadRuns = useCallback(async () => {
-    setLoading(true);
     try {
       const payload = await requestJSON<{ items: SimilarityCalibrationRun[] }>("/api/similarity-calibrations");
       setRuns(payload.items);
@@ -75,11 +74,7 @@ export function SimilarityReviewPanel({ user, onNotice }: Props) {
   }, [onNotice]);
 
   const loadPairs = useCallback(async (runID: string) => {
-    if (!runID) {
-      setPairs([]);
-      return [];
-    }
-    setLoading(true);
+    if (!runID) return [];
     try {
       const payload = await requestJSON<{ items: SimilarityReviewPair[] }>(
         `/api/similarity-calibrations/${encodeURIComponent(runID)}/pairs?limit=200`,
@@ -98,11 +93,7 @@ export function SimilarityReviewPanel({ user, onNotice }: Props) {
   }, [onNotice]);
 
   const loadDetail = useCallback(async (pairID: string) => {
-    if (!pairID) {
-      setDetail(null);
-      return;
-    }
-    setLoadingDetail(true);
+    if (!pairID) return;
     try {
       const payload = await requestJSON<SimilarityPairDetail>(
         `/api/similarity-pairs/${encodeURIComponent(pairID)}`,
@@ -115,13 +106,34 @@ export function SimilarityReviewPanel({ user, onNotice }: Props) {
     }
   }, [onNotice]);
 
-  useEffect(() => { void loadRuns(); }, [loadRuns]);
-  useEffect(() => { void loadPairs(selectedRunID); }, [loadPairs, selectedRunID]);
-  useEffect(() => { void loadDetail(selectedPairID); }, [loadDetail, selectedPairID]);
   useEffect(() => {
-    if (filteredPairs.some((pair) => pair.id === selectedPairID)) return;
+    const timer = window.setTimeout(() => { void loadRuns(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadRuns]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void loadPairs(selectedRunID); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadPairs, selectedRunID]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void loadDetail(selectedPairID); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadDetail, selectedPairID]);
+
+  // Seçim listeyle uyumsuzsa render sırasında düzeltilir; detay yükleme
+  // göstergesi de seçim değişiminde burada açılır (effect içinde senkron
+  // setState yerine React'in "adjust state during render" deseni).
+  if (!filteredPairs.some((pair) => pair.id === selectedPairID) && (filteredPairs[0]?.id ?? "") !== selectedPairID) {
     setSelectedPairID(filteredPairs[0]?.id ?? "");
-  }, [filteredPairs, selectedPairID]);
+  }
+  const [prevPairID, setPrevPairID] = useState(selectedPairID);
+  if (prevPairID !== selectedPairID) {
+    setPrevPairID(selectedPairID);
+    if (selectedPairID) {
+      setLoadingDetail(true);
+    } else {
+      setDetail(null);
+    }
+  }
 
   async function submitReview(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -143,6 +155,7 @@ export function SimilarityReviewPanel({ user, onNotice }: Props) {
       ].find((pair) => !pair.current_reviewer_label);
       setLabel("");
       onNotice("Benzerlik kararı kaydedildi.");
+      setLoading(true);
       await Promise.all([loadRuns(), loadPairs(selectedRunID)]);
       setSelectedPairID(nextPending?.id ?? detail.pair.id);
     } catch (error) {
@@ -166,7 +179,7 @@ export function SimilarityReviewPanel({ user, onNotice }: Props) {
       <div className="similarity-run-bar">
         <label>
           <span>Kalibrasyon</span>
-          <select value={selectedRunID} onChange={(event) => { setSelectedRunID(event.target.value); setSelectedPairID(""); }}>
+          <select value={selectedRunID} onChange={(event) => { setLoading(true); setSelectedRunID(event.target.value); setSelectedPairID(""); }}>
             {runs.map((run) => (
               <option key={run.id} value={run.id}>
                 {run.content_purpose} · {run.source_snapshot[0]?.name ?? run.report_object_sha256.slice(0, 8)}
@@ -182,7 +195,7 @@ export function SimilarityReviewPanel({ user, onNotice }: Props) {
             <option value="all">Tümü ({pairs.length})</option>
           </select>
         </label>
-        <button className="icon-button" type="button" title="Benzerlik verilerini yenile" onClick={() => void loadRuns()}>
+        <button className="icon-button" type="button" title="Benzerlik verilerini yenile" onClick={() => { setLoading(true); void loadRuns(); }}>
           <RefreshCw className={loading ? "spin" : ""} size={18} aria-hidden="true" />
         </button>
       </div>

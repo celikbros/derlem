@@ -23,7 +23,7 @@ const roleDescriptions: Record<string, { title: string; can: string[] }> = {
   editor: {
     title: "Editör (editor)",
     can: [
-      "Kaynak metadata'sını düzenler.",
+      "Kaynak metadata’sını düzenler.",
       "Belge içeriğini düzeltip yeni immutable sürüm oluşturur.",
       "Kaynak açamaz, onay kararı veremez.",
     ],
@@ -52,8 +52,8 @@ const roleDescriptions: Record<string, { title: string; can: string[] }> = {
   consumer_team: {
     title: "Tüketici ekip (consumer_team)",
     can: [
-      "Yalnızca donmuş (frozen) release'leri görür.",
-      "Manifest, kaynak artifact'i ve JSONL/TXT export indirir; checksum ile doğrular.",
+      "Yalnızca donmuş (frozen) release’leri görür.",
+      "Manifest, kaynak artifact’i ve JSONL/TXT export indirir; checksum ile doğrular.",
     ],
   },
 };
@@ -69,7 +69,7 @@ export function GuidePanel({ user }: { user: User }) {
           atölyesidir. Kimse buraya elle metin yazmaz: var olan corpus dosyaları sisteme alınır,
           otomatik kalite kapılarından geçirilir, insan incelemesiyle onaylanır ve eğitim
           ekiplerine değişmez (frozen) paketler olarak sunulur. Çıktılar modelden ve
-          tokenizer'dan bağımsızdır; aynı paketi herhangi bir model ekibi kullanabilir.
+          tokenizer’dan bağımsızdır; aynı paketi herhangi bir model ekibi kullanabilir.
         </p>
       </div>
 
@@ -77,7 +77,7 @@ export function GuidePanel({ user }: { user: User }) {
         <h3>Veri yolculuğu: altı adım</h3>
         <ol className="guide-steps">
           <li>
-            <strong>Kaynak kaydı.</strong> Veri yöneticisi Kaynaklar ekranında "Yeni kaynak" ile
+            <strong>Kaynak kaydı.</strong> Veri yöneticisi Kaynaklar ekranında “Yeni kaynak” ile
             künyeyi girer: ad, içerik amacı, lisans, hak durumu ve köken. İçerik amacı
             (pretrain, eval, ...) kayıttan sonra değiştirilemez.
           </li>
@@ -98,11 +98,11 @@ export function GuidePanel({ user }: { user: User }) {
           <li>
             <strong>Release ve freeze.</strong> Aynı amaçtaki onaylı kaynaklardan Sürümler
             ekranında taslak release oluşturulur. Yönetici freeze ettiğinde kapılar yeniden
-            koşulur, eval/holdout sızıntı kontrolü yapılır ve SHA256 manifest'i sabitlenir.
+            koşulur, eval/holdout sızıntı kontrolü yapılır ve SHA256 manifest’i sabitlenir.
           </li>
           <li>
-            <strong>Tüketim.</strong> Model ekibi frozen release'in manifestini ve
-            JSONL/TXT export'unu indirir, checksum ile doğrular ve kendi eğitim hattında
+            <strong>Tüketim.</strong> Model ekibi frozen release’in manifestini ve
+            JSONL/TXT export’unu indirir, checksum ile doğrular ve kendi eğitim hattında
             kullanır. Düzeltme gerekirse mevcut release değişmez; yeni release çıkarılır.
           </li>
         </ol>
@@ -114,7 +114,7 @@ export function GuidePanel({ user }: { user: User }) {
           <li><Library size={16} aria-hidden="true" /> <strong>Kaynaklar:</strong> tüm veri kaynaklarının kataloğu; her satırda sıradaki kapı gösterilir.</li>
           <li><ClipboardCheck size={16} aria-hidden="true" /> <strong>İnceleme:</strong> karar bekleyen kaynakların öncelik sıralı kuyruğu ve örnek belge incelemesi.</li>
           <li><GitCompareArrows size={16} aria-hidden="true" /> <strong>Benzerlik:</strong> yakın-tekrar aday çiftlerinin körlemeli insan etiketlemesi.</li>
-          <li><PackageCheck size={16} aria-hidden="true" /> <strong>Sürümler:</strong> taslak ve frozen release'ler, kapı sonuçları, manifest ve export indirme.</li>
+          <li><PackageCheck size={16} aria-hidden="true" /> <strong>Sürümler:</strong> taslak ve frozen release’ler, kapı sonuçları, manifest ve export indirme.</li>
           <li><ListTodo size={16} aria-hidden="true" /> <strong>İşler:</strong> arka plan işlerinin durumu ve canlı ilerlemesi.</li>
         </ul>
       </div>
@@ -147,7 +147,7 @@ export function GuidePanel({ user }: { user: User }) {
           <dt>Örneklem</dt>
           <dd>Milyonlarca belgeden risk puanına göre seçilen, insan incelemesine sunulan 200 temsilci belge.</dd>
           <dt>Freeze / frozen release</dt>
-          <dd>Release içeriğinin SHA256 manifest'iyle dondurulması. Frozen release asla değişmez; düzeltme yeni release olur.</dd>
+          <dd>Release içeriğinin SHA256 manifest’iyle dondurulması. Frozen release asla değişmez; düzeltme yeni release olur.</dd>
         </dl>
       </div>
     </section>

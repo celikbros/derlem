@@ -445,6 +445,7 @@ go test ./...
 .\.venv\Scripts\python.exe -m pytest worker\tests
 
 Set-Location web
+npm run typecheck
 npm run lint
 npm run build
 npm audit --audit-level=moderate
@@ -535,6 +536,8 @@ insan/hak operasyonu sürüyor; sıradaki teknik hedef v0.4.**
 
 - [Hızlı başlangıç: ilk kaynağınızı uçtan uca geçirin](docs/hizli_baslangic.md)
 - [Kapsamlı proje ve devir teslim raporu](docs/derlem_kapsamli_proje_raporu.md)
+- [Gardash tüketici geri bildirimi ve kapanış planı](docs/gardash_feedback_2026_07.md)
+- [v2 alım planı: web-ölçekli TR + sentetik ders kitabı](docs/v2_intake_plan.md)
 - [MVP planı](docs/web_data_atolyesi_mvp_plan.md)
 - [Versiyon yol haritası](docs/version_roadmap.md)
 - [Proje tamamlanma durumu](docs/project_completion_status.md)

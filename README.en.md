@@ -443,6 +443,7 @@ go test ./...
 .\.venv\Scripts\python.exe -m pytest worker\tests
 
 Set-Location web
+npm run typecheck
 npm run lint
 npm run build
 npm audit --audit-level=moderate

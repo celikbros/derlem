@@ -267,7 +267,13 @@ Kapanış kriteri:
 6. Büyük dosya ingest ve index job'larında progress/result raporunu derinleştir. **Tamamlandı.**
 7. Büyük ingest için resume/checkpoint desteği ekle. **Tamamlandı.**
 8. Gardas nesil 2 örneklerini hak/lisans kararıyla birlikte insan review'dan geçir.
-9. Public/staging açmadan önce P0 güvenlik backlog'unu sırayla kapat.
+   **Gardash Spark takvimi bu kapanışa kilitli; kritik yol ve 1-2 iş günlük plan:
+   [Gardash Feedback 2026-07](gardash_feedback_2026_07.md).**
+9. v2 web-ölçekli TR alımını (FineWeb-2/HPLT/CulturaX + sentetik ders kitabı)
+   [v2 Alım Planı](v2_intake_plan.md) fazlarına göre başlat; faz 0-1 GPU gerektirmez.
+10. Public/staging açmadan önce P0 güvenlik backlog'unu sırayla kapat.
+    (`SEC-P0-08`'in bağımlılık tarama dilimi 2026-07-05'te CI'ya eklendi:
+    govulncheck + pip-audit + npm audit.)
 
 ## Şu Anki Karar
 

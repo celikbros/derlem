@@ -24,6 +24,7 @@ consume approved, versioned Derlem exports through their own model adapters.
 
 - [Why Derlem?](#why-derlem)
 - [Scope](#scope)
+- [How It Works](#how-it-works)
 - [Design Principles](#design-principles)
 - [Architecture](#architecture)
 - [Data Lifecycle](#data-lifecycle)
@@ -83,6 +84,55 @@ For the current Gardas/Faz 2 seed import record, see [Gardas Seed Import](docs/g
 - Treat any model's chat template as the canonical data schema.
 - Auto-approve data with unknown or blocked rights.
 - Modify an existing frozen release in place; corrections create a new release.
+
+## How It Works
+
+Nobody types text into Derlem by hand. The input is existing large corpus
+files (web crawls, books, datasets, existing corpora such as Gardas/Faz 2);
+the output is frozen, training-ready data packages. Humans do not produce
+data; they register sources, review samples, and make the decisions.
+
+```mermaid
+flowchart TD
+    DM["Data manager registers a source:<br/>name, purpose, license, rights status, lineage"]
+    UP["File intake:<br/>streamed browser upload or trusted local ingest"]
+    ING["Immutable store:<br/>SHA256-identified, unchangeable copy"]
+    PII["PII scan:<br/>TCKN, IBAN, email, phone, payment card"]
+    DUP["Duplicate checks:<br/>file (byte) + document (normalized) level"]
+    SAMP["Risk-stratified, deterministic<br/>200-document sample"]
+    REV["Reviewer reads samples and scores quality;<br/>rights/license evidence is verified"]
+    DEC{"All gates clear?"}
+    APP["approved_source"]
+    REJ["rejected / quarantined"]
+    REL["Release Builder (admin):<br/>draft from approved sources of the same purpose"]
+    FRZ["Freeze: gates re-run,<br/>eval/holdout leakage check"]
+    MAN["Frozen manifest + SHA256 snapshot<br/>(immutable; corrections = new release)"]
+    EXP["Export: deterministic JSONL/TXT;<br/>consumed by Gardas or any LLM/tokenizer team"]
+
+    DM --> UP --> ING
+    ING --> PII --> SAMP
+    ING --> DUP --> SAMP
+    SAMP --> REV --> DEC
+    DEC -- yes --> APP --> REL --> FRZ --> MAN --> EXP
+    DEC -- no --> REJ
+```
+
+Common points of confusion:
+
+- **Nobody enters text into Derlem.** The human roles are registering
+  (data manager), reviewing (moderator/expert reviewer), freezing (admin),
+  and consuming (consumer team). An open contribution queue is planned for v0.5.
+- **The license/rights gate is about the usage rights of the data's origin.**
+  Even if a file passes every technical gate, a source cannot be approved
+  until "what right do we have to use these texts" is answered with recorded
+  evidence; data with `unknown` rights never enters a release.
+- **Each source is bound to a single purpose at registration** (`pretrain`,
+  `instruction`, `preference`, `eval`, `holdout`, `post_training`) and that
+  purpose can never change. This is how eval/holdout leakage into training
+  pools is prevented.
+- **The output is independent of any model, tokenizer, or model-specific
+  labels.** The same frozen release can be consumed by Gardas or any other
+  LLM/tokenizer team through their own adapter, without re-approving the data.
 
 ## Design Principles
 

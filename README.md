@@ -26,6 +26,7 @@ kullanır.
 
 - [Neden Derlem?](#neden-derlem)
 - [Kapsam](#kapsam)
+- [Nasıl Çalışır?](#nasıl-çalışır)
 - [Tasarım İlkeleri](#tasarım-ilkeleri)
 - [Mimari](#mimari)
 - [Veri Yaşam Döngüsü](#veri-yaşam-döngüsü)
@@ -85,6 +86,54 @@ Güncel Gardas/Faz 2 seed import kaydı için bkz. [Gardas Seed Import](docs/gar
 - Modelin chat template'ini kanonik veri formatı olarak kabul etmez.
 - Lisansı veya hak durumu belirsiz veriyi otomatik olarak onaylamaz.
 - Mevcut frozen release'i yerinde değiştirmez; düzeltme yeni release'tir.
+
+## Nasıl Çalışır?
+
+Derlem'e kimse elle metin yazmaz. Girdi, var olan büyük corpus dosyalarıdır
+(web derlemesi, kitap, veri seti, Gardas/Faz 2 gibi mevcut corpus'lar); çıktı,
+eğitime hazır ve dondurulmuş veri paketleridir. İnsanlar veri üretmez; kaynağı
+kaydeder, örnekleri inceler ve kararı verir.
+
+```mermaid
+flowchart TD
+    DM["Veri yöneticisi kaynak kaydı açar:<br/>ad, amaç, lisans, hak durumu, köken"]
+    UP["Dosya alınır:<br/>tarayıcıdan stream upload veya güvenilir yerel ingest"]
+    ING["Immutable depo:<br/>SHA256 kimlikli, değiştirilemez kopya"]
+    PII["PII taraması:<br/>TCKN, IBAN, e-posta, telefon, kart"]
+    DUP["Tekrar kontrolü:<br/>dosya (byte) + belge (normalize) düzeyi"]
+    SAMP["Risk puanlı, deterministik<br/>200 belgelik örneklem"]
+    REV["İnceleyici örnekleri okur ve kalite puanlar;<br/>hak/lisans kanıtı doğrulanır"]
+    DEC{"Tüm kapılar temiz mi?"}
+    APP["approved_source"]
+    REJ["rejected / quarantined"]
+    REL["Release Builder (admin):<br/>aynı amaçtaki onaylı kaynaklardan draft"]
+    FRZ["Freeze: kapılar yeniden koşulur,<br/>eval/holdout sızıntı kontrolü yapılır"]
+    MAN["Frozen manifest + SHA256 snapshot<br/>(değişmez; düzeltme = yeni release)"]
+    EXP["Export: deterministik JSONL/TXT;<br/>Gardas veya herhangi bir LLM/tokenizer ekibi tüketir"]
+
+    DM --> UP --> ING
+    ING --> PII --> SAMP
+    ING --> DUP --> SAMP
+    SAMP --> REV --> DEC
+    DEC -- evet --> APP --> REL --> FRZ --> MAN --> EXP
+    DEC -- hayır --> REJ
+```
+
+Sık karışan noktalar:
+
+- **Kimse Derlem'e metin girmez.** İnsan rolleri kaydetmek (data manager),
+  incelemek (moderator/expert reviewer), dondurmak (admin) ve tüketmektir
+  (consumer team). Açık katkı kuyruğu v0.5 planıdır.
+- **Lisans/hak kapısı, verinin kaynağının kullanım hakkıdır.** Dosya tüm teknik
+  kapılardan geçse bile "bu metinleri kullanma hakkımız nedir" sorusu
+  cevaplanıp kanıt referansı girilmeden kaynak onaylanamaz; hakkı `unknown`
+  olan veri release'e giremez.
+- **Her kaynak kayıt anında tek amaca bağlanır** (`pretrain`, `instruction`,
+  `preference`, `eval`, `holdout`, `post_training`) ve bu amaç sonradan
+  değiştirilemez. Eval/holdout içeriğinin eğitim havuzuna sızması böyle önlenir.
+- **Çıktı modelden, tokenizer'dan ve model-spesifik etiketlerden bağımsızdır.**
+  Aynı frozen release'i Gardas da, başka bir LLM/tokenizer ekibi de kendi
+  adaptörüyle, veriyi yeniden onaylatmadan kullanır.
 
 ## Tasarım İlkeleri
 

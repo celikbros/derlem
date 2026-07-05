@@ -2831,3 +2831,107 @@ textarea:focus {
     padding: 26px 22px;
   }
 }
+
+.guide-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 920px;
+}
+
+.guide-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+}
+
+.guide-card h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+
+.guide-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+.guide-steps {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.guide-steps strong {
+  color: var(--ink);
+}
+
+.guide-screens {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.guide-screens li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.guide-screens svg {
+  flex-shrink: 0;
+  transform: translateY(2px);
+  color: var(--green);
+}
+
+.guide-screens strong {
+  color: var(--ink);
+}
+
+.guide-role {
+  margin-top: 8px;
+  font-size: 13.5px;
+}
+
+.guide-role ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.guide-terms {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.guide-terms dt {
+  font-weight: 600;
+  margin-top: 10px;
+}
+
+.guide-terms dt:first-child {
+  margin-top: 0;
+}
+
+.guide-terms dd {
+  margin: 2px 0 0;
+  color: var(--muted);
+}

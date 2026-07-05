@@ -533,6 +533,7 @@ insan/hak operasyonu sürüyor; sıradaki teknik hedef v0.4.**
 
 ## Dokümantasyon
 
+- [Hızlı başlangıç: ilk kaynağınızı uçtan uca geçirin](docs/hizli_baslangic.md)
 - [Kapsamlı proje ve devir teslim raporu](docs/derlem_kapsamli_proje_raporu.md)
 - [MVP planı](docs/web_data_atolyesi_mvp_plan.md)
 - [Versiyon yol haritası](docs/version_roadmap.md)

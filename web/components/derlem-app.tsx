@@ -2,6 +2,7 @@
 
 import {
   AlertTriangle,
+  BookOpen,
   CheckCircle2,
   ClipboardCheck,
   Database,
@@ -22,6 +23,7 @@ import {
 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { GuidePanel } from "@/components/guide-panel";
 import { JobsPanel } from "@/components/jobs-panel";
 import { ReleasePanel } from "@/components/release-panel";
 import { SimilarityReviewPanel } from "@/components/similarity-review-panel";
@@ -34,7 +36,7 @@ type SourceList = {
   next_cursor?: string;
 };
 
-type ActiveView = "sources" | "review" | "similarity" | "releases" | "jobs" | "restricted";
+type ActiveView = "sources" | "review" | "similarity" | "releases" | "jobs" | "guide";
 
 const sourceWorkspaceRoles = ["admin", "data_manager", "editor", "moderator", "expert_reviewer"];
 const reviewerRoles = ["admin", "moderator", "expert_reviewer"];
@@ -231,6 +233,11 @@ export function DerlemApp() {
               <span>›</span>
             </button>
           )}
+          <button aria-label="Rehber" aria-pressed={activeView === "guide"} className={`nav-item${activeView === "guide" ? " active" : ""}`} type="button" onClick={() => { setActiveView("guide"); setSelected(null); }}>
+            <BookOpen size={18} aria-hidden="true" />
+            Rehber
+            <span>›</span>
+          </button>
         </nav>
         <div className="sidebar-footer">
           <div className="user-block">
@@ -282,11 +289,8 @@ export function DerlemApp() {
           </div>
         )}
 
-        {activeView === "restricted" ? (
-          <section className="empty-state" aria-label="Yetkili çalışma alanı bulunamadı">
-            <ShieldCheck size={24} aria-hidden="true" />
-            <p>Bu rol için etkin bir çalışma alanı bulunmuyor.</p>
-          </section>
+        {activeView === "guide" ? (
+          <GuidePanel user={user} />
         ) : activeView === "jobs" ? <JobsPanel onNotice={setNotice} /> : activeView === "releases" ? <ReleasePanel sources={sources} user={user} onNotice={setNotice} /> : activeView === "similarity" ? <SimilarityReviewPanel user={user} onNotice={setNotice} /> : <section className={`catalog-layout${selected ? " with-inspector" : ""}`}>
           <div className="catalog-panel">
             <div className="table-toolbar">
@@ -478,7 +482,7 @@ function hasAnyRole(user: User, allowedRoles: string[]) {
 function defaultViewFor(user: User): ActiveView {
   if (hasAnyRole(user, sourceWorkspaceRoles)) return "sources";
   if (hasAnyRole(user, releaseRoles)) return "releases";
-  return "restricted";
+  return "guide";
 }
 
 function viewHeading(view: ActiveView) {
@@ -488,7 +492,7 @@ function viewHeading(view: ActiveView) {
     similarity: { eyebrow: "Kalibrasyon", title: "Benzerlik incelemesi" },
     releases: { eyebrow: "Release Builder", title: "Sürümler" },
     jobs: { eyebrow: "Worker kuyruğu", title: "Arka plan işleri" },
-    restricted: { eyebrow: "Yetkilendirme", title: "Çalışma alanı" },
+    guide: { eyebrow: "Yardım", title: "Derlem rehberi" },
   };
   return headings[view];
 }

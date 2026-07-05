@@ -530,6 +530,7 @@ continues; v0.4 is the active technical target.**
 
 ## Documentation
 
+- [Quick start: walk your first source end to end (Turkish)](docs/hizli_baslangic.md)
 - [Comprehensive project and handover report (Turkish)](docs/derlem_kapsamli_proje_raporu.md)
 - [MVP plan](docs/web_data_atolyesi_mvp_plan.md)
 - [Version roadmap](docs/version_roadmap.md)

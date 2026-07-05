@@ -185,7 +185,8 @@ Kapanış kriteri:
 
 ## v0.5 - Katkı, Ajan ve Servis Hesapları
 
-**Durum:** Planlandı.
+**Durum:** Planlandı. Kitlesel ölçek vizyonu ve güven modeli:
+[Kitlesel Katkı Platformu Tasarımı](katki_platformu_tasarimi.md).
 
 Amaç, Derlem'i sadece iç ekip aracı olmaktan çıkarıp kontrollü katkı ve ajan destekli
 operasyonlara hazırlamak.

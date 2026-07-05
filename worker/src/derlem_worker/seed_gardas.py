@@ -15,7 +15,7 @@ from psycopg.rows import dict_row
 from derlem_worker.config import load_config
 
 
-DEFAULT_MANIFEST = Path(r"C:\CELIK-GARDASH\docs\TOKENIZER_V3_8_FINAL_CORPUS_MANIFEST_FAZ2.json")
+DEFAULT_MANIFEST = Path(r"C:\CELIKBROS PROJECTS\gardash\docs\TOKENIZER_V3_8_FINAL_CORPUS_MANIFEST_FAZ2.json")
 
 
 def main() -> None:

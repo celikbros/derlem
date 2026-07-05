@@ -58,7 +58,7 @@ Derlem şu sorunları çözmek için tasarlanır:
 - Bir dataset release'inin daha sonra aynı girdilerle üretilememesi.
 - İnsan ve otomasyon kararlarının denetlenebilir bir kayıt bırakmaması.
 
-İlk seed kaynak, `C:\CELIK-GARDASH` altındaki mevcut Türkçe corpus'tur. Bu
+İlk seed kaynak, `C:\CELIKBROS PROJECTS\gardash` altındaki mevcut Türkçe corpus'tur. Bu
 yerel yol yalnızca lineage bilgisidir; bir kaynak, dosyası değişmez depoya
 alınmadan onaylanmış veri sayılmaz.
 
@@ -442,8 +442,6 @@ değerini ister ve çakışmada `409 version_conflict` döndürür.
 ```powershell
 go test ./...
 
-$env:TEMP='C:\tmp'
-$env:TMP='C:\tmp'
 .\.venv\Scripts\python.exe -m pytest worker\tests
 
 Set-Location web

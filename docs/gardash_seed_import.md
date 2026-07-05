@@ -13,6 +13,10 @@ tutuyor. Kanonik metin dosyasi icerik adresli object store altinda saklaniyor.
 
 ## Kaynak
 
+> **Not (2026-07-05):** Gardas projesi `C:\CELIKBROS PROJECTS\gardash` konumuna
+> taşındı. Aşağıdaki orijinal path'ler import anındaki lineage kaydıdır; dosya
+> kimliği path değil SHA256'dır.
+
 | Alan | Deger |
 |---|---|
 | Orijinal path | `C:\CELIK-GARDASH\datasets\faz2_corpus\gardash_tr_dedup.lf.txt` |
@@ -28,7 +32,7 @@ tutuyor. Kanonik metin dosyasi icerik adresli object store altinda saklaniyor.
 | Alan | Deger |
 |---|---|
 | Object key | `objects/sha256/98/26/9826d58e8e11713ab99fb3690fff75bbfa2d533490c81b1b78f5ebdd83aa07b5` |
-| Yerel path | `C:\CELIK- DERLEM\var\storage\objects\sha256\98\26\9826d58e8e11713ab99fb3690fff75bbfa2d533490c81b1b78f5ebdd83aa07b5` |
+| Yerel path | `C:\CELIKBROS PROJECTS\derlem\var\storage\objects\sha256\98\26\9826d58e8e11713ab99fb3690fff75bbfa2d533490c81b1b78f5ebdd83aa07b5` |
 | Immutable flag | `true` |
 
 ## Gate Durumu
@@ -46,8 +50,8 @@ Son bilinen durum:
 
 Yerel, Git disi triage raporu:
 
-- `C:\CELIK- DERLEM\var\reports\gardash_faz2_tr_dedup_20260621_06ac330e_triage.md`
-- `C:\CELIK- DERLEM\var\reports\gardash_faz2_tr_dedup_20260621_06ac330e_triage.json`
+- `C:\CELIKBROS PROJECTS\derlem\var\reports\gardash_faz2_tr_dedup_20260621_06ac330e_triage.md`
+- `C:\CELIKBROS PROJECTS\derlem\var\reports\gardash_faz2_tr_dedup_20260621_06ac330e_triage.json`
 
 ## Clean Candidate Hazirligi
 
@@ -83,8 +87,8 @@ Tam corpus clean candidate uretildi:
 | Alan | Deger |
 |---|---|
 | Clean candidate source id | `f63352dd-fdd1-4e4b-a8d2-b167b3c856cf` |
-| Cikti dosyasi | `C:\CELIK- DERLEM\var\derived\gardash_faz2_tr_dedup_20260621_06ac330e_clean_candidate.txt` |
-| Manifest | `C:\CELIK- DERLEM\var\derived\gardash_faz2_tr_dedup_20260621_06ac330e_clean_candidate.txt.manifest.json` |
+| Cikti dosyasi | `C:\CELIKBROS PROJECTS\derlem\var\derived\gardash_faz2_tr_dedup_20260621_06ac330e_clean_candidate.txt` |
+| Manifest | `C:\CELIKBROS PROJECTS\derlem\var\derived\gardash_faz2_tr_dedup_20260621_06ac330e_clean_candidate.txt.manifest.json` |
 | Okunan satir | `6,027,968` |
 | Yazilan satir | `5,922,891` |
 | Cikarilan PII satiri | `104,853` |

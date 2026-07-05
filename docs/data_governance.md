@@ -54,7 +54,7 @@ Bir corpus release'i donduruldugunda sunlar degistirilmez:
 
 Yeni veri veya temizlik karari gerekiyorsa mevcut release degistirilmez; yeni release acilir.
 
-`C:\CELIK-GARDASH` tarafindaki mevcut v3.8 Faz 2 release bu kurala tabidir. Atolye yeni veri eklediginde v3.8 manifest'i geriye donuk degistirmek yerine yeni bir release id uretir.
+`C:\CELIKBROS PROJECTS\gardash` tarafindaki mevcut v3.8 Faz 2 release bu kurala tabidir. Atolye yeni veri eklediginde v3.8 manifest'i geriye donuk degistirmek yerine yeni bir release id uretir.
 
 ## Kaynak/Shard Bazli Onay
 

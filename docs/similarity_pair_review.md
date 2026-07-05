@@ -45,7 +45,7 @@ kayıt sonrasında arayüz sıradaki bekleyen çifte geçer.
 En yakın 100 çiftin metinlerini nesne deposuna çıkaran idempotent komut:
 
 ```powershell
-cd "C:\CELIK- DERLEM"
+cd "C:\CELIKBROS PROJECTS\derlem"
 .\.venv\Scripts\python.exe -m derlem_worker.similarity_review_import `
   --report .\var\reports\similarity_calibration_pretrain_ebe29279.json
 ```

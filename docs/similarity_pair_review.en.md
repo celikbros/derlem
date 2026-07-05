@@ -44,7 +44,7 @@ successful decision.
 Idempotent command that materializes the closest 100 pairs:
 
 ```powershell
-cd "C:\CELIK- DERLEM"
+cd "C:\CELIKBROS PROJECTS\derlem"
 .\.venv\Scripts\python.exe -m derlem_worker.similarity_review_import `
   --report .\var\reports\similarity_calibration_pretrain_ebe29279.json
 ```

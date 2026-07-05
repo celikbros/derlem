@@ -12,7 +12,7 @@ Ham ve temizlenmis buyuk metin dosyalari PostgreSQL icine konmaz. Veri atolyeler
 
 Tek makine/pilot icin local filesystem yeterli olabilir. Ekip ve veri buyuyunce MinIO/S3 uyumlu object storage'a gecilir. DVC kucuk/orta Git merkezli veri surumleme icin, lakeFS ise object storage uzerinde branch/commit/merge semantigi gerektiginde degerlendirilir.
 
-Mevcut `C:\CELIK-GARDASH` v3.8 Faz 2 corpus release'i degistirilmez. Yeni kaynaklar geldiginde mevcut manifest uzerine yazilmaz; `v3.9`, `v4` veya yeni tarihli bir frozen release uretilir.
+Mevcut `C:\CELIKBROS PROJECTS\gardash` v3.8 Faz 2 corpus release'i degistirilmez. Yeni kaynaklar geldiginde mevcut manifest uzerine yazilmaz; `v3.9`, `v4` veya yeni tarihli bir frozen release uretilir.
 
 ## Iki Ayri Yasam Dongusu
 
@@ -88,7 +88,7 @@ Her gecis bir run id, arac surumu, zaman damgasi, operator ve rapor path'i uretm
 
 ## LLM ve Tokenizer Ekiplerine Teslim
 
-Mevcut `C:\CELIK-GARDASH` ve `C:\TURKCE-TOKENIZER` disiplininden devam edilmeli:
+Mevcut `C:\CELIKBROS PROJECTS\gardash` ve `C:\TURKCE-TOKENIZER` disiplininden devam edilmeli:
 
 - Corpus release, `v3.8-final-corpus-manifest-1` benzeri makine-okunur manifest ile gelir.
 - Manifest en az sunlari tasir: frozen path, format, line count, raw bytes, sha256, dedup status, mixture, normalization policy, tokenizer registry, document-boundary karari.

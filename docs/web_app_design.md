@@ -34,7 +34,7 @@ Sistemi bir **veri atolyesi CMS'i** gibi dusunelim:
 
 2. **Kaynak Katalogu**
    - Kaynak adi, tip, lisans, dil, domain, dosya path'i, checksum, durum.
-   - Baslangicta `C:\CELIK-GARDASH` Faz 2 verisi burada seed kaynak olarak gorunur.
+   - Baslangicta `C:\CELIKBROS PROJECTS\gardash` Faz 2 verisi burada seed kaynak olarak gorunur.
 
 3. **Veri Giris/Yukleme**
    - Tek metin girisi.
@@ -133,6 +133,6 @@ Bu MVP, LLM/tokenizer ekiplerine ilk gunden fayda verir: "su tarihte dondurulmus
 
 ## Ilk Veriyle Baslama
 
-Baslangic icin `C:\CELIK-GARDASH` Faz 2 verisi sisteme "mevcut frozen kaynak" olarak kaydedilir. Dosyanin kendisi kopyalanmak zorunda degil; path, checksum, doc sayisi ve rapor path'leri kaydedilebilir.
+Baslangic icin `C:\CELIKBROS PROJECTS\gardash` Faz 2 verisi sisteme "mevcut frozen kaynak" olarak kaydedilir. Dosyanin kendisi kopyalanmak zorunda degil; path, checksum, doc sayisi ve rapor path'leri kaydedilebilir.
 
 Sonra yeni veriler Atolye uzerinden girilir ve ayri release olarak dondurulur. Boylece ekipler eski veriyle yeni veriyi karsilastirabilir.

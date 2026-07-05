@@ -53,7 +53,7 @@ This command streams all 5,922,891 documents in the
 long time and should be run in the user's terminal without assistant-side polling:
 
 ```powershell
-cd "C:\CELIK- DERLEM"
+cd "C:\CELIKBROS PROJECTS\derlem"
 .\.venv\Scripts\python.exe -m derlem_worker.similarity_calibration `
   --source-id f63352dd-fdd1-4e4b-a8d2-b167b3c856cf `
   --sample-size 1000 `

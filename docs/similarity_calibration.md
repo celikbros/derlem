@@ -53,7 +53,7 @@ Bu komut `gardash_faz2_tr_dedup_20260621_clean_candidate_20260625` kaynağının
 beklenmeden kullanıcı terminalinde çalıştırılmalıdır:
 
 ```powershell
-cd "C:\CELIK- DERLEM"
+cd "C:\CELIKBROS PROJECTS\derlem"
 .\.venv\Scripts\python.exe -m derlem_worker.similarity_calibration `
   --source-id f63352dd-fdd1-4e4b-a8d2-b167b3c856cf `
   --sample-size 1000 `

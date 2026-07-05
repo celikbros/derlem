@@ -27,7 +27,7 @@ Atolye sunlari yapmaz:
 Ilk seed kaynak:
 
 ```text
-C:\CELIK-GARDASH
+C:\CELIKBROS PROJECTS\gardash
 ```
 
 Gardas tarafindaki mevcut Faz 2 corpus once kataloglanir, sonra sha256 kimligi

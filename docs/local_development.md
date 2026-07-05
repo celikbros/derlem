@@ -155,8 +155,6 @@ bagimsiz karar ekleyebilir.
 
 ```powershell
 go test ./...
-$env:TEMP='C:\tmp'
-$env:TMP='C:\tmp'
 .\.venv\Scripts\python.exe -m pytest worker\tests
 Set-Location web
 npm run lint

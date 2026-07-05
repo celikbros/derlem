@@ -11,9 +11,9 @@
 
 **Ana dal:** `main`
 
-**Kanonik yerel dizin:** `C:\CELIK- DERLEM`
+**Kanonik yerel dizin:** `C:\CELIKBROS PROJECTS\derlem`
 
-**Yerel junction:** `C:\TURKCE-VERI-ATOLYESI` -> `C:\CELIK- DERLEM`
+**Eski yollar:** `C:\CELIK- DERLEM` ve `C:\TURKCE-VERI-ATOLYESI` junction'ı kullanımdan kalktı; proje 2026-07-05 itibarıyla `C:\CELIKBROS PROJECTS\derlem` altındadır.
 
 Bu belge Derlem'in neden kurulduğunu, bugün gerçekten ne yaptığını, hangi
 kararların bilinçli olduğunu, canlı yerel verinin durumunu ve projeyi devralan
@@ -245,9 +245,9 @@ docs/                            Mimari, süreç, runbook ve karar belgeleri
 var/                             Git dışı object store, rapor ve türetilmiş veri
 ```
 
-`C:\TURKCE-VERI-ATOLYESI` ayrı bir kopya değildir; Windows junction olarak
-`C:\CELIK- DERLEM` dizinine gider. Komut ve belgelerde karışıklığı önlemek için
-kanonik path kullanılmalıdır.
+Eski `C:\TURKCE-VERI-ATOLYESI` junction'ı ve `C:\CELIK- DERLEM` dizini artık
+kullanılmaz; hedefi silindiği için junction askıdadır ve kaldırılabilir. Komut ve
+belgelerde yalnızca kanonik `C:\CELIKBROS PROJECTS\derlem` yolu kullanılmalıdır.
 
 ## 8. Veri Modeli
 
@@ -680,7 +680,7 @@ derlem-similarity-review-import
 Karantina raporu:
 
 ```powershell
-cd "C:\CELIK- DERLEM"
+cd "C:\CELIKBROS PROJECTS\derlem"
 .\.venv\Scripts\python.exe -m derlem_worker.triage `
   --source-id <SOURCE_ID> `
   --output-dir .\var\reports
@@ -722,7 +722,7 @@ beklenen artifact önceden kaydedilmelidir.
 ### İlk kurulum
 
 ```powershell
-cd "C:\CELIK- DERLEM"
+cd "C:\CELIKBROS PROJECTS\derlem"
 go mod download
 go run ./cmd/migrate
 python -m venv .venv
@@ -982,8 +982,8 @@ olmadan değiştirilmemelidir.
 - Production'da local test hesaplarını veya login ekranındaki parolaları açık
   bırakmayın.
 - Açık P0 güvenlik maddeleri varken sistemi internete açmayın.
-- `C:\TURKCE-VERI-ATOLYESI` ile `C:\CELIK- DERLEM` dizinlerini iki ayrı repo
-  sanıp dosyaları birbirine kopyalamayın; ilki junction'dır.
+- Eski `C:\TURKCE-VERI-ATOLYESI` junction'ını veya `C:\CELIK- DERLEM` yolunu
+  kullanmayın; kanonik dizin `C:\CELIKBROS PROJECTS\derlem` dizinidir.
 
 ## 27. Git ve Yayın Kuralları
 

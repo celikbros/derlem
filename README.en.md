@@ -56,7 +56,7 @@ Derlem is designed to address:
 - Dataset releases that cannot be reproduced from the same inputs.
 - Human and automated decisions that leave no auditable record.
 
-The first seed is the existing Turkish corpus under `C:\CELIK-GARDASH`. This
+The first seed is the existing Turkish corpus under `C:\CELIKBROS PROJECTS\gardash`. This
 local path is provenance only; a source is not approved until its file is
 copied into immutable storage.
 
@@ -440,8 +440,6 @@ return `409 version_conflict` if another writer changed the record first.
 ```powershell
 go test ./...
 
-$env:TEMP='C:\tmp'
-$env:TMP='C:\tmp'
 .\.venv\Scripts\python.exe -m pytest worker\tests
 
 Set-Location web

@@ -124,3 +124,18 @@ otomatik kısmı saatler mertebesindedir. Frozen release manifest'i
 gate sonuçlarını zincirler; 224 satırının hesabı türetme manifesti + bu belge
 ile lineage'da kalıcıdır. Bekletme Derlem'in otomasyon tarafında olmayacaktır;
 tek değişken insan kapısının takvimidir.
+
+## Döngü Durumu (2026-07-05, Gardash bilançosu)
+
+Gardash mühendislerinin teyidiyle üç ekip döngüsünün iletişim ayağı kapandı:
+
+- Gardash → Tamga: saha teyidi gönderildi ✓
+- Tamga → Gardash: re-tokenize hazır + 224 satır yakalaması ✓
+- Gardash → Derlem: 4 ön koşul soruldu ✓
+- Derlem → Gardash: 4/4 kanıtlı cevap ✓
+
+Kalan tek iş iki insan adımıdır: veri yöneticisinin hak/lisans kararı
+(+ kanıt referansı) ve moderatörün 200 örnek incelemesi. Sonrası otomatiktir:
+freeze → re-tokenize → DGX Spark v1 girdisi (1-2 iş günü). Hak kararını
+hızlandırmak için doldurulmaya hazır karar/kanıt şablonu:
+[gardash_faz2_rights_decision.md](gardash_faz2_rights_decision.md).

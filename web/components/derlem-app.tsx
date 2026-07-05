@@ -19,6 +19,7 @@ import {
   RefreshCw,
   Search,
   ShieldCheck,
+  UsersRound,
   X,
 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -28,6 +29,7 @@ import { JobsPanel } from "@/components/jobs-panel";
 import { ReleasePanel } from "@/components/release-panel";
 import { SimilarityReviewPanel } from "@/components/similarity-review-panel";
 import { SourceInspector } from "@/components/source-inspector";
+import { UsersPanel } from "@/components/users-panel";
 import { messageFrom, requestJSON } from "@/lib/client-api";
 import type { Source, User } from "@/lib/types";
 
@@ -36,7 +38,7 @@ type SourceList = {
   next_cursor?: string;
 };
 
-type ActiveView = "sources" | "review" | "similarity" | "releases" | "jobs" | "guide";
+type ActiveView = "sources" | "review" | "similarity" | "releases" | "jobs" | "users" | "guide";
 
 const sourceWorkspaceRoles = ["admin", "data_manager", "editor", "moderator", "expert_reviewer"];
 const reviewerRoles = ["admin", "moderator", "expert_reviewer"];
@@ -233,6 +235,13 @@ export function DerlemApp() {
               <span>›</span>
             </button>
           )}
+          {user.roles.includes("admin") && (
+            <button aria-label="Kullanıcılar" aria-pressed={activeView === "users"} className={`nav-item${activeView === "users" ? " active" : ""}`} type="button" onClick={() => { setActiveView("users"); setSelected(null); }}>
+              <UsersRound size={18} aria-hidden="true" />
+              Kullanıcılar
+              <span>›</span>
+            </button>
+          )}
           <button aria-label="Rehber" aria-pressed={activeView === "guide"} className={`nav-item${activeView === "guide" ? " active" : ""}`} type="button" onClick={() => { setActiveView("guide"); setSelected(null); }}>
             <BookOpen size={18} aria-hidden="true" />
             Rehber
@@ -291,7 +300,7 @@ export function DerlemApp() {
 
         {activeView === "guide" ? (
           <GuidePanel user={user} />
-        ) : activeView === "jobs" ? <JobsPanel onNotice={setNotice} /> : activeView === "releases" ? <ReleasePanel sources={sources} user={user} onNotice={setNotice} /> : activeView === "similarity" ? <SimilarityReviewPanel user={user} onNotice={setNotice} /> : <section className={`catalog-layout${selected ? " with-inspector" : ""}`}>
+        ) : activeView === "users" ? <UsersPanel currentUserID={user.id} onNotice={setNotice} /> : activeView === "jobs" ? <JobsPanel onNotice={setNotice} /> : activeView === "releases" ? <ReleasePanel sources={sources} user={user} onNotice={setNotice} /> : activeView === "similarity" ? <SimilarityReviewPanel user={user} onNotice={setNotice} /> : <section className={`catalog-layout${selected ? " with-inspector" : ""}`}>
           <div className="catalog-panel">
             <div className="table-toolbar">
               <label className="search-field">
@@ -492,6 +501,7 @@ function viewHeading(view: ActiveView) {
     similarity: { eyebrow: "Kalibrasyon", title: "Benzerlik incelemesi" },
     releases: { eyebrow: "Release Builder", title: "Sürümler" },
     jobs: { eyebrow: "Worker kuyruğu", title: "Arka plan işleri" },
+    users: { eyebrow: "Yönetim", title: "Kullanıcılar" },
     guide: { eyebrow: "Yardım", title: "Derlem rehberi" },
   };
   return headings[view];

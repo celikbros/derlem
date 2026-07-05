@@ -412,6 +412,8 @@ Ayrıntılı yönergeler: [docs/local_development.md](docs/local_development.md)
 | `POST` | `/api/v1/auth/logout` | Geçerli sunucu oturumunu revoke eder |
 | `POST` | `/api/v1/auth/logout-all` | Kullanıcının tüm sunucu oturumlarını revoke eder |
 | `GET` | `/api/v1/me` | Aktif kullanıcı ve rolleri |
+| `GET/POST` | `/api/v1/users` | Kullanıcı listesi ve oluşturma (yalnız admin) |
+| `PATCH` | `/api/v1/users/{id}` | Rol/durum/parola güncelleme (yalnız admin) |
 | `GET/POST` | `/api/v1/sources` | Kaynakları listeler veya oluşturur |
 | `GET/PATCH` | `/api/v1/sources/{id}` | Kaynak ayrıntısı ve optimistic update |
 | `POST` | `/api/v1/sources/{id}/upload` | Tarayıcıdan stream upload |
@@ -542,6 +544,7 @@ insan/hak operasyonu sürüyor; sıradaki teknik hedef v0.4.**
 - [Versiyon yol haritası](docs/version_roadmap.md)
 - [Proje tamamlanma durumu](docs/project_completion_status.md)
 - [Yerel geliştirme](docs/local_development.md)
+- [Yedekleme ve restore runbook'u](docs/backup_restore.md)
 - [Local rol test kullanıcıları](docs/local_role_testing.md)
 - [Production deployment](docs/production_deployment.md)
 - [API yetkilendirme matrisi](docs/api_authorization_matrix.md)

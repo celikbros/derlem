@@ -25,6 +25,7 @@ Yeni bir veri endpoint'i açık rol listesi olmadan kaydedilemez.
 |---|---|---|
 | `/api/v1/me` | Oturum açmış tüm roller | Yalnız aktif kullanıcının kimliği ve rolleri |
 | Auth logout/logout-all | Oturum açmış tüm roller | Current veya tüm server session kayıtlarını revoke eder |
+| Kullanıcı yönetimi (`/api/v1/users`) | Yalnız `admin` | Liste/oluşturma/rol/durum/parola; self-lockout ve son-aktif-admin koruması sunucuda; her değişiklik audit edilir |
 | Kaynak katalogu/detayı | `admin`, `data_manager`, `editor`, `moderator`, `expert_reviewer` | Contributor ve consumer için kapalı |
 | PII scan, belge örnekleri, kalite ve review geçmişi | `admin`, `data_manager`, `editor`, `moderator`, `expert_reviewer` | Ham/karantina metin aynı sınır içinde |
 | Kaynak oluşturma, ingest ve upload | `admin`, `data_manager` | Yazma işlemi audit edilir |

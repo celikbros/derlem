@@ -4,6 +4,16 @@ export type User = {
   roles: string[];
 };
 
+export type UserAccount = {
+  id: string;
+  email: string;
+  display_name: string;
+  status: string;
+  roles: string[];
+  created_at: string;
+  updated_at: string;
+};
+
 export type Source = {
   id: string;
   name: string;

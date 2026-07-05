@@ -18,6 +18,7 @@ type Server struct {
 	documents      *repository.Documents
 	releases       *repository.Releases
 	similarities   *repository.SimilarityReviews
+	users          *repository.Users
 	objectStore    storage.Store
 	tokens         *auth.TokenManager
 	sessions       *auth.SessionStore
@@ -35,6 +36,7 @@ func NewServer(pool *pgxpool.Pool, objectStore storage.Store, tokens *auth.Token
 		documents:      repository.NewDocuments(pool),
 		releases:       repository.NewReleases(pool),
 		similarities:   repository.NewSimilarityReviews(pool),
+		users:          repository.NewUsers(pool),
 		objectStore:    objectStore,
 		tokens:         tokens,
 		sessions:       sessions,

@@ -37,6 +37,7 @@ func TestReadRouteAuthorizationMatrix(t *testing.T) {
 	reviewers := []string{roleAdmin, roleModerator, roleExpertReviewer}
 	releases := []string{roleAdmin, roleDataManager, roleConsumerTeam}
 	expected := map[string][]string{
+		"GET /api/v1/users":                                      {roleAdmin},
 		"GET /api/v1/sources":                                    workspace,
 		"GET /api/v1/sources/{id}":                               workspace,
 		"GET /api/v1/sources/{id}/reviews":                       workspace,

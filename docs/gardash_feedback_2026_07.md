@@ -70,3 +70,57 @@ kabul metriğidir.
 - v2 planındaki faz 0 işleri: başlatılabilir; GPU gerektirmez.
 - Bu belge append-only kültürle uyumludur: sonraki gelişmeler yeni tarihli
   bölüm olarak eklenir, mevcut kayıt değiştirilmez.
+
+## Ek (2026-07-05): Gardash ön koşul sorularına kanıtlı yanıtlar
+
+Gardash'ın frozen release ile istediği dört madde; tüm değerler bugün
+artifact'ler üzerinde yeniden doğrulanmıştır.
+
+### 1. 224 satır farkının tam hesabı
+
+Fark tek kaynaktan değil iki ayrı kapıdan gelir; denklem birebir tutar:
+
+| Kalem | Satır |
+|---|---:|
+| Ham corpus (`gardash_faz2_tr_dedup_20260621`) | 6.027.968 |
+| − PII bulgulu satırlar | 104.853 |
+| − Normalize document dedup iç tekrarları (NFKC + casefold + whitespace collapse parmak izi eşleşmesi) | 221 |
+| − Boyut aşımı belgeler (> `MAX_DOCUMENT_BYTES` = 262.144 byte) | 3 |
+| **= Temiz aday** | **5.922.891** |
+
+221 + 3 = 224. İki bağımsız hesap aynı sonucu verir: türetme manifesti
+(`clean-candidate-v1`, `removed_duplicate_lines: 221`,
+`removed_oversized_lines: 3`) ve ham kaynak üzerindeki fingerprint işi
+(`internal_duplicate_count: 221`, `skipped_oversized: 3`).
+
+### 2. Tam SHA256 ve kesin sayılar
+
+- **SHA256 (tam):** `ebe292793d87ec067076bbb86f39801e6ed5fae18761dfcfa3506c4503c0d989`
+- **Satır sayısı:** `5.922.891`
+- **Byte boyutu:** `12.850.383.067`
+- 2026-07-05'te dosya üzerinden yeniden hesaplandı; türetme manifesti ve
+  katalogdaki kaynak kaydı (`f63352dd-...`) ile birebir aynı. Dosya içerik
+  adresli depoda bu hash anahtarıyla salt-okunur durur; hash aynı zamanda depo
+  anahtarı olduğu için sessiz değişim yapısal olarak imkânsızdır.
+
+### 3. LF politikası teyidi
+
+Temiz aday **%100 LF**'dir:
+
+- Türetici her satırı binary modda `UTF-8 + b"\n"` olarak yazar
+  (`clean_candidate.py`, satır sonu üretimi tek noktadadır).
+- 2026-07-05'te 12,8 GB'lık dosyanın tamamı tarandı: **0 adet CR (`\r`) byte**;
+  dosya LF ile biter. Ham Faz 2 zincirindeki CRLF, Derlem'e alınan
+  `gardash_tr_dedup.lf.txt` aşamasında zaten normalize edilmişti; türetme bu
+  durumu korur.
+
+### 4. ETA ve manifest zinciri
+
+Kritik yol (bu belgenin 1. bölümü): hak/lisans kararı + kanıt girişi (~30 dk,
+insan) → 200 örnek toplu inceleme (0,5-1 gün, insan) → kaynak onayı → freeze →
+export. **Hak kararının verildiği günden itibaren 1-2 iş günü**; freeze/export
+otomatik kısmı saatler mertebesindedir. Frozen release manifest'i
+(`derlem.release-manifest.v1`) kaynak snapshot'ında yukarıdaki SHA256'yı ve
+gate sonuçlarını zincirler; 224 satırının hesabı türetme manifesti + bu belge
+ile lineage'da kalıcıdır. Bekletme Derlem'in otomasyon tarafında olmayacaktır;
+tek değişken insan kapısının takvimidir.

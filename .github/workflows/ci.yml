@@ -18,6 +18,8 @@ jobs:
           go-version: "1.25.x"
           cache: true
       - run: go test ./...
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
   worker:
     runs-on: ubuntu-latest
@@ -29,6 +31,10 @@ jobs:
           cache: pip
       - run: python -m pip install -e "worker[dev]"
       - run: python -m pytest worker/tests
+      - name: pip-audit
+        run: |
+          python -m pip install pip-audit
+          python -m pip_audit --skip-editable
 
   web:
     runs-on: ubuntu-latest
@@ -45,3 +51,5 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run build
+      - name: npm audit
+        run: npm audit --audit-level=moderate

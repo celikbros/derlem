@@ -12,7 +12,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8,<9"]
+dev = ["pytest>=9.0.3,<10"]
 
 [project.scripts]
 derlem-worker = "derlem_worker.main:main"

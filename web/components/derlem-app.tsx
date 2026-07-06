@@ -387,7 +387,13 @@ export function DerlemApp() {
               </select>
             </label>
             <label>Dil<input name="language" defaultValue="tr" required /></label>
-            <label>Alan<input name="domain" placeholder="genel" required /></label>
+            <label>
+              Alan
+              <input name="domain" placeholder="genel" list="domain-suggestions" required />
+              <datalist id="domain-suggestions">
+                {["hukuk", "tip", "felsefe", "matematik", "fizik", "kimya", "biyoloji", "tarih", "cografya", "edebiyat", "dil", "din", "egitim", "teknoloji", "ekonomi", "yurttaslik", "haber", "kultur", "spor", "konusma", "mixed", "genel"].map((value) => <option key={value} value={value} />)}
+              </datalist>
+            </label>
             <label className="full-width">Kaynak URL’si<input name="source_url" type="url" /></label>
             <label className="full-width">Lisans kanıtı<input name="license_evidence_ref" /></label>
             <label className="full-width">Köken bilgisi<input name="lineage_ref" placeholder="Dosya yolu, URL veya kayıt referansı" required /></label>

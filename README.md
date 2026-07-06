@@ -538,6 +538,7 @@ insan/hak operasyonu sürüyor; sıradaki teknik hedef v0.4.**
 
 - [Hızlı başlangıç: ilk kaynağınızı uçtan uca geçirin](docs/hizli_baslangic.md)
 - [Senaryolarla Derlem: ekipler için kullanım kılavuzu](docs/senaryolar.md)
+- [Alan (domain) taksonomisi](docs/alan_taksonomisi.md)
 - [Kapsamlı proje ve devir teslim raporu](docs/derlem_kapsamli_proje_raporu.md)
 - [Gardash tüketici geri bildirimi ve kapanış planı](docs/gardash_feedback_2026_07.md)
 - [v2 alım planı: web-ölçekli TR + sentetik ders kitabı](docs/v2_intake_plan.md)

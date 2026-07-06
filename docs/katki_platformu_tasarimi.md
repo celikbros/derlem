@@ -89,7 +89,43 @@ self-review engeli, körlemeli inceleme akışı.
 
 Her faz bir sonrakinin varsayımlarını ölçerek doğrular ("ölçek ölçümle büyür").
 
-## 7. Açık Sorular (karar bekliyor)
+## 7. Hesap Açılış Modelleri (2026-07-06 kararı)
+
+Kullanıcının önerdiği model **başvuru-onay** modelidir: kişi hesabını kendisi
+açar, hangi görev için geldiğini beyan eder; yetkili görevli başvuruyu
+onaylar/reddeder ve rol/görev atar. Beş bilinen model ve ödünleşimleri:
+
+| Model | Nasıl çalışır | Güçlü yanı | Zayıf yanı | Uygun faz |
+|---|---|---|---|---|
+| Davet | Mevcut güvenilir üye davet eder; davet ilk güveni taşır | En yüksek kalite girişi | Büyümez | A-B |
+| **Başvuru-onay** (önerilen taban) | Self-signup + görev beyanı + insan onayı + rol atama | Kontrollü, denetlenebilir, niyet verisi toplar | Ölçekte onay darboğazı: günde binlerce başvuruyu insan okuyamaz | B-C |
+| Açık kayıt + kazanılmış güven | Anında kayıt (e-posta doğrulama); herkes yalnız düşük-riskli görev görür; yükselme ölçümle | Sınırsız ölçeklenir, onay emeği sıfır | Girişte kimlik/niyet bilgisi zayıf | C-D |
+| Yeterlilik sınavı | Rol, testi geçmekle açılır (çeviri testi, alan quizi) | Beceri kanıtı nesnel | Tek başına motivasyonu ölçmez | Rol yükseltmede ek |
+| Kurumsal/federated | Üniversite/dernek toplu getirir, kurum kefil olur | Toplu ve nitelikli giriş | Kurum anlaşması gerekir | C-D |
+
+**Karar — hibrit:** giriş ile yetki ayrılır.
+
+1. **Giriş otomatiktir** (e-posta doğrulamalı self-signup): hesap `pending`
+   değil, anında `contributor` olur ama YALNIZ düşük-riskli görevleri görür
+   (tercih karşılaştırma, kalibrasyon/altın görevler). Bot/istismar riski
+   düşük-riskli görevlerde sınırlıdır; insan onayı beklemek 1M ölçeğinde
+   imkânsızdır.
+2. **Görev beyanı kayıtta alınır** ("hangi görev için geldiniz": çeviri,
+   cevap yazma, inceleme, alan uzmanlığı + kısa gerekçe/kanıt). Bu beyan
+   yönlendirme verisidir ve ilgili onaycının kuyruğuna düşer.
+3. **İnsan onayı yükseltmeye uygulanır** (kullanıcının önerdiği akış tam
+   burada): görevli, başvuru + ölçülmüş performansı (altın görev skoru,
+   kabul oranı) birlikte görür; rolü/görevi atar veya reddeder. Onay/ret
+   gerekçesiyle audit'e yazılır; onaycı kendi davet ettiğini onaylayamaz.
+4. **Yüksek-riskli roller her zaman insan kapısındadır:** uzman onaycı,
+   moderatör, hak/lisans görevleri hiçbir zaman otomatik verilmez.
+
+Uygulama notu: bugünkü şemaya küçük ek yeter — `users.status`'a `pending`
+yerine, ayrı bir `role_applications` tablosu (beyan, kanıt referansı, karar,
+karar veren, gerekçe) + Kullanıcılar paneline "Başvurular" kuyruğu. Mevcut
+admin kullanıcı yönetimi (2026-07-06) bunun çekirdeğidir.
+
+## 8. Açık Sorular (karar bekliyor)
 
 - Ödeme/gönüllülük modeli (hukuk görüşü şart).
 - Çeviri kaynak havuzu: hangi izinli EN kaynaklar? (Wikipedia + PD önerisi.)

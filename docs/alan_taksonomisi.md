@@ -27,6 +27,9 @@ arayüz bu listeyi öneri olarak sunar.
    kullanılmaz** — kontrolden çıkar.
 6. Release mixture raporu alan dağılımını bu etiketten hesaplar; etiket
    disiplini doğrudan rapor kalitesine yansır.
+7. **Arayüz sıralaması bilinçlidir:** konu kategorileri alfabetik önerilir;
+   `mixed` ve `genel` listenin SONUNDA durur (önce özgül etiket aransın,
+   bulunamazsa geri düşülsün); `e2e` gerçek ekiplere hiç önerilmez.
 
 ## Kategori Listesi (öneri sözlüğü)
 

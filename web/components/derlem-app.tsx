@@ -391,7 +391,7 @@ export function DerlemApp() {
               Alan
               <input name="domain" placeholder="genel" list="domain-suggestions" required />
               <datalist id="domain-suggestions">
-                {["hukuk", "tip", "felsefe", "matematik", "fizik", "kimya", "biyoloji", "tarih", "cografya", "edebiyat", "dil", "din", "egitim", "teknoloji", "ekonomi", "yurttaslik", "haber", "kultur", "spor", "konusma", "mixed", "genel"].map((value) => <option key={value} value={value} />)}
+                {["hukuk", "tip", "felsefe", "matematik", "fizik", "kimya", "biyoloji", "tarih", "cografya", "edebiyat", "dil", "din", "egitim", "teknoloji", "ekonomi", "sosyal", "yurttaslik", "tarim", "haber", "kultur", "spor", "konusma", "mixed", "genel"].map((value) => <option key={value} value={value} />)}
               </datalist>
             </label>
             <label className="full-width">Kaynak URL’si<input name="source_url" type="url" /></label>

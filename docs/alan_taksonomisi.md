@@ -19,36 +19,43 @@ arayüz bu listeyi öneri olarak sunar.
 5. Release mixture raporu alan dağılımını bu etiketten hesaplar; etiket
    disiplini doğrudan rapor kalitesine yansır.
 
-## Üst Alanlar (öneri sözlüğü)
+## Kategori Listesi (öneri sözlüğü)
 
-| Etiket | Kapsam | Alt alan örneği |
+24 üst kategori. Alt kategoriler `ust-alt` biçiminde serbestçe türetilir;
+listedekiler örnektir, ekip ihtiyaç duyduğu alt kategoriyi kendisi açabilir.
+Rapor okunabilirliği için en fazla iki seviye önerilir
+(gerekirse üç: `tip-dahiliye-kardiyoloji`).
+
+| # | Üst kategori | Alt kategori örnekleri |
 |---|---|---|
-| `hukuk` | Mevzuat, içtihat, hukuk doktrini | `hukuk-yargitay`, `hukuk-mevzuat` |
-| `tip` | Tıp ve sağlık bilimleri | `tip-dahiliye`, `tip-radyoloji` |
-| `felsefe` | Felsefe, mantık, etik | `felsefe-etik` |
-| `matematik` | Matematik | `matematik-analiz` |
-| `fizik` | Fizik | `fizik-astrofizik` |
-| `kimya` | Kimya | — |
-| `biyoloji` | Biyoloji, çevre | — |
-| `tarih` | Tarih | `tarih-osmanli` |
-| `cografya` | Coğrafya | — |
-| `edebiyat` | Edebiyat, şiir, roman | `edebiyat-divan` |
-| `dil` | Dilbilgisi, dilbilim, sözlük | `dil-sozluk` |
-| `din` | Din, ilahiyat | — |
-| `egitim` | Ders kitabı tarzı genel eğitsel içerik | `egitim-lise` |
-| `teknoloji` | Bilişim, mühendislik, yazılım | `teknoloji-yazilim` |
-| `ekonomi` | Ekonomi, finans, işletme | `ekonomi-finans` |
-| `yurttaslik` | Siyaset bilimi, kamu yönetimi, yurttaşlık | — |
-| `haber` | Haber ve güncel metin | — |
-| `kultur` | Kültür, sanat, müzik, sinema | — |
-| `spor` | Spor | — |
-| `konusma` | Günlük diyalog, sohbet | — |
-| `mixed` | Çok alanlı karışık derleme | Gardas/Faz 2 böyledir |
-| `genel` | Alanı belirsiz/önemsiz | — |
-| `e2e` | Test/smoke kaynakları | Release'e girmez |
+| 1 | `hukuk` | `hukuk-mevzuat`, `hukuk-ictihat`, `hukuk-doktrin`, `hukuk-sozlesme` |
+| 2 | `tip` | `tip-dahiliye`, `tip-cerrahi`, `tip-radyoloji`, `tip-pediatri`, `tip-psikiyatri`, `tip-eczacilik`, `tip-dis`, `tip-halk-sagligi` |
+| 3 | `felsefe` | `felsefe-etik`, `felsefe-mantik`, `felsefe-metafizik`, `felsefe-siyaset-felsefesi` |
+| 4 | `matematik` | `matematik-analiz`, `matematik-cebir`, `matematik-geometri`, `matematik-istatistik` |
+| 5 | `fizik` | `fizik-mekanik`, `fizik-astrofizik`, `fizik-kuantum` |
+| 6 | `kimya` | `kimya-organik`, `kimya-anorganik`, `kimya-biyokimya` |
+| 7 | `biyoloji` | `biyoloji-genetik`, `biyoloji-mikrobiyoloji`, `biyoloji-ekoloji` |
+| 8 | `tarih` | `tarih-osmanli`, `tarih-cumhuriyet`, `tarih-islam`, `tarih-dunya` |
+| 9 | `cografya` | `cografya-turkiye`, `cografya-dunya` |
+| 10 | `edebiyat` | `edebiyat-roman`, `edebiyat-siir`, `edebiyat-divan`, `edebiyat-halk`, `edebiyat-dunya` |
+| 11 | `dil` | `dil-dilbilgisi`, `dil-sozluk`, `dil-ceviri`, `dil-dilbilim` |
+| 12 | `din` | `din-islam`, `din-ilahiyat`, `din-dinler-tarihi` |
+| 13 | `egitim` | `egitim-ilkokul`, `egitim-ortaokul`, `egitim-lise`, `egitim-universite` |
+| 14 | `teknoloji` | `teknoloji-yazilim`, `teknoloji-yapay-zeka`, `teknoloji-elektrik-elektronik`, `teknoloji-makine`, `teknoloji-insaat` |
+| 15 | `ekonomi` | `ekonomi-finans`, `ekonomi-isletme`, `ekonomi-muhasebe` |
+| 16 | `sosyal` | `sosyal-psikoloji`, `sosyal-sosyoloji`, `sosyal-antropoloji` |
+| 17 | `yurttaslik` | `yurttaslik-kamu-yonetimi`, `yurttaslik-uluslararasi-iliskiler` |
+| 18 | `tarim` | `tarim-ziraat`, `tarim-veterinerlik`, `tarim-gida` |
+| 19 | `haber` | `haber-gundem`, `haber-yerel` |
+| 20 | `kultur` | `kultur-sanat`, `kultur-muzik`, `kultur-sinema`, `kultur-mutfak` |
+| 21 | `spor` | `spor-futbol`, `spor-genel` |
+| 22 | `konusma` | `konusma-diyalog`, `konusma-forum` |
+| 23 | `mixed` | Çok alanlı karışık derleme (Gardas/Faz 2 böyledir) |
+| 24 | `genel` | Alanı belirsiz/önemsiz |
+| — | `e2e` | Test/smoke kaynakları; release'e girmez |
 
-Yeni üst alan ihtiyacı doğarsa bu belgeye eklenir; belge öneri sözlüğü olduğu
-için ekleme migration gerektirmez.
+Yeni üst kategori ihtiyacı doğarsa bu belgeye eklenir; belge öneri sözlüğü
+olduğu için ekleme migration gerektirmez.
 
 ## Mevcut Veriler Nasıl Etkilenir?
 

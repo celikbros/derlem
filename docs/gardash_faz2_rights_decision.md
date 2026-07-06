@@ -1,11 +1,11 @@
 # Gardas/Faz 2 Temiz Adayı — Hak/Lisans Kararı ve Kanıt Kaydı
 
-> **DURUM: TASLAK DOLDURULDU — ONAY BEKLİYOR.**
-> Köken beyanı 2026-07-07'de veri sahibi tarafından verildi ("kendi
-> crawl'ladığımız Türkçe sitelerden geldi"); değerlendirme bu beyana göre
-> hazırlandı. Karar, 4. bölümdeki karar sahibi alanları doldurulup teyit
-> edilene kadar geçersizdir. Onay sonrası bu dosyanın yolu kaynağın
-> `license_evidence_ref` alanına yazılır.
+> **DURUM (2026-07-07 revizyonu):** Bu kaynak, sınıf bazında karar veren
+> [Genel Web Derleme Hak Politikası](web_derleme_politikasi.md) kapsamındadır
+> (köken beyanı: "kendi crawl'ladığımız Türkçe sitelerden geldi").
+> **Politika bir kez onaylandığında bu kaynak için ayrı imza gerekmez**;
+> aşağıdaki bölümler sınıf kararının bu kaynağa uygulanma kaydıdır.
+> Kaynağın `license_evidence_ref` alanına politika dosyası yazılır.
 
 **Kaynak:** `gardash_faz2_tr_dedup_20260621_clean_candidate_20260625`
 **Source ID:** `f63352dd-fdd1-4e4b-a8d2-b167b3c856cf`

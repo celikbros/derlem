@@ -63,10 +63,9 @@ FineWeb vb. aynı nitelikte veridir).
 
 ## 4. Karar sahibi (doldurulacak)
 
-- Ad / rol: `.......`
-- Tarih: `.......`
-- Teyit: "1. bölümdeki köken beyanı doğrudur; 2. bölümdeki risk
-  değerlendirmesini okudum; 3. bölümdeki kararı onaylıyorum."
+- Karar, [Genel Web Derleme Hak Politikası](web_derleme_politikasi.md)
+  kapsamında verilmiştir; politika onayı: **Celikbros, 2026-07-07**.
+  Bu kaynak için ayrı imza gerekmez (sınıf kararı uygulanmıştır).
 
 ## 5. Karar sonrası üç adım (operasyon)
 

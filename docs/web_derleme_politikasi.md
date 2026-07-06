@@ -52,9 +52,10 @@ Hepsi bu. Ayrı belge, ayrı değerlendirme, ayrı imza yok.
 
 ## Politika onayı (bir kez doldurulur)
 
-- Onaylayan ad / rol: `.......`
-- Tarih: `.......`
+- Onaylayan ad / rol: **Celikbros** (proje sahibi)
+- Tarih: **2026-07-07**
 - Teyit: "Sınıf tanımını ve karar koşullarını okudum; bu politika ekibimizin
   crawl'ladığı genel web verisi sınıfı için kalıcı hak kararımızdır."
+  — Onay, 2026-07-07 tarihli yazılı "Onaylıyorum — Celikbros" beyanıyla verildi.
 
 Politika değişirse yeni tarihli sürüm eklenir; eski kayıtlar dokunulmaz.

@@ -2961,3 +2961,55 @@ textarea:focus {
 .role-option input {
   margin: 0;
 }
+
+.view-help {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px 16px;
+  margin-bottom: 16px;
+  font-size: 13.5px;
+}
+
+.view-help summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  color: var(--green-dark);
+  font-weight: 600;
+  list-style: none;
+}
+
+.view-help summary::-webkit-details-marker {
+  display: none;
+}
+
+.view-help[open] summary {
+  margin-bottom: 8px;
+}
+
+.view-help p {
+  margin: 0 0 6px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.view-help ul {
+  margin: 0 0 6px;
+  padding-left: 20px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.view-help-more {
+  font-size: 12.5px;
+}
+
+.local-account-card em {
+  display: block;
+  font-style: normal;
+  font-size: 12px;
+  color: var(--green-dark);
+  margin-top: 2px;
+}

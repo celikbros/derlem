@@ -25,6 +25,11 @@ bürokrasiyi budar.
 
 **Ölçüt:** Gerçek teslimat sayısı 0 → 1. DGX Spark v1 girdisi verilmiş olur.
 
+**Faz 0 destek kaydı (2026-07-07):** Kullanıcı giriş ekranında hangi hesabı
+seçeceğini bilemedi → her yerel hesap kartına görev açıklaması ve her ekrana
+rol-duyarlı "Bu ekranda ne yapabilirim?" yardım kutusu eklendi. Moratoryum
+istisnası kapsamındadır (teslimatı açan rehberlik; yeni yetenek değil).
+
 ### Faz 1 — MORATORYUM (bugün yürürlüğe girer)
 
 Gerçek release #1 teslim edilene VE sisteme ikinci gerçek insan (ekip üyesi)

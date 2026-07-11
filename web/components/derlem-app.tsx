@@ -9,6 +9,7 @@ import {
   FilePlus2,
   FileText,
   GitCompareArrows,
+  Info,
   Library,
   ListTodo,
   LoaderCircle,
@@ -68,6 +69,82 @@ const statusLabels: Record<string, string> = {
 };
 
 const reviewStatuses = ["license_review", "auto_checked", "sampled_for_review", "quarantined"];
+
+const accountHints: Record<string, string> = {
+  admin: "Yönetim: kullanıcılar, release freeze — tüm yetkiler",
+  manager: "Kaynak kaydı açma ve dosya yükleme",
+  editor: "Metadata ve belge içeriği düzeltme",
+  moderator: "Örnek inceleme ve kaynak onayı",
+  expert: "Hassas inceleme ve benzerlik etiketleme",
+  contributor: "Henüz işlem yok (katkı kuyruğu v0.5'te)",
+  consumer: "Frozen release görüntüleme ve indirme",
+};
+
+type ViewTip = { text: string; roles?: string[] };
+
+const viewHelpContent: Partial<Record<ActiveView, { purpose: string; tips: ViewTip[] }>> = {
+  sources: {
+    purpose: "Tüm veri kaynaklarının kataloğu. Her satırdaki “Sıradaki kapı” sütunu, o kaynak için şimdi ne beklendiğini söyler.",
+    tips: [
+      { text: "Satıra tıklayınca sağda detay paneli açılır: kapılar, örnekler, dosya yükleme ve geçmiş." },
+      { text: "“Yeni kaynak” ile kayıt açıp dosya yükleyebilirsiniz.", roles: ["admin", "data_manager"] },
+      { text: "Metadata ve hak bilgisini düzenleyebilirsiniz; onay kararı bu ekranda değil İnceleme'dedir.", roles: ["editor"] },
+      { text: "Bu ekranda yalnız görüntüler ve detay panelinden karar verirsiniz; kaynak açamazsınız.", roles: ["moderator", "expert_reviewer"] },
+    ],
+  },
+  review: {
+    purpose: "Karar bekleyen kaynakların öncelik sıralı kuyruğu. Önce örnek belgeleri okuyup puanlarsınız, tüm örnekler bitince kaynak kararını verirsiniz.",
+    tips: [
+      { text: "Belgeleri seçip toplu incelemeyle tek seferde 200'e kadar puanlayabilirsiniz; şüpheli belgeyi ayrı açıp reddedin." },
+      { text: "Kendi yüklediğiniz kaynağı onaylayamazsınız (bağımsız inceleme kuralı)." },
+      { text: "“Onayla” pasifse detay panelindeki kapı listesi eksik koşulu gösterir: incelenmemiş örnek, hak durumu, PII veya tekrar." },
+    ],
+  },
+  similarity: {
+    purpose: "Yakın-tekrar aday çiftlerinin körlemeli etiketlenmesi: diğer inceleyicilerin kararını göremezsiniz, onlar da sizinkini göremez.",
+    tips: [
+      { text: "Yalnız iki metni karşılaştırın: aynı mı, türev mi, ilgisiz mi? “Doğru cevabı” tahmin etmeye çalışmayın; dürüst etiket, eşik kararının girdisidir." },
+    ],
+  },
+  releases: {
+    purpose: "Taslak ve frozen release'ler. Frozen release asla değişmez; düzeltme yeni release olarak çıkar.",
+    tips: [
+      { text: "Aynı amaçtaki onaylı kaynaklardan taslak oluşturabilirsiniz.", roles: ["admin", "data_manager"] },
+      { text: "Freeze yalnız admin yetkisidir; freeze sırasında tüm kapılar yeniden koşar.", roles: ["admin"] },
+      { text: "Manifest ve export dosyalarını indirip SHA256 ile doğrulayabilirsiniz." },
+    ],
+  },
+  jobs: {
+    purpose: "Arka plan işlerinin durumu ve canlı ilerlemesi.",
+    tips: [
+      { text: "İşler uzun süre “queued” durumunda kalıyorsa worker servisi çalışmıyor olabilir." },
+      { text: "Büyük dosyalarda ilerleme 64 MiB aralıklarla güncellenir; sayfa kendini yeniler." },
+    ],
+  },
+  users: {
+    purpose: "Kullanıcı hesapları ve rolleri (yalnız admin görür).",
+    tips: [
+      { text: "Rolü veya durumu değişen kullanıcının açık oturumları otomatik olarak düşer." },
+      { text: "Son aktif admin devre dışı bırakılamaz; kendi hesabınızın admin rolünü kaldıramazsınız." },
+    ],
+  },
+};
+
+function ViewHelp({ view, user }: { view: ActiveView; user: User }) {
+  const help = viewHelpContent[view];
+  if (!help) return null;
+  const tips = help.tips.filter((tip) => !tip.roles || hasAnyRole(user, tip.roles));
+  return (
+    <details className="view-help">
+      <summary><Info size={15} aria-hidden="true" /> Bu ekranda ne yapabilirim?</summary>
+      <p>{help.purpose}</p>
+      <ul>
+        {tips.map((tip) => <li key={tip.text}>{tip.text}</li>)}
+      </ul>
+      <p className="view-help-more">Akışın tamamı ve rolünüzün tüm yetkileri için sol menüdeki Rehber sekmesine bakın.</p>
+    </details>
+  );
+}
 
 export function DerlemApp() {
   const [user, setUser] = useState<User | null>(null);
@@ -272,6 +349,8 @@ export function DerlemApp() {
           )}
         </header>
 
+        <ViewHelp view={activeView} user={user} />
+
         {(activeView === "sources" || activeView === "review") && <section className="summary-strip" aria-label={activeView === "review" ? "İnceleme özeti" : "Kaynak özeti"}>
           {activeView === "review" ? (
             <>
@@ -459,6 +538,7 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
                   <strong>{account.label}</strong>
                   <span>{account.email}</span>
                   <code>{account.password}</code>
+                  {accountHints[account.label] && <em>{accountHints[account.label]}</em>}
                 </button>
               ))}
             </div>

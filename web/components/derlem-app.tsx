@@ -130,6 +130,50 @@ const viewHelpContent: Partial<Record<ActiveView, { purpose: string; tips: ViewT
   },
 };
 
+function WelcomeTip({ user, onOpenGuide }: { user: User; onOpenGuide: () => void }) {
+  const storageKey = `derlem-welcome-dismissed-${user.id}`;
+  const [dismissed, setDismissed] = useState(true);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDismissed(window.localStorage.getItem(storageKey) === "1");
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [storageKey]);
+  if (dismissed) return null;
+  const primaryRole = user.roles[0] ?? "";
+  const roleLine = accountHints[primaryRole.replace("data_manager", "manager").replace("expert_reviewer", "expert").replace("consumer_team", "consumer")]
+    ?? "Rolünüze göre yapabilecekleriniz Rehber'de listelenir.";
+  function dismiss() {
+    window.localStorage.setItem(storageKey, "1");
+    setDismissed(true);
+  }
+  return (
+    <section className="welcome-tip" aria-label="Hoş geldiniz">
+      <div className="welcome-tip-body">
+        <strong>Derlem’e hoş geldiniz.</strong>
+        <p>
+          Burası bir veri atölyesidir: metin dosyaları alınır, kalite kapılarından geçirilir,
+          insan incelemesiyle onaylanır ve eğitime hazır paketler üretilir. Sizin rolünüz:
+          <em> {roleLine.toLocaleLowerCase("tr-TR")}</em>.
+        </p>
+        <p className="welcome-tip-hint">
+          Her ekranın başındaki <strong>“Bu ekranda ne yapabilirim?”</strong> kutusunu açın;
+          tam akış için soldaki Rehber’e bakın.
+        </p>
+        <div className="welcome-tip-actions">
+          <button type="button" className="primary-button" onClick={() => { dismiss(); onOpenGuide(); }}>
+            <BookOpen size={16} aria-hidden="true" /> Rehber’i aç
+          </button>
+          <button type="button" className="text-button" onClick={dismiss}>Anladım, kapat</button>
+        </div>
+      </div>
+      <button type="button" className="icon-button compact" title="Kapat" onClick={dismiss}>
+        <X size={16} aria-hidden="true" />
+      </button>
+    </section>
+  );
+}
+
 function ViewHelp({ view, user }: { view: ActiveView; user: User }) {
   const help = viewHelpContent[view];
   if (!help) return null;
@@ -349,6 +393,8 @@ export function DerlemApp() {
           )}
         </header>
 
+        <WelcomeTip user={user} onOpenGuide={() => { setActiveView("guide"); setSelected(null); }} />
+
         <ViewHelp view={activeView} user={user} />
 
         {(activeView === "sources" || activeView === "review") && <section className="summary-strip" aria-label={activeView === "review" ? "İnceleme özeti" : "Kaynak özeti"}>
@@ -465,7 +511,17 @@ export function DerlemApp() {
                 <option value="blocked">Engelli</option>
               </select>
             </label>
-            <label>Dil<input name="language" defaultValue="tr" required /></label>
+            <label>
+              Dil
+              <input name="language" defaultValue="tr" list="language-suggestions" required />
+              <datalist id="language-suggestions">
+                {[
+                  ["tr", "Türkçe"], ["en", "İngilizce"], ["ar", "Arapça"], ["de", "Almanca"],
+                  ["fr", "Fransızca"], ["es", "İspanyolca"], ["ru", "Rusça"], ["fa", "Farsça"],
+                  ["ku", "Kürtçe"], ["az", "Azerbaycan Türkçesi"], ["multi", "Çok dilli"],
+                ].map(([code, label]) => <option key={code} value={code}>{label}</option>)}
+              </datalist>
+            </label>
             <label>
               Alan
               <input name="domain" placeholder="genel" list="domain-suggestions" required />

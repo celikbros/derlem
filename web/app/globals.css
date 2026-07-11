@@ -3214,3 +3214,51 @@ dialog.source-dialog {
 dialog::backdrop {
   background: rgb(12 22 17 / 45%);
 }
+
+.welcome-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 16px 18px;
+  border: 1px solid #cfe6db;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #f0f9f4 0%, #eaf5ef 100%);
+  box-shadow: var(--shadow-sm);
+}
+
+.welcome-tip-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.welcome-tip-body > strong {
+  display: block;
+  font-size: 15px;
+  color: var(--green-dark);
+  margin-bottom: 4px;
+}
+
+.welcome-tip-body p {
+  margin: 0 0 6px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: #3c4a44;
+}
+
+.welcome-tip-body em {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--green-dark);
+}
+
+.welcome-tip-hint {
+  color: #52605a;
+}
+
+.welcome-tip-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}

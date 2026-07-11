@@ -9,8 +9,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="tr">
-      <body>{children}</body>
+    // suppressHydrationWarning: tarayıcı eklentileri (Trancy, Grammarly vb.)
+    // React yüklenmeden html/body özniteliklerini değiştirebiliyor; yalnız bu
+    // iki elemanın öznitelik farkları yok sayılır, içerik denetimi sürer.
+    <html lang="tr" suppressHydrationWarning>
+      <body suppressHydrationWarning>{children}</body>
     </html>
   );
 }

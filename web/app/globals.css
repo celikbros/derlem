@@ -3015,3 +3015,202 @@ textarea:focus {
   margin-top: 1px;
   line-height: 1.35;
 }
+
+/* ===== Görsel yenileme (2026-07-08) — derinlik, boşluk, hiyerarşi ===== */
+
+:root {
+  --radius: 8px;
+  --shadow-sm: 0 1px 2px rgb(16 34 26 / 5%), 0 2px 6px rgb(16 34 26 / 4%);
+  --shadow-md: 0 6px 20px rgb(16 34 26 / 9%);
+}
+
+body {
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizelegibility;
+}
+
+button,
+.nav-item,
+.local-account-card,
+input,
+select {
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  border-color: #1d9e75;
+  outline: 2px solid rgb(29 158 117 / 45%);
+  outline-offset: 1px;
+}
+
+button:focus-visible {
+  outline: 2px solid rgb(29 158 117 / 55%);
+  outline-offset: 2px;
+}
+
+.login-page {
+  background: radial-gradient(1100px 620px at 15% -10%, #d9eee3 0%, #e9eeeb 48%, #e5eae7 100%);
+}
+
+.login-panel {
+  padding: 40px 38px;
+  border: 0;
+  border-radius: 18px;
+  box-shadow: 0 24px 60px rgb(15 35 27 / 13%), 0 2px 8px rgb(15 35 27 / 6%);
+}
+
+.login-brand {
+  font-size: 23px;
+}
+
+.login-panel h1 {
+  margin-top: 22px;
+  font-size: 24px;
+  letter-spacing: -0.3px;
+}
+
+.local-credentials {
+  margin-top: 20px;
+  padding: 14px 6px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: #f1f7f3;
+}
+
+.local-credentials > span {
+  color: #4c7f6a;
+  letter-spacing: 0.8px;
+}
+
+.local-account-list {
+  max-height: 330px;
+  gap: 8px;
+  scrollbar-width: thin;
+}
+
+.local-account-card {
+  padding: 10px 12px;
+  border-color: #e3eae6;
+  border-radius: 10px;
+}
+
+.local-account-card:hover {
+  border-color: #9bcbb8;
+  background: #f4faf7;
+}
+
+.local-account-card[aria-pressed="true"] {
+  box-shadow: 0 0 0 2px rgb(20 160 111 / 20%);
+}
+
+.login-panel form input {
+  min-height: 42px;
+  border-radius: 9px;
+}
+
+.login-button {
+  min-height: 46px;
+  border-radius: 10px;
+  font-weight: 600;
+  box-shadow: 0 6px 18px rgb(20 122 85 / 22%);
+}
+
+.sidebar {
+  padding: 22px 14px 16px;
+  background: linear-gradient(180deg, #1c2924 0%, #16201c 100%);
+}
+
+.brand {
+  font-size: 21px;
+  letter-spacing: -0.2px;
+}
+
+.nav-item {
+  border-radius: 9px;
+  font-weight: 500;
+}
+
+.nav-item:hover {
+  background: #26352f;
+  color: #e7efeb;
+}
+
+.nav-item.active {
+  background: var(--green);
+  color: #ffffff;
+}
+
+.nav-item.active > span {
+  background: rgb(255 255 255 / 22%);
+  color: #ffffff;
+}
+
+.page-header h1 {
+  font-size: 24px;
+  letter-spacing: -0.3px;
+}
+
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.catalog-panel,
+.jobs-panel,
+.release-list-panel,
+.release-detail,
+.inspector,
+.guide-card,
+.view-help,
+.summary-item {
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.table-scroll th {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+
+.table-scroll tbody tr:hover {
+  background: #f5faf7;
+}
+
+.status,
+.pii-status,
+.next-step,
+.purpose-label,
+.release-status {
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.primary-button {
+  border-radius: 9px;
+  font-weight: 600;
+}
+
+.primary-button:hover {
+  filter: brightness(1.07);
+}
+
+.icon-button:hover {
+  background: #edf4f0;
+}
+
+dialog.source-dialog {
+  border: 0;
+  border-radius: 16px;
+  box-shadow: 0 30px 80px rgb(10 25 18 / 25%);
+}
+
+dialog::backdrop {
+  background: rgb(12 22 17 / 45%);
+}

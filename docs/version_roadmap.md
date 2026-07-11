@@ -1,5 +1,12 @@
 # Derlem Versiyon Yol Haritasi
 
+> **DONDURULDU (2026-07-07):** Aktif yol haritası artık
+> [Diyet Yol Haritası](diyet_yol_haritasi.md)'dır ([v1 Otopsi](v1-autopsy.md)
+> uyarınca). Bu belgedeki v0.4 sonrası hedefler (v0.5 katkı/ajan, v0.6 üretim
+> altyapısı) diyet tamamlanana kadar dondurulmuştur. Not: buradaki
+> "tamamlandı" iddialarının teknik doğrulamaları smoke (sentetik) verilerle
+> yapılmıştır; gerçek corpus teslimatı henüz gerçekleşmemiştir.
+
 **Tarih:** 2026-07-01
 **Kapsam:** Derlem veri atölyesinin versiyon versiyon hedefleri, mevcut konumu ve sonraki işler.
 

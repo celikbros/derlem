@@ -15,12 +15,12 @@ from psycopg.rows import dict_row
 from derlem_worker.config import load_config
 
 
-DEFAULT_MANIFEST = Path(r"C:\CELIKBROS PROJECTS\gardash\docs\TOKENIZER_V3_8_FINAL_CORPUS_MANIFEST_FAZ2.json")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Catalog the Gardas Faz 2 corpus in Derlem")
-    parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
+    parser.add_argument("--manifest", type=Path, required=True,
+                        help="Seed corpus manifest dosyasinin yolu")
     parser.add_argument("--actor-email")
     parser.add_argument("--license", default="unknown")
     parser.add_argument("--rights-status", choices=("unknown", "cleared", "restricted", "blocked"), default="unknown")

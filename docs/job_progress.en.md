@@ -1,5 +1,9 @@
 # Background Job Progress Contract
 
+> **UNMAINTAINED (2026-07-07):** This English translation is no longer
+> updated and may be out of date. The Turkish original is authoritative.
+> See [docs/v1-autopsy.md](v1-autopsy.md) / [diyet_yol_haritasi.md](diyet_yol_haritasi.md).
+
 Derlem runs long operations through the PostgreSQL `background_jobs` queue.
 Transient progress is stored in the running job's `result.progress` object
 instead of a separate table.

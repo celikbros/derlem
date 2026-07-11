@@ -1,5 +1,9 @@
 # Release Near-Duplicate Report
 
+> **UNMAINTAINED (2026-07-07):** This English translation is no longer
+> updated and may be out of date. The Turkish original is authoritative.
+> See [docs/v1-autopsy.md](v1-autopsy.md) / [diyet_yol_haritasi.md](diyet_yol_haritasi.md).
+
 Before freezing a release, Derlem scans its documents for approximate
 similarity both within each source and across sources. The result is bound to
 the frozen manifest and API snapshot under `gate_results.near_duplicate_report`.

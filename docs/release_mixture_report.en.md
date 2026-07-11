@@ -1,5 +1,9 @@
 # Release Mixture Report
 
+> **UNMAINTAINED (2026-07-07):** This English translation is no longer
+> updated and may be out of date. The Turkish original is authoritative.
+> See [docs/v1-autopsy.md](v1-autopsy.md) / [diyet_yol_haritasi.md](diyet_yol_haritasi.md).
+
 **Active schema:** `derlem.mixture-report.v2`
 
 The mixture report describes a frozen release's source composition without

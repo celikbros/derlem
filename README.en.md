@@ -1,5 +1,8 @@
 # Derlem
 
+> **UNMAINTAINED (2026-07-07):** This English README is no longer updated;
+> the Turkish [README.md](README.md) is authoritative.
+
 **A Turkish-centered, model-independent and auditable AI data workshop.**
 
 [Türkçe](README.md) | [English](README.en.md)

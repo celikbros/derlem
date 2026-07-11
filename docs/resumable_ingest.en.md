@@ -1,5 +1,9 @@
 # Resumable Large-File Ingest
 
+> **UNMAINTAINED (2026-07-07):** This English translation is no longer
+> updated and may be out of date. The Turkish original is authoritative.
+> See [docs/v1-autopsy.md](v1-autopsy.md) / [diyet_yol_haritasi.md](diyet_yol_haritasi.md).
+
 Derlem retains completed copy work for `ingest_local_file` and
 `ingest_staged_file` jobs in a checkpoint bound to the job UUID. If a worker
 stops or the job hits a retryable error, the same file is not written again from

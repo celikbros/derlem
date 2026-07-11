@@ -154,6 +154,13 @@ Sık karışan noktalar:
 8. **Ölçek ölçümle büyür.** MVP'de PostgreSQL kuyruğu ve local object store;
    ihtiyaç kanıtlandığında S3/MinIO ve ayrı mesajlaşma katmanı kullanılır.
 
+> **Garanti kapsamı (dürüstlük notu):** Append-only audit, immutable depo ve
+> bağımsız inceleme garantileri; çok kullanıcılı, ayrıcalıkları ayrılmış bir
+> kurulumda (ayrı DB rolleri, ayrı OS hesapları, birden fazla gerçek
+> inceleyici) tam güç kazanır. Tek operatörlü yerel kurulumda bu mekanizmalar
+> **disiplin provasıdır**: operatörün kendisine karşı teknik koruma
+> sağlamazlar. Ayrıntı: [v1 Otopsi Raporu](docs/v1-autopsy.md).
+
 ## Mimari
 
 ```mermaid
@@ -543,7 +550,9 @@ insan/hak operasyonu sürüyor; sıradaki teknik hedef v0.4.**
 - [Gardash tüketici geri bildirimi ve kapanış planı](docs/gardash_feedback_2026_07.md)
 - [v2 alım planı: web-ölçekli TR + sentetik ders kitabı](docs/v2_intake_plan.md)
 - [MVP planı](docs/web_data_atolyesi_mvp_plan.md)
-- [Versiyon yol haritası](docs/version_roadmap.md)
+- [v1 Otopsi raporu](docs/v1-autopsy.md)
+- [Diyet yol haritası (AKTİF)](docs/diyet_yol_haritasi.md)
+- [Versiyon yol haritası (donduruldu)](docs/version_roadmap.md)
 - [Proje tamamlanma durumu](docs/project_completion_status.md)
 - [Yerel geliştirme](docs/local_development.md)
 - [Yedekleme ve restore runbook'u](docs/backup_restore.md)

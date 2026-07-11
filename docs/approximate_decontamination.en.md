@@ -1,5 +1,9 @@
 # Approximate Decontamination Pilot
 
+> **UNMAINTAINED (2026-07-07):** This English translation is no longer
+> updated and may be out of date. The Turkish original is authoritative.
+> See [docs/v1-autopsy.md](v1-autopsy.md) / [diyet_yol_haritasi.md](diyet_yol_haritasi.md).
+
 When freezing a `pretrain` release, Derlem reports approximate document
 similarity against eval and holdout sources. The report runs after the exact
 decontamination gate and is bound to the frozen release snapshot under

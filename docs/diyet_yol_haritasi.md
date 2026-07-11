@@ -78,6 +78,27 @@ yeniden değerlendirilir:
 2. Sistemde en az bir ikinci gerçek insan düzenli çalışıyor.
 3. Faz 2-3 ölçütlerinin tamamı yeşil.
 
+### Yeniden büyüme adayları — öncelik sırası (2026-07-08 sahip talebi)
+
+Sahibin kararı: "Tüm işlemler Derlem ile yapılabilmeli; dışarıdan script'e
+gerek kalmamalı." Moratoryum kalktığında İLK yatırım, üretim modülleridir:
+
+1. **Belge ekstraksiyon işi:** PDF/EPUB/DOCX → satır-belge TXT dönüşümü,
+   worker job'ı olarak (ilerleme + audit + deterministik çıktı). Not: belge
+   ayrıştırıcılar klasik saldırı yüzeyidir; SEC-P0-07 karantina tarayıcısıyla
+   birlikte tasarlanır.
+2. **Distilasyon işi:** dış model API'sinden kontrollü üretim; prompt şablonu,
+   model kimliği ve üretim manifesti otomatik kaydedilir; API anahtarları
+   secret yönetimiyle (SEC-P0-05) birlikte ele alınır.
+3. Dondurulmuş eski hedefler (v2 web alımı, katkı platformu) bunlardan sonra
+   yeniden değerlendirilir.
+
+Gerekçe dengesi (kayıt): sahip argümanı — dışarıda dolaşan dosya/script hem
+güvenlik riski hem iş yükü; içerideki iş audit'li ve tek tip olur. Karşı not —
+ayrıştırıcı ve API anahtarı içeri alınınca YENİ saldırı yüzeyi doğar; bu
+modüller güvenlik maddeleriyle birlikte, teslimat #1'den önce DEĞİL, sonra
+yapılır.
+
 ## Bu belge nasıl güncellenir
 
 Durum değişiklikleri tarihli olarak işlenir; satır silinmez. "Bitti" iddiası

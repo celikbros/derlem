@@ -90,8 +90,25 @@ gerek kalmamalı." Moratoryum kalktığında İLK yatırım, üretim modüllerid
 2. **Distilasyon işi:** dış model API'sinden kontrollü üretim; prompt şablonu,
    model kimliği ve üretim manifesti otomatik kaydedilir; API anahtarları
    secret yönetimiyle (SEC-P0-05) birlikte ele alınır.
-3. Dondurulmuş eski hedefler (v2 web alımı, katkı platformu) bunlardan sonra
+3. **Arayüz uluslararasılaştırma (i18n):** sahibin ürün vizyonu kararı
+   (2026-07-08): Derlem yalnız Türkçe bilenlerin aracı olmayacak — herhangi
+   bir ulus/ekip (Japon, Alman, Arap...) kendi egemen veri bankasını bu
+   platformla kurabilmeli. Gereken: çeviri katmanı (~500+ arayüz metni),
+   dil seçici, önce TR+EN, mimari ja/de/ar'a hazır (Arapça için RTL).
+   Not: i18n altyapısı ERKEN kurulursa ucuzdur — her yeni ekran metni
+   borcu büyütür; bu yüzden moratoryum kalkar kalkmaz ilk dalgada yapılır.
+   Veri tarafı zaten çok dillidir (dil alanı + UTF-8; seçici 2026-07-08'de
+   eklendi).
+4. Dondurulmuş eski hedefler (v2 web alımı, katkı platformu) bunlardan sonra
    yeniden değerlendirilir.
+
+**Ürün vizyonu kaydı (2026-07-08):** "Veri bankası yapay zekânın ana besin
+kaynağıdır." Derlem'in hedef kimliği: çok dilli, kullanıcı dostu, profesyonel,
+dayanıklı ve hızlı bir egemen-veri-atölyesi ürünü. Bu beş sıfatın karşılıkları:
+çok dilli = i18n (yukarıda), kullanıcı dostu = rehber/yardım katmanı (yapıldı,
+sürer), profesyonel = tasarım yenileme (başladı) + gerçek teslimat sicili,
+dayanıklı = SEC-P0 backlog'u + yedekleme (tatbikat PASS), hızlı = Go/stream
+mimarisi (mevcut) + ölçüm.
 
 Gerekçe dengesi (kayıt): sahip argümanı — dışarıda dolaşan dosya/script hem
 güvenlik riski hem iş yükü; içerideki iş audit'li ve tek tip olur. Karşı not —

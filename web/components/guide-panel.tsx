@@ -2,64 +2,11 @@
 
 import { BookOpen, ClipboardCheck, Database, GitCompareArrows, Library, ListTodo, PackageCheck, ShieldCheck } from "lucide-react";
 
+import { roleInfoByRole } from "@/lib/roles";
 import type { User } from "@/lib/types";
 
-const roleDescriptions: Record<string, { title: string; can: string[] }> = {
-  admin: {
-    title: "Yönetici (admin)",
-    can: [
-      "Tüm ekranları görür ve tüm işlemleri yapabilir.",
-      "Yalnızca bu role açık iki kritik yetki: release freeze ve kontrollü yeniden örnekleme.",
-    ],
-  },
-  data_manager: {
-    title: "Veri yöneticisi (data_manager)",
-    can: [
-      "Yeni kaynak kaydı açar, metadata ve hak bilgisini düzenler.",
-      "Dosya yükler veya yerel ingest başlatır.",
-      "Release taslağı oluşturur; manifest ve export indirir. Freeze edemez.",
-    ],
-  },
-  editor: {
-    title: "Editör (editor)",
-    can: [
-      "Kaynak metadata’sını düzenler.",
-      "Belge içeriğini düzeltip yeni immutable sürüm oluşturur.",
-      "Kaynak açamaz, onay kararı veremez.",
-    ],
-  },
-  moderator: {
-    title: "Moderatör (moderator)",
-    can: [
-      "İnceleme kuyruğundaki örnek belgeleri okur ve kalite puanı verir.",
-      "Kaynak için onay, ret veya hassas inceleme kararı verir.",
-      "Kendi yüklediği kaynağı onaylayamaz (self-review engeli).",
-    ],
-  },
-  expert_reviewer: {
-    title: "Uzman inceleyici (expert_reviewer)",
-    can: [
-      "Moderatör ile aynı inceleme ve karar yetkilerine sahiptir.",
-      "Benzerlik ekranında yakın-tekrar çiftlerini körlemeli olarak etiketler.",
-    ],
-  },
-  contributor: {
-    title: "Katkıcı (contributor)",
-    can: [
-      "Şimdilik yalnızca oturum açabilir; katkı kuyruğu v0.5 sürümünde planlıdır.",
-    ],
-  },
-  consumer_team: {
-    title: "Tüketici ekip (consumer_team)",
-    can: [
-      "Yalnızca donmuş (frozen) release’leri görür.",
-      "Manifest, kaynak artifact’i ve JSONL/TXT export indirir; checksum ile doğrular.",
-    ],
-  },
-};
-
 export function GuidePanel({ user }: { user: User }) {
-  const userRoles = user.roles.filter((role) => roleDescriptions[role]);
+  const userRoles = user.roles.filter((role) => roleInfoByRole[role]);
   return (
     <section className="guide-layout" aria-label="Derlem kullanım rehberi">
       <div className="guide-card guide-intro">
@@ -124,9 +71,10 @@ export function GuidePanel({ user }: { user: User }) {
           <h3><ShieldCheck size={17} aria-hidden="true" /> Sizin yetkileriniz</h3>
           {userRoles.map((role) => (
             <div className="guide-role" key={role}>
-              <strong>{roleDescriptions[role].title}</strong>
+              <strong>{roleInfoByRole[role].title}</strong>
+              <p className="guide-role-who">{roleInfoByRole[role].who}</p>
               <ul>
-                {roleDescriptions[role].can.map((line) => <li key={line}>{line}</li>)}
+                {roleInfoByRole[role].duties.map((line) => <li key={line}>{line}</li>)}
               </ul>
             </div>
           ))}

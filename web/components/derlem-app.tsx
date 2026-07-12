@@ -9,6 +9,7 @@ import {
   FilePlus2,
   FileText,
   GitCompareArrows,
+  HelpCircle,
   Info,
   Library,
   ListTodo,
@@ -32,7 +33,9 @@ import { SimilarityReviewPanel } from "@/components/similarity-review-panel";
 import { SourceInspector } from "@/components/source-inspector";
 import { UsersPanel } from "@/components/users-panel";
 import { messageFrom, requestJSON } from "@/lib/client-api";
+import { ROLE_INFO, roleSummaryByLabel as accountHints } from "@/lib/roles";
 import type { Source, User } from "@/lib/types";
+import { versionLabel } from "@/lib/version";
 
 type SourceList = {
   items: Source[];
@@ -69,16 +72,6 @@ const statusLabels: Record<string, string> = {
 };
 
 const reviewStatuses = ["license_review", "auto_checked", "sampled_for_review", "quarantined"];
-
-const accountHints: Record<string, string> = {
-  admin: "Yönetim: kullanıcılar, release freeze — tüm yetkiler",
-  manager: "Kaynak kaydı açma ve dosya yükleme",
-  editor: "Metadata ve belge içeriği düzeltme",
-  moderator: "Örnek inceleme ve kaynak onayı",
-  expert: "Hassas inceleme ve benzerlik etiketleme",
-  contributor: "Henüz işlem yok (katkı kuyruğu v0.5'te)",
-  consumer: "Frozen release görüntüleme ve indirme",
-};
 
 type ViewTip = { text: string; roles?: string[] };
 
@@ -378,6 +371,7 @@ export function DerlemApp() {
             <LogOut size={18} aria-hidden="true" />
           </button>
         </div>
+        <p className="sidebar-version" title={versionLabel}>{versionLabel}</p>
       </aside>
 
       <main className="workspace">
@@ -555,6 +549,7 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
   const accounts = localAccounts.length > 0 ? localAccounts : fallbackAccounts;
   const [email, setEmail] = useState(accounts[0]?.email ?? "");
   const [password, setPassword] = useState(accounts[0]?.password ?? "");
+  const helpDialog = useRef<HTMLDialogElement>(null);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -577,7 +572,12 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
   return (
     <main className="login-page">
       <section className="login-panel">
-        <div className="login-brand"><Database size={28} aria-hidden="true" /><span>Derlem</span></div>
+        <div className="login-topbar">
+          <div className="login-brand"><Database size={28} aria-hidden="true" /><span>Derlem</span></div>
+          <button type="button" className="login-help-button" onClick={() => helpDialog.current?.showModal()}>
+            <HelpCircle size={16} aria-hidden="true" /> Kullanıcı tipleri
+          </button>
+        </div>
         <h1>Veri atölyesine giriş</h1>
         {accounts.length > 0 && (
           <div className="local-credentials" aria-label="Yerel giriş bilgileri">
@@ -609,6 +609,38 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
             Giriş yap
           </button>
         </form>
+        <p className="login-version" title={versionLabel}>{versionLabel}</p>
+
+        <dialog ref={helpDialog} className="role-help-dialog" aria-label="Kullanıcı tipleri ve yardım">
+          <div className="role-help-head">
+            <h2><HelpCircle size={19} aria-hidden="true" /> Kullanıcı tipleri</h2>
+            <button type="button" className="icon-button" title="Kapat" onClick={() => helpDialog.current?.close()}>
+              <X size={18} aria-hidden="true" />
+            </button>
+          </div>
+          <p className="role-help-intro">
+            Derlem bir veri atölyesidir: hazır metin dosyaları sisteme alınır, otomatik kalite
+            kapılarından geçirilir, insan incelemesiyle onaylanır ve eğitime hazır değişmez
+            paketler üretilir. Her rol bu zincirin bir halkasıdır — aşağıda her kullanıcı tipinin
+            kim olduğu ve ne iş yaptığı açıklanır.
+          </p>
+          <ul className="role-help-list">
+            {ROLE_INFO.map((info) => (
+              <li className="role-help-item" key={info.role}>
+                <div className="role-help-title">
+                  <strong>{info.title}</strong>
+                  <span>{info.who}</span>
+                </div>
+                <ul>
+                  {info.duties.map((duty) => <li key={duty}>{duty}</li>)}
+                </ul>
+              </li>
+            ))}
+          </ul>
+          <form method="dialog" className="role-help-actions">
+            <button type="submit" className="primary-button">Kapat</button>
+          </form>
+        </dialog>
       </section>
     </main>
   );

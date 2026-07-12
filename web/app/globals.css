@@ -3056,7 +3056,8 @@ button:focus-visible {
 }
 
 .login-panel {
-  padding: 40px 38px;
+  width: min(760px, 100%);
+  padding: 40px 42px;
   border: 0;
   border-radius: 18px;
   box-shadow: 0 24px 60px rgb(15 35 27 / 13%), 0 2px 8px rgb(15 35 27 / 6%);
@@ -3086,13 +3087,15 @@ button:focus-visible {
 }
 
 .local-account-list {
-  max-height: 330px;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  max-height: none;
+  overflow: visible;
   gap: 8px;
-  scrollbar-width: thin;
+  padding: 0 6px;
 }
 
 .local-account-card {
-  padding: 10px 12px;
+  padding: 9px 12px;
   border-color: #e3eae6;
   border-radius: 10px;
 }

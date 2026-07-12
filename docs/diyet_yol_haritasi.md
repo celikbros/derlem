@@ -25,6 +25,12 @@ bürokrasiyi budar.
 
 **Ölçüt:** Gerçek teslimat sayısı 0 → 1. DGX Spark v1 girdisi verilmiş olur.
 
+**Durum güncellemesi (2026-07-12):** DGX Spark donanımı gecikti; Gardash
+teslimatı beklemeye alındı (sahip kararı). Faz 0 artık takvim-kritik DEĞİL.
+Teslimat yine kapatılır (frozen release beklemeye dayanıklıdır; donanım
+geldiğinde paket hazır olur). Claude'un 200 örneklik ön-inceleme raporu
+hazırlanmıştır; insan onayı ~20 dakikaya iner.
+
 **Faz 0 destek kaydı (2026-07-07):** Kullanıcı giriş ekranında hangi hesabı
 seçeceğini bilemedi → her yerel hesap kartına görev açıklaması ve her ekrana
 rol-duyarlı "Bu ekranda ne yapabilirim?" yardım kutusu eklendi. Moratoryum

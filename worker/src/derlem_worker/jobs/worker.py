@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import socket
 import time
@@ -18,6 +19,7 @@ from derlem_worker.releases import (
 )
 from derlem_worker.storage import ContentAddressedStore, IngestOutcome, StoredObject
 from derlem_worker.jobs.queue import LOGGER
+from derlem_worker.jobs.distill_jobs import DistillJobsMixin
 from derlem_worker.jobs.gate_jobs import GateJobsMixin
 from derlem_worker.jobs.ingest_jobs import IngestJobsMixin
 from derlem_worker.jobs.queue import QueueMixin
@@ -25,7 +27,7 @@ from derlem_worker.jobs.release_jobs import ReleaseJobsMixin
 from derlem_worker.jobs.sample_jobs import SampleJobsMixin
 
 
-class Worker(QueueMixin, IngestJobsMixin, GateJobsMixin, SampleJobsMixin, ReleaseJobsMixin):
+class Worker(QueueMixin, IngestJobsMixin, GateJobsMixin, SampleJobsMixin, ReleaseJobsMixin, DistillJobsMixin):
     def __init__(self, config: Config, worker_id: str | None = None) -> None:
         self.config = config
         self.worker_id = worker_id or f"{socket.gethostname()}-{os.getpid()}"
@@ -216,6 +218,22 @@ class Worker(QueueMixin, IngestJobsMixin, GateJobsMixin, SampleJobsMixin, Releas
                     job.payload.get("release_id"),
                     job.payload.get("format"),
                     export_sha256,
+                )
+            elif job.job_type == "distill_source":
+                result = self._distill_source(job)
+                with psycopg.connect(self.config.database_url) as connection:
+                    connection.execute(
+                        """
+                        UPDATE background_jobs
+                        SET status = 'succeeded', result = %s::jsonb, completed_at = now(), updated_at = now()
+                        WHERE id = %s AND status = 'running'
+                        """,
+                        (json.dumps(result), job.id),
+                    )
+                    connection.commit()
+                LOGGER.info(
+                    "job_succeeded job_id=%s provider=%s document_count=%s",
+                    job.id, result["provider"], result["document_count"],
                 )
             else:
                 raise ValueError(f"Unsupported job type: {job.job_type}")

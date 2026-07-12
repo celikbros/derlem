@@ -219,7 +219,7 @@ func (r *Sources) queueIngest(
 		SELECT EXISTS (
 			SELECT 1 FROM background_jobs
 			WHERE payload->>'source_id' = $1
-			  AND job_type IN ('ingest_local_file', 'ingest_staged_file')
+			  AND job_type IN ('ingest_local_file', 'ingest_staged_file', 'distill_source')
 			  AND status IN ('queued', 'running')
 		)
 	`, sourceID).Scan(&active); err != nil {
@@ -291,4 +291,41 @@ func scanSource(row scanner) (domain.Source, error) {
 		&source.CreatedAt, &source.UpdatedAt,
 	)
 	return source, err
+}
+
+// DistillationInput carries the generation configuration for a distill job.
+// The API key itself is never accepted here — only the name of the worker
+// environment variable that holds it.
+type DistillationInput struct {
+	Provider       string   `json:"provider"`
+	Model          string   `json:"model"`
+	APIKeyEnv      string   `json:"api_key_env"`
+	SystemPrompt   string   `json:"system_prompt"`
+	PromptTemplate string   `json:"prompt_template"`
+	Topics         []string `json:"topics"`
+	Count          int      `json:"count"`
+	MaxTokens      int      `json:"max_tokens"`
+	Temperature    float64  `json:"temperature"`
+	SourceName     string   `json:"source_name"`
+}
+
+// QueueDistillation queues a distill_source job for a registered source that
+// has no object yet, mirroring the ingest-queue guards.
+func (r *Sources) QueueDistillation(ctx context.Context, sourceID string, input DistillationInput, actorID string) (string, error) {
+	payload := map[string]any{
+		"source_id":       sourceID,
+		"provider":        input.Provider,
+		"model":           input.Model,
+		"api_key_env":     input.APIKeyEnv,
+		"system_prompt":   input.SystemPrompt,
+		"prompt_template": input.PromptTemplate,
+		"topics":          input.Topics,
+		"count":           input.Count,
+		"max_tokens":      input.MaxTokens,
+		"temperature":     input.Temperature,
+		"source_name":     input.SourceName,
+	}
+	return r.queueIngest(ctx, sourceID, "distill_source", payload, actorID, map[string]any{
+		"mode": "distillation", "provider": input.Provider, "model": input.Model,
+	})
 }

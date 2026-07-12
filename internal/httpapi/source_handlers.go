@@ -111,6 +111,60 @@ type ingestRequest struct {
 	LocalPath string `json:"local_path"`
 }
 
+var distillationProviders = map[string]bool{
+	"anthropic": true, "openai": true, "google": true, "xai": true, "alibaba": true, "echo": true,
+}
+
+func (s *Server) distillSource(w http.ResponseWriter, r *http.Request) {
+	var input repository.DistillationInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	input.Provider = strings.TrimSpace(input.Provider)
+	if !distillationProviders[input.Provider] {
+		writeError(w, http.StatusUnprocessableEntity, "invalid_provider", "Desteklenmeyen LLM sağlayıcısı.")
+		return
+	}
+	if strings.TrimSpace(input.PromptTemplate) == "" {
+		writeError(w, http.StatusUnprocessableEntity, "missing_prompt", "Prompt şablonu zorunludur.")
+		return
+	}
+	if len(input.Topics) == 0 && input.Count < 1 {
+		writeError(w, http.StatusUnprocessableEntity, "missing_count", "Konu listesi veya en az 1 belge sayısı gerekir.")
+		return
+	}
+	if input.MaxTokens <= 0 {
+		input.MaxTokens = 2000
+	}
+	if input.MaxTokens > 32000 {
+		writeError(w, http.StatusUnprocessableEntity, "invalid_max_tokens", "max_tokens en fazla 32000 olabilir.")
+		return
+	}
+	if len(input.Topics) > 500 || input.Count > 500 {
+		writeError(w, http.StatusUnprocessableEntity, "count_too_large", "Tek seferde en fazla 500 belge üretilebilir.")
+		return
+	}
+	if input.Temperature <= 0 {
+		input.Temperature = 1.0
+	}
+	principal, _ := principalFrom(r.Context())
+	jobID, err := s.sources.QueueDistillation(r.Context(), r.PathValue("id"), input, principal.Subject)
+	if errors.Is(err, repository.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "source_not_found", "Kaynak bulunamadı.")
+		return
+	}
+	if errors.Is(err, repository.ErrConflict) {
+		writeError(w, http.StatusConflict, "distill_conflict", "Kaynağa zaten içerik alınmış veya aktif bir iş var.")
+		return
+	}
+	if err != nil {
+		s.logger.Error("queue distillation failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "Distilasyon işi oluşturulamadı.")
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]string{"job_id": jobID, "status": "queued"})
+}
+
 func (s *Server) queueSourceIngest(w http.ResponseWriter, r *http.Request) {
 	var request ingestRequest
 	if !decodeJSON(w, r, &request) {

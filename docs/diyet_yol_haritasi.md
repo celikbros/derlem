@@ -105,9 +105,17 @@ gerek kalmamalı." Moratoryum kalktığında İLK yatırım, üretim modüllerid
    duman testi: DOCX upload → ekstraksiyon → PII/dedup/örnekleme zinciri
    uçtan uca geçti. Kalan: EPUB desteği, OCR, karantina tarayıcısı
    (SEC-P0-07 ile birlikte).
-2. **Distilasyon işi:** dış model API'sinden kontrollü üretim; prompt şablonu,
-   model kimliği ve üretim manifesti otomatik kaydedilir; API anahtarları
-   secret yönetimiyle (SEC-P0-05) birlikte ele alınır.
+2. **Distilasyon işi:** ✅ **v1 TAMAMLANDI (2026-07-12).** Sağlayıcıdan
+   bağımsız tek tip HTTP katmanı: Claude, ChatGPT, Gemini, Grok, Qwen ve
+   OpenAI-uyumlu diğerleri arayüzden seçilir; ağ/anahtar gerektirmeyen Echo
+   sağlayıcısıyla test edilir. `distill_source` işi N belge üretir, üretim
+   manifestini immutable depoya alır (`source.distilled` audit'i), sonra
+   normal PII/dedup/örneklem/insan kapılarına sokar. API anahtarı ARAYÜZE
+   girilmez — yalnız worker ortam değişkeninin adı kaydedilir; anahtar değeri
+   hiçbir yere yazılmaz (SEC-P0-05 uyumlu). Canlı Echo duman testi (API + UI)
+   uçtan uca geçti. Detay: [distilasyon.md](distilasyon.md). Kalan: model
+   kimliği doğrulaması, hız/oran sınırı, maliyet tahmini, sentetik etiket
+   filtresi.
 3. **Arayüz uluslararasılaştırma (i18n):** sahibin ürün vizyonu kararı
    (2026-07-08): Derlem yalnız Türkçe bilenlerin aracı olmayacak — herhangi
    bir ulus/ekip (Japon, Alman, Arap...) kendi egemen veri bankasını bu

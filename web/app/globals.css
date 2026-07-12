@@ -3308,12 +3308,17 @@ dialog::backdrop {
 }
 
 .sidebar-version {
+  display: grid;
+  gap: 1px;
   margin: 8px 2px 0;
   padding-top: 8px;
-  overflow: hidden;
   color: #7c8f88;
   font: 10.5px/1.4 var(--mono);
   letter-spacing: 0.2px;
+}
+
+.sidebar-version span {
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -3434,9 +3439,11 @@ dialog::backdrop {
 
 @media (max-width: 820px) {
   .sidebar-version {
+    display: flex;
     grid-column: 1 / -1;
+    justify-content: center;
+    gap: 8px;
     margin: 0;
     padding-top: 0;
-    text-align: center;
   }
 }

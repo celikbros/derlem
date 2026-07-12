@@ -35,7 +35,7 @@ import { UsersPanel } from "@/components/users-panel";
 import { messageFrom, requestJSON } from "@/lib/client-api";
 import { ROLE_INFO, roleSummaryByLabel as accountHints } from "@/lib/roles";
 import type { Source, User } from "@/lib/types";
-import { versionLabel } from "@/lib/version";
+import { APP_BUILD, APP_VERSION, versionLabel } from "@/lib/version";
 
 type SourceList = {
   items: Source[];
@@ -371,7 +371,10 @@ export function DerlemApp() {
             <LogOut size={18} aria-hidden="true" />
           </button>
         </div>
-        <p className="sidebar-version" title={versionLabel}>{versionLabel}</p>
+        <div className="sidebar-version" title={versionLabel}>
+          <span>Derlem · v{APP_VERSION}</span>
+          <span>build {APP_BUILD}</span>
+        </div>
       </aside>
 
       <main className="workspace">

@@ -544,7 +544,8 @@ export function SourceInspector({
         <section className="inspector-section">
           <h3><Upload size={16} /> Dosya</h3>
           <form className="ingest-form" onSubmit={uploadFile}>
-            <label>Dosya<input name="file" type="file" accept=".txt,.jsonl,.json,.csv,.tsv,text/plain,application/json" required /></label>
+            <label>Dosya<input name="file" type="file" accept=".txt,.jsonl,.json,.csv,.tsv,.pdf,.docx,text/plain,application/json,application/pdf" required /></label>
+            <p className="muted-copy">Metin (TXT/JSONL/CSV) doğrudan alınır; PDF ve Word (DOCX) belgeleri otomatik olarak metne çevrilir.</p>
             <button className="secondary-button" type="submit" disabled={uploading}>
               {uploading ? <LoaderCircle className="spin" size={17} /> : <Upload size={17} />}
               {uploading ? "Yükleniyor" : "Dosyayı yükle"}

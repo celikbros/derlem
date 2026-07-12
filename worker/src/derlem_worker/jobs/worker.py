@@ -126,6 +126,7 @@ class Worker(QueueMixin, IngestJobsMixin, GateJobsMixin, SampleJobsMixin, Releas
         try:
             if job.job_type in {"ingest_local_file", "ingest_staged_file"}:
                 ingest_path = self._ingest_path(job)
+                ingest_path, extraction, converted_path = self._maybe_extract(job, ingest_path)
                 with psycopg.connect(self.config.database_url) as progress_connection:
                     outcome = self.store.ingest_file_resumable(
                         ingest_path,
@@ -142,10 +143,12 @@ class Worker(QueueMixin, IngestJobsMixin, GateJobsMixin, SampleJobsMixin, Releas
                         ),
                     )
                 with psycopg.connect(self.config.database_url) as connection:
-                    self._complete_ingest(connection, job, outcome)
+                    self._complete_ingest(connection, job, outcome, extraction=extraction)
                 self._discard_ingest_checkpoint(job, outcome.stored)
+                if converted_path is not None:
+                    converted_path.unlink(missing_ok=True)
                 if job.job_type == "ingest_staged_file":
-                    ingest_path.unlink(missing_ok=True)
+                    Path(str(job.payload.get("staged_path", ""))).unlink(missing_ok=True)
                 LOGGER.info(
                     "job_succeeded job_id=%s sha256=%s resumed_from_bytes=%s",
                     job.id,

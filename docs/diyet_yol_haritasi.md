@@ -45,6 +45,14 @@ girene kadar:
 - İzinli işler: hata düzeltme, budama, dokümantasyon, Faz 0 desteği.
 - Bu kural Claude dahil herkesi bağlar.
 
+**REVİZYON (2026-07-12, sahip kararı):** "Teslimattan önce başka veriler de
+girmemiz gerekebilir; önce sistemi yapalım bitirelim." DGX gecikmesiyle
+birlikte moratoryum şu şekilde revize edildi: **yeniden büyüme adayları
+listesindeki işler sırayla açılmıştır** (1. belge ekstraksiyonu → 2.
+distilasyon → 3. i18n). Liste dışı yeni özellik hâlâ yasaktır. Faz 0
+teslimatı iptal değil, ertelidir: ön-inceleme raporu hazır, insan onayı
+~20 dk; veriler tamamlanınca release daha zengin içerikle dondurulur.
+
 **Ölçüt:** Moratoryum süresince `feat:` commit sayısı = 0.
 
 ### Faz 2 — BUDAMA (moratoryumla paralel; bugün başladı)
@@ -89,10 +97,14 @@ yeniden değerlendirilir:
 Sahibin kararı: "Tüm işlemler Derlem ile yapılabilmeli; dışarıdan script'e
 gerek kalmamalı." Moratoryum kalktığında İLK yatırım, üretim modülleridir:
 
-1. **Belge ekstraksiyon işi:** PDF/EPUB/DOCX → satır-belge TXT dönüşümü,
-   worker job'ı olarak (ilerleme + audit + deterministik çıktı). Not: belge
-   ayrıştırıcılar klasik saldırı yüzeyidir; SEC-P0-07 karantina tarayıcısıyla
-   birlikte tasarlanır.
+1. **Belge ekstraksiyon işi:** ✅ **v1 TAMAMLANDI (2026-07-12).** PDF ve
+   DOCX yüklemeleri worker'da otomatik olarak satır-belge TXT'ye çevrilir
+   (`text-extraction-v1`: paragraf normalize + 4000 karakterlik parça);
+   ham ikili, lineage kanıtı olarak içerik adresli depoya alınır ve audit'e
+   işlenir; görüntü tabanlı PDF açık hatayla reddedilir (OCR v2). Canlı
+   duman testi: DOCX upload → ekstraksiyon → PII/dedup/örnekleme zinciri
+   uçtan uca geçti. Kalan: EPUB desteği, OCR, karantina tarayıcısı
+   (SEC-P0-07 ile birlikte).
 2. **Distilasyon işi:** dış model API'sinden kontrollü üretim; prompt şablonu,
    model kimliği ve üretim manifesti otomatik kaydedilir; API anahtarları
    secret yönetimiyle (SEC-P0-05) birlikte ele alınır.

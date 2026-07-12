@@ -55,6 +55,40 @@ class ContentAddressedStore:
             checkpoint_path=None,
         ).stored
 
+    def ingest_raw_file(self, source_path: Path) -> StoredObject:
+        """UTF-8 dogrulamasi olmadan ikili dosyayi (PDF/DOCX vb.) depoya alir.
+
+        Ekstraksiyon kaynaklarinin ham hali lineage kaniti olarak saklanir;
+        satir sayimi ve encoding tespiti ikili icerik icin anlamsizdir.
+        """
+        hasher = hashlib.sha256()
+        byte_size = 0
+        fd, temp_name = tempfile.mkstemp(dir=str(self.temp_root), prefix="raw-")
+        temp_path = Path(temp_name)
+        try:
+            with os.fdopen(fd, "wb") as temp, source_path.open("rb") as source:
+                while True:
+                    chunk = source.read(4 * 1024 * 1024)
+                    if not chunk:
+                        break
+                    hasher.update(chunk)
+                    byte_size += len(chunk)
+                    temp.write(chunk)
+            digest = hasher.hexdigest()
+            storage_key = f"objects/sha256/{digest[:2]}/{digest[2:4]}/{digest}"
+            target = self.root / Path(storage_key)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            self._publish_create_only(temp_path, target, remove_source=True)
+            return StoredObject(
+                sha256=digest,
+                storage_key=storage_key,
+                byte_size=byte_size,
+                line_count=0,
+                detected_encoding="binary",
+            )
+        finally:
+            temp_path.unlink(missing_ok=True)
+
     def ingest_file_resumable(
         self,
         source_path: Path,

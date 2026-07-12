@@ -1,13 +1,46 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
+from dataclasses import asdict
 from pathlib import Path
 import psycopg
+from derlem_worker.extraction import convert_file, media_type_for, needs_extraction
 from derlem_worker.storage import ContentAddressedStore, IngestOutcome, StoredObject
 from derlem_worker.jobs.queue import Job
 
 
 class IngestJobsMixin:
+    def _maybe_extract(
+        self, job: Job, ingest_path: Path
+    ) -> tuple[Path, dict | None, Path | None]:
+        """PDF/DOCX yüklemeleri kanonik satır-belge TXT'ye çevirir.
+
+        Ham ikili, lineage kanıtı olarak içerik adresli depoya alınır;
+        dönüşen metin normal ingest zincirine girer. Metin dosyaları
+        olduğu gibi geçer.
+        """
+        candidate = str(job.payload.get("original_filename") or "") or ingest_path.name
+        if not needs_extraction(candidate):
+            return ingest_path, None, None
+        suffix = Path(candidate).suffix.lower()
+        raw = self.store.ingest_raw_file(ingest_path)
+        descriptor, converted_name = tempfile.mkstemp(
+            dir=str(self.config.staging_root), suffix=".extracted.txt"
+        )
+        os.close(descriptor)
+        converted_path = Path(converted_name)
+        report = convert_file(ingest_path, converted_path, suffix=suffix)
+        extraction = {
+            **asdict(report),
+            "original_filename": candidate,
+            "raw_sha256": raw.sha256,
+            "raw_byte_size": raw.byte_size,
+            "raw_storage_key": raw.storage_key,
+            "raw_media_type": media_type_for(candidate),
+        }
+        return converted_path, extraction, converted_path
     def _ingest_path(self, job: Job) -> Path:
         source_id = str(job.payload.get("source_id", "")).strip()
         if not source_id:
@@ -29,6 +62,7 @@ class IngestJobsMixin:
         connection: psycopg.Connection,
         job: Job,
         outcome: IngestOutcome,
+        extraction: dict | None = None,
     ) -> None:
         stored = outcome.stored
         source_id = str(job.payload["source_id"])
@@ -63,6 +97,20 @@ class IngestJobsMixin:
                 """,
                 (stored.sha256, stored.storage_key, stored.byte_size),
             )
+            if extraction is not None:
+                connection.execute(
+                    """
+                    INSERT INTO storage_objects(sha256, storage_key, byte_size, media_type)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (sha256) DO NOTHING
+                    """,
+                    (
+                        extraction["raw_sha256"],
+                        extraction["raw_storage_key"],
+                        extraction["raw_byte_size"],
+                        extraction["raw_media_type"],
+                    ),
+                )
             updated = connection.execute(
                 """
                 UPDATE sources
@@ -94,7 +142,9 @@ class IngestJobsMixin:
                         'byte_size', %s::bigint,
                         'resumed_from_bytes', %s::bigint,
                         'checkpoint_revalidated_bytes', %s::bigint,
-                        'checkpoint_reset', %s::boolean
+                        'checkpoint_reset', %s::boolean,
+                        'extraction_method', %s::text,
+                        'raw_sha256', %s::text
                     )
                 )
                 """,
@@ -106,6 +156,8 @@ class IngestJobsMixin:
                     outcome.resumed_from_bytes,
                     outcome.checkpoint_revalidated_bytes,
                     outcome.checkpoint_reset,
+                    extraction["method"] if extraction else None,
+                    extraction["raw_sha256"] if extraction else None,
                 ),
             )
             connection.execute(
@@ -151,6 +203,7 @@ class IngestJobsMixin:
                             "resumed_from_bytes": outcome.resumed_from_bytes,
                             "checkpoint_revalidated_bytes": outcome.checkpoint_revalidated_bytes,
                             "checkpoint_reset": outcome.checkpoint_reset,
+                            "extraction": extraction,
                         }
                     ),
                     job.id,

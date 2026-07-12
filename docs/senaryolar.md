@@ -30,11 +30,13 @@ Kullanıcılar ekranı → "Yeni kullanıcı" → `hukuk.yonetici@...` (rol:
 `data_manager`), `hukuk.uzman1@...` ve `hukuk.uzman2@...` (rol: `moderator`
 veya `expert_reviewer`).
 
-**Adım 1 — Dosyayı hazırla (Derlem'in DIŞINDA):**
-Kaynak ne olursa olsun (PDF kitap, Word, web sayfası) önce düz metne çevrilir.
-Kural basit: **UTF-8 bir `.txt`, satır başına bir belge** (bir karar = bir satır)
-veya JSONL (`{"text": "..."}` satırları). PDF→metin dönüşümü Derlem'in işi
-değildir; ekip bunu kendi aracıyla yapar.
+**Adım 1 — Dosyayı hazırla:**
+**PDF ve Word (DOCX) dosyaları artık doğrudan yüklenebilir** — program
+metne çevirmeyi kendisi yapar (2026-07-12'den beri) ve ham belgeyi kanıt
+olarak saklar. Elinizdeki veri düz metinse kural: **UTF-8 bir `.txt`,
+satır başına bir belge** (bir karar = bir satır) veya JSONL
+(`{"text": "..."}` satırları). Taranmış (görüntü) PDF'ler henüz
+desteklenmez; OCR sıradaki sürümdedir.
 
 **Adım 2 — Kaynak kaydı (hukuk.yonetici):**
 Kaynaklar → "Yeni kaynak":

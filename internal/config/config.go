@@ -27,6 +27,7 @@ type Config struct {
 	BootstrapAdminPassword string
 	StorageRoot            string
 	StagingRoot            string
+	ImportRoot             string
 	MaxUploadBytes         int64
 	WorkerPollInterval     time.Duration
 }
@@ -72,6 +73,7 @@ func Load() (Config, error) {
 		BootstrapAdminPassword: os.Getenv("BOOTSTRAP_ADMIN_PASSWORD"),
 		StorageRoot:            envOr("STORAGE_ROOT", "./var/storage"),
 		StagingRoot:            envOr("STAGING_ROOT", "./var/staging"),
+		ImportRoot:             envOr("IMPORT_ROOT", "./var/import"),
 		WorkerPollInterval:     workerPollInterval,
 	}
 	cfg.MaxUploadBytes, err = int64Env("MAX_UPLOAD_BYTES", 50*1024*1024*1024)

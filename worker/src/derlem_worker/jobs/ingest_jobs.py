@@ -2,18 +2,235 @@ from __future__ import annotations
 
 import json
 import os
-import tempfile
+import shutil
+import stat
 from dataclasses import asdict
 from pathlib import Path
 import psycopg
-from derlem_worker.extraction import convert_file, media_type_for, needs_extraction
+from derlem_worker.extraction import (
+    ExtractionError,
+    ExtractionLimits,
+    convert_file,
+    media_type_for,
+    needs_extraction,
+)
 from derlem_worker.storage import ContentAddressedStore, IngestOutcome, StoredObject
 from derlem_worker.jobs.queue import Job
 
 
+def _resolve_regular_file_under_root(path_value: str, root: Path, field_name: str) -> Path:
+    candidate_input = Path(path_value)
+    if not candidate_input.is_absolute():
+        raise ValueError(f"{field_name} must be an absolute path")
+
+    try:
+        root_resolved = root.resolve(strict=True)
+    except OSError as error:
+        raise ValueError(f"Configured root is unavailable: {root}") from error
+    if not root_resolved.is_dir():
+        raise ValueError(f"Configured root is not a directory: {root_resolved}")
+
+    candidate = Path(os.path.abspath(candidate_input))
+    try:
+        relative = candidate.relative_to(root_resolved)
+    except ValueError as error:
+        raise ValueError(f"{field_name} must stay under {root_resolved}") from error
+
+    current = root_resolved
+    for index, component in enumerate(relative.parts):
+        current /= component
+        try:
+            mode = current.lstat().st_mode
+        except OSError as error:
+            raise ValueError(f"{field_name} is unavailable: {current}") from error
+        if stat.S_ISLNK(mode):
+            raise ValueError(f"{field_name} cannot contain symbolic links")
+        is_last = index == len(relative.parts) - 1
+        if not is_last and not stat.S_ISDIR(mode):
+            raise ValueError(f"{field_name} contains a non-directory component")
+        if is_last and not stat.S_ISREG(mode):
+            raise ValueError(f"{field_name} must reference a regular file")
+
+    try:
+        resolved = candidate.resolve(strict=True)
+        resolved.relative_to(root_resolved)
+    except (OSError, ValueError) as error:
+        raise ValueError(f"{field_name} resolves outside its configured root") from error
+    if not resolved.is_file():
+        raise ValueError(f"{field_name} must reference a regular file")
+    return resolved
+
+
+def _same_file_version(left: os.stat_result, right: os.stat_result) -> bool:
+    return (
+        left.st_dev,
+        left.st_ino,
+        left.st_mode,
+        left.st_size,
+        left.st_mtime_ns,
+        left.st_ctime_ns,
+    ) == (
+        right.st_dev,
+        right.st_ino,
+        right.st_mode,
+        right.st_size,
+        right.st_mtime_ns,
+        right.st_ctime_ns,
+    )
+
+
+def _same_file_content(left: os.stat_result, right: os.stat_result) -> bool:
+    """Compare identity/content while allowing hard-link creation to change ctime."""
+    return (
+        left.st_dev,
+        left.st_ino,
+        left.st_mode,
+        left.st_size,
+        left.st_mtime_ns,
+    ) == (
+        right.st_dev,
+        right.st_ino,
+        right.st_mode,
+        right.st_size,
+        right.st_mtime_ns,
+    )
+
+
 class IngestJobsMixin:
+    def _snapshot_ingest_source(self, job: Job, source_path: Path) -> Path:
+        """Pin or copy one source into private attempt-local staging.
+
+        Text inputs use an atomic hard link when the roots share a filesystem,
+        preserving resumable ingest without doubling very large files. Inputs
+        that need extraction are copied because parsing and raw lineage hashing
+        must consume exactly the same stable bytes. Cross-device text inputs
+        fall back to a capacity-checked copy.
+        """
+        suffix = source_path.suffix.lower()
+        if suffix not in {".pdf", ".docx", ".txt", ".json", ".jsonl"}:
+            suffix = ".source"
+        candidate = (
+            str(job.payload.get("original_filename") or "") or source_path.name
+        )
+        if not needs_extraction(candidate) and os.name != "nt":
+            try:
+                return self._hardlink_ingest_source(job, source_path, suffix=suffix)
+            except (NotImplementedError, OSError):
+                # Cross-device links and platforms without link support still
+                # get a private copy, subject to disk headroom.
+                pass
+
+        return self._copy_ingest_source(
+            job,
+            source_path,
+            suffix=suffix,
+            extraction_input=needs_extraction(candidate),
+        )
+
+    def _hardlink_ingest_source(
+        self, job: Job, source_path: Path, *, suffix: str
+    ) -> Path:
+        descriptor, pinned_path = self._new_attempt_artifact(
+            job, suffix=f".snapshot{suffix}"
+        )
+        os.close(descriptor)
+        pinned_path.unlink()
+        try:
+            before = source_path.lstat()
+            if not stat.S_ISREG(before.st_mode):
+                raise ValueError("Ingest source must remain a regular file")
+            os.link(source_path, pinned_path, follow_symlinks=False)
+            linked = pinned_path.lstat()
+            after_path = source_path.lstat()
+            if not stat.S_ISREG(linked.st_mode) or not _same_file_content(
+                before, linked
+            ) or not _same_file_version(linked, after_path):
+                raise ValueError("Ingest source changed while it was being pinned")
+            return pinned_path
+        except Exception:
+            pinned_path.unlink(missing_ok=True)
+            raise
+
+    def _copy_ingest_source(
+        self,
+        job: Job,
+        source_path: Path,
+        *,
+        suffix: str,
+        extraction_input: bool,
+    ) -> Path:
+        target_descriptor, snapshot_path = self._new_attempt_artifact(
+            job, suffix=f".snapshot{suffix}"
+        )
+        source_descriptor: int | None = None
+        target_open = True
+        try:
+            before = source_path.lstat()
+            if not stat.S_ISREG(before.st_mode):
+                raise ValueError("Ingest source must remain a regular file")
+
+            flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+            flags |= getattr(os, "O_NOFOLLOW", 0)
+            source_descriptor = os.open(source_path, flags)
+            opened = os.fstat(source_descriptor)
+            if not stat.S_ISREG(opened.st_mode) or not _same_file_content(before, opened):
+                raise ValueError("Ingest source changed between validation and open")
+            if (
+                extraction_input
+                and opened.st_size > self.config.extraction_max_source_bytes
+            ):
+                raise ExtractionError(
+                    "Belge extraction kaynak boyutu sınırını aşıyor "
+                    f"({opened.st_size} > "
+                    f"{self.config.extraction_max_source_bytes} byte)."
+                )
+            free_bytes = shutil.disk_usage(self.config.staging_root).free
+            reserve_bytes = min(64 * 1024 * 1024, max(1024 * 1024, free_bytes // 20))
+            if opened.st_size + reserve_bytes > free_bytes:
+                raise RuntimeError(
+                    "Insufficient staging capacity for a secure ingest snapshot"
+                )
+
+            with os.fdopen(source_descriptor, "rb") as source:
+                source_descriptor = None
+                with os.fdopen(target_descriptor, "wb") as target:
+                    target_open = False
+                    while chunk := source.read(4 * 1024 * 1024):
+                        target.write(chunk)
+                    target.flush()
+                    os.fsync(target.fileno())
+                    after_handle = os.fstat(source.fileno())
+
+            try:
+                after_path = source_path.lstat()
+            except OSError as error:
+                raise ValueError("Ingest source changed while snapshotting") from error
+            if not _same_file_version(opened, after_handle) or not _same_file_version(
+                before, after_path
+            ):
+                raise ValueError("Ingest source changed while snapshotting")
+            return snapshot_path
+        except Exception:
+            if source_descriptor is not None:
+                os.close(source_descriptor)
+                source_descriptor = None
+            if target_open:
+                os.close(target_descriptor)
+                target_open = False
+            snapshot_path.unlink(missing_ok=True)
+            raise
+        finally:
+            if source_descriptor is not None:
+                os.close(source_descriptor)
+            if target_open:
+                os.close(target_descriptor)
+
     def _maybe_extract(
-        self, job: Job, ingest_path: Path
+        self,
+        job: Job,
+        ingest_path: Path,
+        *,
+        source_name: str | None = None,
     ) -> tuple[Path, dict | None, Path | None]:
         """PDF/DOCX yüklemeleri kanonik satır-belge TXT'ye çevirir.
 
@@ -21,17 +238,48 @@ class IngestJobsMixin:
         dönüşen metin normal ingest zincirine girer. Metin dosyaları
         olduğu gibi geçer.
         """
-        candidate = str(job.payload.get("original_filename") or "") or ingest_path.name
+        candidate = (
+            str(job.payload.get("original_filename") or "")
+            or source_name
+            or ingest_path.name
+        )
         if not needs_extraction(candidate):
             return ingest_path, None, None
         suffix = Path(candidate).suffix.lower()
-        raw = self.store.ingest_raw_file(ingest_path)
-        descriptor, converted_name = tempfile.mkstemp(
-            dir=str(self.config.staging_root), suffix=".extracted.txt"
+        descriptor, converted_path = self._new_attempt_artifact(
+            job, suffix=".extracted.txt"
         )
         os.close(descriptor)
-        converted_path = Path(converted_name)
-        report = convert_file(ingest_path, converted_path, suffix=suffix)
+        try:
+            # Parse before publishing the raw binary. Rejected/corrupt input
+            # must not leave an unreferenced object or partial derived file.
+            report = convert_file(
+                ingest_path,
+                converted_path,
+                suffix=suffix,
+                limits=ExtractionLimits(
+                    max_source_bytes=self.config.extraction_max_source_bytes,
+                    max_docx_entries=self.config.extraction_max_docx_entries,
+                    max_docx_uncompressed_bytes=(
+                        self.config.extraction_max_docx_uncompressed_bytes
+                    ),
+                    max_pdf_pages=self.config.extraction_max_pdf_pages,
+                    max_output_chars=self.config.extraction_max_output_chars,
+                ),
+            )
+        except ExtractionError:
+            converted_path.unlink(missing_ok=True)
+            raise
+        except Exception as error:
+            converted_path.unlink(missing_ok=True)
+            raise ExtractionError(
+                "Belge ayrıştırılamadı; dosya bozuk veya desteklenmeyen yapıdadır."
+            ) from error
+        try:
+            raw = self.store.ingest_raw_file(ingest_path)
+        except Exception:
+            converted_path.unlink(missing_ok=True)
+            raise
         extraction = {
             **asdict(report),
             "original_filename": candidate,
@@ -41,6 +289,7 @@ class IngestJobsMixin:
             "raw_media_type": media_type_for(candidate),
         }
         return converted_path, extraction, converted_path
+
     def _ingest_path(self, job: Job) -> Path:
         source_id = str(job.payload.get("source_id", "")).strip()
         if not source_id:
@@ -49,13 +298,15 @@ class IngestJobsMixin:
             staged_path = str(job.payload.get("staged_path", "")).strip()
             if not staged_path:
                 raise ValueError("ingest_staged_file requires staged_path")
-            resolved = Path(staged_path).resolve(strict=True)
-            resolved.relative_to(self.config.staging_root)
-            return resolved
+            return _resolve_regular_file_under_root(
+                staged_path, self.config.staging_root, "staged_path"
+            )
         local_path = str(job.payload.get("local_path", "")).strip()
         if not local_path:
             raise ValueError("ingest_local_file requires local_path")
-        return Path(local_path).resolve(strict=True)
+        return _resolve_regular_file_under_root(
+            local_path, self.config.import_root, "local_path"
+        )
 
     def _complete_ingest(
         self,

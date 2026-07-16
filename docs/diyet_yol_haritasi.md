@@ -110,12 +110,13 @@ gerek kalmamalı." Moratoryum kalktığında İLK yatırım, üretim modüllerid
    OpenAI-uyumlu diğerleri arayüzden seçilir; ağ/anahtar gerektirmeyen Echo
    sağlayıcısıyla test edilir. `distill_source` işi N belge üretir, üretim
    manifestini immutable depoya alır (`source.distilled` audit'i), sonra
-   normal PII/dedup/örneklem/insan kapılarına sokar. API anahtarı ARAYÜZE
-   girilmez — yalnız worker ortam değişkeninin adı kaydedilir; anahtar değeri
-   hiçbir yere yazılmaz (SEC-P0-05 uyumlu). Canlı Echo duman testi (API + UI)
+   normal PII/dedup/örneklem/insan kapılarına sokar. API anahtarı ve ortam
+   değişkeni adı ARAYÜZE girilmez; allowlist'teki sağlayıcı worker tarafında
+   sabit anahtar ortamına eşlenir, anahtar değeri hiçbir yere yazılmaz
+   (SEC-P0-05 uyumlu). Canlı Echo duman testi (API + UI)
    uçtan uca geçti. Detay: [distilasyon.md](distilasyon.md). Kalan: model
-   kimliği doğrulaması, hız/oran sınırı, maliyet tahmini, sentetik etiket
-   filtresi.
+   kimliği doğrulaması, hız/oran sınırı, maliyet tahmini/onayı, prompt başına
+   durable checkpoint/idempotency ve sentetik etiket filtresi.
 3. **Arayüz uluslararasılaştırma (i18n):** sahibin ürün vizyonu kararı
    (2026-07-08): Derlem yalnız Türkçe bilenlerin aracı olmayacak — herhangi
    bir ulus/ekip (Japon, Alman, Arap...) kendi egemen veri bankasını bu

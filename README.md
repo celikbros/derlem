@@ -363,10 +363,18 @@ Başlıca ayarlar:
 | `BOOTSTRAP_ADMIN_PASSWORD` | İlk admin parolası |
 | `STORAGE_ROOT` | Immutable object store kökü |
 | `STAGING_ROOT` | Stream upload geçici alanı |
+| `IMPORT_ROOT` | Yalnız admin local-ingest dosyalarının bulunduğu güvenilir kök |
 | `MAX_UPLOAD_BYTES` | Tek upload üst sınırı; varsayılan 50 GiB |
 | `WORKER_POLL_INTERVAL` | Worker queue polling aralığı |
+| `WORKER_LEASE_TIMEOUT` | Heartbeat kesilen running işin stale sayılma süresi; varsayılan 5 dakika |
+| `WORKER_HEARTBEAT_INTERVAL` | Running iş lease yenileme aralığı; varsayılan 30 saniye |
 | `DOCUMENT_SAMPLE_SIZE` | Kaynak başına bounded review örneği; varsayılan 200 |
 | `MAX_DOCUMENT_BYTES` | Örnekleme/dekontaminasyon belge üst sınırı; varsayılan 256 KiB |
+| `EXTRACTION_MAX_SOURCE_BYTES` | PDF/DOCX parser kaynak üst sınırı; varsayılan 100 MiB |
+| `EXTRACTION_MAX_DOCX_ENTRIES` | DOCX ZIP girdi üst sınırı; varsayılan 2.048 |
+| `EXTRACTION_MAX_DOCX_UNCOMPRESSED_BYTES` | DOCX açılmış toplam içerik üst sınırı; varsayılan 256 MiB |
+| `EXTRACTION_MAX_PDF_PAGES` | PDF sayfa üst sınırı; varsayılan 1.000 |
+| `EXTRACTION_MAX_OUTPUT_CHARS` | Çıkarılan normalize metnin toplam üst sınırı; varsayılan 32 Mi karakter |
 | `NEXT_PUBLIC_LOCAL_LOGIN_EMAIL` | Yalnızca local login kartında gösterilecek hesap |
 | `NEXT_PUBLIC_LOCAL_LOGIN_PASSWORD` | Yalnızca local login kartında gösterilecek parola |
 

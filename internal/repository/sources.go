@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/celikbros/derlem/internal/domain"
@@ -171,8 +172,9 @@ func (r *Sources) List(ctx context.Context, limit int, beforeTime *time.Time, be
 
 func (r *Sources) QueueLocalIngest(ctx context.Context, sourceID, localPath, actorID string) (string, error) {
 	return r.queueIngest(ctx, sourceID, "ingest_local_file", map[string]any{
-		"source_id":  sourceID,
-		"local_path": localPath,
+		"source_id":         sourceID,
+		"local_path":        localPath,
+		"original_filename": filepath.Base(localPath),
 	}, actorID, map[string]any{"mode": "server_path"})
 }
 
@@ -293,13 +295,12 @@ func scanSource(row scanner) (domain.Source, error) {
 	return source, err
 }
 
-// DistillationInput carries the generation configuration for a distill job.
-// The API key itself is never accepted here — only the name of the worker
-// environment variable that holds it.
+// DistillationInput carries the non-secret generation configuration for a
+// distill job. Provider credentials are selected from the worker-owned
+// provider registry and are never part of the API or job contract.
 type DistillationInput struct {
 	Provider       string   `json:"provider"`
 	Model          string   `json:"model"`
-	APIKeyEnv      string   `json:"api_key_env"`
 	SystemPrompt   string   `json:"system_prompt"`
 	PromptTemplate string   `json:"prompt_template"`
 	Topics         []string `json:"topics"`
@@ -312,11 +313,17 @@ type DistillationInput struct {
 // QueueDistillation queues a distill_source job for a registered source that
 // has no object yet, mirroring the ingest-queue guards.
 func (r *Sources) QueueDistillation(ctx context.Context, sourceID string, input DistillationInput, actorID string) (string, error) {
-	payload := map[string]any{
+	payload := distillationJobPayload(sourceID, input)
+	return r.queueIngest(ctx, sourceID, "distill_source", payload, actorID, map[string]any{
+		"mode": "distillation", "provider": input.Provider, "model": input.Model,
+	})
+}
+
+func distillationJobPayload(sourceID string, input DistillationInput) map[string]any {
+	return map[string]any{
 		"source_id":       sourceID,
 		"provider":        input.Provider,
 		"model":           input.Model,
-		"api_key_env":     input.APIKeyEnv,
 		"system_prompt":   input.SystemPrompt,
 		"prompt_template": input.PromptTemplate,
 		"topics":          input.Topics,
@@ -325,7 +332,4 @@ func (r *Sources) QueueDistillation(ctx context.Context, sourceID string, input 
 		"temperature":     input.Temperature,
 		"source_name":     input.SourceName,
 	}
-	return r.queueIngest(ctx, sourceID, "distill_source", payload, actorID, map[string]any{
-		"mode": "distillation", "provider": input.Provider, "model": input.Model,
-	})
 }

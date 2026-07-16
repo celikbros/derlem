@@ -388,6 +388,9 @@ class GateJobsMixin:
                     },
                 )
 
+            # All work above is still transactional. Lock and verify the exact
+            # claimed attempt before any source/job state can be published.
+            self._assert_job_ownership(connection, job)
             duplicate_counts = connection.execute(
                 """
                 WITH current_fingerprints AS (

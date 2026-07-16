@@ -22,15 +22,26 @@ Kubernetes, Redis, Kafka ve MinIO zorunlu değildir.
 | `/etc/derlem/derlem.env` | Production ortam değişkenleri |
 | `/var/lib/derlem/storage` | İçerik-adresli immutable object store |
 | `/var/lib/derlem/staging` | Geçici upload staging alanı |
+| `/var/lib/derlem/import` | Admin-only local ingest için güvenilir drop alanı |
 
 Linux servis kullanıcısı:
 
 ```bash
 sudo useradd --system --create-home --shell /usr/sbin/nologin derlem
-sudo mkdir -p /opt/derlem /etc/derlem /var/lib/derlem/storage /var/lib/derlem/staging
-sudo chown -R derlem:derlem /opt/derlem /var/lib/derlem
+sudo mkdir -p /opt/derlem /etc/derlem /var/lib/derlem/storage /var/lib/derlem/staging /var/lib/derlem/import
+sudo chown -R derlem:derlem /opt/derlem /var/lib/derlem/storage /var/lib/derlem/staging
+sudo chown root:derlem /var/lib/derlem/import
+sudo chmod 750 /var/lib/derlem/storage /var/lib/derlem/staging /var/lib/derlem/import
 sudo chmod 750 /etc/derlem
 ```
+
+`IMPORT_ROOT` bir güven sınırıdır. Dosyayı kontrollü handoff ile root sahibi ve
+worker tarafından yalnız okunabilir yerleştir; örneğin
+`sudo install -o root -g derlem -m 0640 corpus.txt /var/lib/derlem/import/`.
+Dosya kuyruğa alındıktan job bitene kadar hiçbir kullanıcı veya başka process
+dosyayı ya da ata dizinlerini yazmamalı, yeniden adlandırmamalı veya
+değiştirmemelidir. Bileşen bazlı symlink kontrolleri, eşzamanlı rename/write
+yetkisi olan düşmanca bir yerel process'e karşı OS-seviyesi izolasyon değildir.
 
 ## 2. Gerekli Yazılımlar
 
@@ -95,6 +106,46 @@ Varsayılan session/rate-limit değerleri ve proxy IP güven sınırı için
 İlk başarılı girişten sonra `BOOTSTRAP_ADMIN_PASSWORD` değerini boşalt veya
 vault/secret manager tarafına taşı. Local login bilgilerini ekranda gösteren
 `NEXT_PUBLIC_LOCAL_LOGIN_*` alanları production'da boş kalmalıdır.
+
+Distilasyon sağlayıcı anahtarlarını API ve web'in de okuduğu ortak
+`/etc/derlem/derlem.env` dosyasına koyma. `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
+`GEMINI_API_KEY`, `XAI_API_KEY` ve `DASHSCOPE_API_KEY` değerlerinden gerekenleri
+yalnız worker servisinin yüklediği `/etc/derlem/derlem-worker.env` dosyasında
+tut. Worker systemd birimi bu opsiyonel dosyayı ayrıca yükler; böylece
+anahtarlar API/web process ortamına girmez. Mevcut servisler aynı OS hesabını
+kullandığından tam dosya/process izolasyonu ayrı servis kimlikleri gerektirir.
+
+PDF/DOCX parser güvenlik sınırlarını production şablonundaki varsayılanlardan
+başlat: 100 MiB ikili kaynak, 2.048 DOCX ZIP girdisi, 256 MiB açılmış DOCX,
+1.000 PDF sayfası ve 32 Mi karakter çıkarılmış toplam metin. Worker uzantı ile
+magic/format uyumunu parser'dan
+önce doğrular. Bunlar kaynak tüketimini sınırlar; zararlı parser girdisine karşı
+tam sandbox değildir. `python-docx` ve `pypdf` hâlâ ana worker process'i içinde,
+worker'ın OS hesabı, dosya erişimi, ortam değişkenleri ve ağ yetkileriyle çalışır.
+
+Running işler varsayılan olarak her 30 saniyede heartbeat yazar; beş dakika
+heartbeat alınmazsa stale recovery aynı owner+attempt lease'ini guard ederek işi
+retry/failure durumuna geçirir. `WORKER_HEARTBEAT_INTERVAL` değerini her zaman
+`WORKER_LEASE_TIMEOUT` değerinden kısa tut ve queue stale-recovery uyarılarını
+izle.
+
+Worker POSIX metin girdisini mümkünse attempt-scoped hard link ile sabitler;
+Windows metin girdisi ile PDF/DOCX
+ise extraction ile ham lineage aynı baytları kullansın diye en çok 100 MiB'lik
+özel snapshot'a kopyalanır. `IMPORT_ROOT` ile `STAGING_ROOT` aynı dosya
+sisteminde ve worker hard-link yetkisine sahipse büyük metinlerde ikinci tam
+kopya oluşmaz. Yukarıda önerilen `root:derlem 0640` handoff, Linux
+`fs.protected_hardlinks=1` altında bilinçli olarak hard-link'i engeller ve worker
+tam özel kopyaya düşer; bu güvenli modelde staging kapasitesini kaynak boyutu +
+rezerv için planla. Cross-device veya yetki kaynaklı fallback kopyası başlamadan
+önce staging boş alanı ve rezervi denetlenir.
+POSIX hard link path/inode kimliğini sabitler, baytları salt-okunur yapmaz; bu hızlı yol
+yukarıdaki salt-okunur, güvenilir handoff sözleşmesine dayanır. Normal size/time/
+inode değişiklikleri ingest sonunda reddedilir, fakat yazma yetkili düşmanca bir
+yerel process'e karşı garanti değildir.
+İnternet-facing production öncesinde extraction'ı ayrı düşük yetkili servis
+hesabına/process'e veya container/VM sandbox'ına taşı; CPU/bellek/zaman kotası,
+seccomp/egress kısıtı ve parser bağımlılığı güncelleme politikasını ayrıca uygula.
 
 ## 5. Build
 
@@ -200,4 +251,8 @@ kaydı oluşturulup upload akışı denenir.
 
 Büyük browser upload'ları için `client_max_body_size`, reverse proxy timeout'ları
 ve disk kapasitesi `MAX_UPLOAD_BYTES` ile uyumlu olmalıdır. Çok GB'lık corpus
-yüklerinde server-side local ingest hâlâ daha güvenli operasyon yoludur.
+yüklerinde dosya önce `IMPORT_ROOT` altına operatör tarafından yerleştirilerek
+admin-only local ingest kullanılabilir. API ve worker kök dışına çıkan, normal
+dosya olmayan veya sembolik bağ içeren yolları reddeder. Bu doğrulamalar güvenilir
+handoff dizininde defense-in-depth'tir; yazma/rename yetkili başka bir process ile
+yarış güvenlik sözleşmesinin dışındadır.

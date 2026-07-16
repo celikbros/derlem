@@ -59,7 +59,7 @@ func protectedRoutes(s *Server) []protectedRoute {
 		{"POST /api/v1/sources", sourceManagerRoles, s.createSource},
 		{"GET /api/v1/sources/{id}", sourceWorkspaceRoles, s.getSource},
 		{"PATCH /api/v1/sources/{id}", sourceEditorRoles, s.updateSource},
-		{"POST /api/v1/sources/{id}/ingest", sourceManagerRoles, s.queueSourceIngest},
+		{"POST /api/v1/sources/{id}/ingest", []string{roleAdmin}, s.queueSourceIngest},
 		{"POST /api/v1/sources/{id}/upload", sourceManagerRoles, s.uploadSourceFile},
 		{"POST /api/v1/sources/{id}/distill", sourceManagerRoles, s.distillSource},
 		{"GET /api/v1/sources/{id}/reviews", sourceWorkspaceRoles, s.listSourceReviews},

@@ -9,6 +9,7 @@ User=derlem
 Group=derlem
 WorkingDirectory=/opt/derlem/current
 EnvironmentFile=/etc/derlem/derlem.env
+EnvironmentFile=-/etc/derlem/derlem-worker.env
 ExecStart=/opt/derlem/current/.venv/bin/python -m derlem_worker
 Restart=always
 RestartSec=3

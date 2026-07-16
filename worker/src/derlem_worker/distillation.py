@@ -2,8 +2,9 @@
 
 Sağlayıcıdan bağımsız tek tip bir HTTP katmanıdır (stdlib urllib): Claude,
 ChatGPT, Gemini, Grok, Qwen ve OpenAI-uyumlu diğer sağlayıcılar aynı arayüzle
-çağrılır. API anahtarları YALNIZCA worker ortam değişkeninden okunur; ne
-veritabanına ne üretim manifestine yazılır (yalnız değişken ADI kaydedilir).
+çağrılır. API anahtarları YALNIZCA sağlayıcı kaydında sabitlenen worker
+ortam değişkeninden okunur; ne veritabanına ne üretim manifestine yazılır
+(manifestte yalnız sabit değişken ADI kaydedilir).
 
 Üretilen her belge bir satırdır; çıktı normal Derlem kapılarından (PII, dedup,
 örneklem, insan incelemesi) geçer. Sentetik olmak kapı muafiyeti getirmez.

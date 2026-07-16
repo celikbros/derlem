@@ -197,6 +197,7 @@ class ReleaseJobsMixin:
 
         with psycopg.connect(self.config.database_url, row_factory=dict_row) as connection:
             with connection.transaction():
+                self._assert_job_ownership(connection, job)
                 locked_release = connection.execute(
                     "SELECT status FROM releases WHERE id = %s FOR UPDATE",
                     (release_id,),
@@ -394,6 +395,7 @@ class ReleaseJobsMixin:
                     "Release export is no longer eligible",
                     {"export": {"status": "blocked", "reason": "export_not_eligible"}},
                 )
+            self._assert_job_ownership(connection, job)
             connection.execute(
                 """
                 UPDATE release_exports
@@ -430,6 +432,8 @@ class ReleaseJobsMixin:
                             'progress', %s::jsonb
                         ), updated_at = now()
                         WHERE id = %s AND status = 'running'
+                          AND locked_by IS NOT DISTINCT FROM %s
+                          AND attempts = %s
                         """,
                         (
                             release_id,
@@ -437,6 +441,8 @@ class ReleaseJobsMixin:
                             export_format,
                             json.dumps(progress, ensure_ascii=False),
                             job.id,
+                            job.lease_owner,
+                            job.attempts,
                         ),
                     )
                     progress_connection.commit()
@@ -459,6 +465,7 @@ class ReleaseJobsMixin:
 
         with psycopg.connect(self.config.database_url, row_factory=dict_row) as connection:
             with connection.transaction():
+                self._assert_job_ownership(connection, job)
                 locked_export = connection.execute(
                     """
                     SELECT status

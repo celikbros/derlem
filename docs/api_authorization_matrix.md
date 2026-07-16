@@ -28,10 +28,11 @@ Yeni bir veri endpoint'i açık rol listesi olmadan kaydedilemez.
 | Kullanıcı yönetimi (`/api/v1/users`) | Yalnız `admin` | Liste/oluşturma/rol/durum/parola; self-lockout ve son-aktif-admin koruması sunucuda; her değişiklik audit edilir |
 | Kaynak katalogu/detayı | `admin`, `data_manager`, `editor`, `moderator`, `expert_reviewer` | Contributor ve consumer için kapalı |
 | PII scan, belge örnekleri, kalite ve review geçmişi | `admin`, `data_manager`, `editor`, `moderator`, `expert_reviewer` | Ham/karantina metin aynı sınır içinde |
-| Kaynak oluşturma, ingest ve upload | `admin`, `data_manager` | Yazma işlemi audit edilir |
+| Kaynak oluşturma ve upload | `admin`, `data_manager` | Yazma işlemi audit edilir |
+| Sunucu yerel dosya ingest'i | Yalnız `admin` | Yol `IMPORT_ROOT` ile sınırlıdır; API ve worker ayrı ayrı doğrular |
 | Kaynak metadata güncelleme | `admin`, `data_manager`, `editor` | Optimistic version kontrolü zorunlu |
 | Belge içerik güncelleme | `admin`, `editor` | Yeni immutable nesne sürümü oluşturur |
-| Kaynak/belge/benzerlik kararı | `admin`, `moderator`, `expert_reviewer` | Self-review ve kör review kuralları ayrıca uygulanır |
+| Kaynak/belge/benzerlik kararı | `admin`, `moderator`, `expert_reviewer` | Self-review ve kör review kuralları ayrıca uygulanır; belge kararı reviewer'a ait, süresi dolmamış claim gerektirir |
 | Arka plan işleri | `admin`, `data_manager` | Job payload/result diğer rollere kapalıdır |
 | Release liste/detay | `admin`, `data_manager`, `consumer_team` | Consumer yalnız `frozen` release görür; draft için `404` alır |
 | Release oluşturma/export | `admin`, `data_manager` | Export yalnız frozen release için üretilir |

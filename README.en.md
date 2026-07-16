@@ -357,10 +357,18 @@ credentials. Never commit real secrets.
 | `BOOTSTRAP_ADMIN_PASSWORD` | Initial administrator password |
 | `STORAGE_ROOT` | Immutable object-store root |
 | `STAGING_ROOT` | Temporary streamed-upload area |
+| `IMPORT_ROOT` | Trusted root containing admin-only local-ingest files |
 | `MAX_UPLOAD_BYTES` | Per-upload limit; defaults to 50 GiB |
 | `WORKER_POLL_INTERVAL` | Worker queue polling interval |
+| `WORKER_LEASE_TIMEOUT` | Time without heartbeat before a running job is stale; defaults to 5 minutes |
+| `WORKER_HEARTBEAT_INTERVAL` | Running-job lease renewal interval; defaults to 30 seconds |
 | `DOCUMENT_SAMPLE_SIZE` | Bounded review samples per source; defaults to 200 |
 | `MAX_DOCUMENT_BYTES` | Sampling/decontamination document limit; defaults to 256 KiB |
+| `EXTRACTION_MAX_SOURCE_BYTES` | PDF/DOCX parser source limit; defaults to 100 MiB |
+| `EXTRACTION_MAX_DOCX_ENTRIES` | DOCX ZIP entry limit; defaults to 2,048 |
+| `EXTRACTION_MAX_DOCX_UNCOMPRESSED_BYTES` | DOCX total uncompressed limit; defaults to 256 MiB |
+| `EXTRACTION_MAX_PDF_PAGES` | PDF page limit; defaults to 1,000 |
+| `EXTRACTION_MAX_OUTPUT_CHARS` | Aggregate normalized extracted-text limit; defaults to 32 Mi characters |
 | `NEXT_PUBLIC_LOCAL_LOGIN_EMAIL` | Account displayed only on the local login card |
 | `NEXT_PUBLIC_LOCAL_LOGIN_PASSWORD` | Password displayed only on the local login card |
 

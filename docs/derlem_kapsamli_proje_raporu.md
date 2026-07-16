@@ -327,8 +327,9 @@ SHA256, UTF-8 durumu, byte ve satır sayısını hesaplar, içeriği şu yapıya
 STORAGE_ROOT/objects/sha256/aa/bb/<sha256>
 ```
 
-Güvenilir yerel ingest yalnız admin/data manager içindir. Public katkı için
-sunucu path'i kabul edilmemeli; ileride presigned object-store upload
+Güvenilir yerel ingest yalnız admin içindir ve `IMPORT_ROOT` altındaki symlink
+içermeyen normal dosyalarla sınırlıdır; API ve worker yolu ayrı ayrı doğrular.
+Public katkı için sunucu path'i kabul edilmemeli; ileride presigned object-store upload
 kullanılmalıdır.
 
 ### PII kapısı

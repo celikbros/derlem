@@ -55,8 +55,10 @@ uygun/riskli aday sayılarını, PII işi toplam bulgu sayısını, export işi 
 ## Yazma ve Yenileme Politikası
 
 - Worker tarama sırasında yaklaşık her 64 MiB'de bir progress yazar.
-- Ingest progress yazılmadan önce checkpoint `flush` ve `fsync` edilir; retry aynı
-  job UUID'sine ait doğrulanmış byte konumundan devam eder.
+- Ingest progress yazılmadan önce attempt-scoped checkpoint `flush` ve `fsync`
+  edilir; normal retry checkpoint'i sonraki attempt'e atomik devrederek
+  doğrulanmış byte konumundan devam eder. Stale lease retry'ı eski writer ile
+  yarışmamak için sıfırdan başlar.
 - Progress ayrı PostgreSQL bağlantısıyla commit edilir; uzun corpus transaction'ı
   tamamlanmadan UI tarafından görülebilir.
 - Retry başladığında eski `result` ve `last_error` temizlenir.

@@ -18,7 +18,10 @@ GET   /sources/{id}/documents
 GET   /sources/{id}/document-quality-summary
 GET   /sources/{id}/document-sample-generations
 POST  /sources/{id}/documents/resample
+POST  /sources/{id}/documents/claims
 POST  /sources/{id}/documents/bulk-reviews
+POST  /document-review-claims/{token}/renew
+DELETE /document-review-claims/{token}
 GET   /documents/{id}
 PATCH /documents/{id}
 GET   /documents/{id}/reviews
@@ -43,6 +46,14 @@ gonderilir; kayit arada degistiyse API `409 version_conflict` dondurur.
 da degistirilemez.
 
 ## Ingest Zinciri
+
+Sunucu yerel dosya endpoint'i yalnız `admin` rolüne açıktır. `local_path`,
+`IMPORT_ROOT` altında bulunan symlink içermeyen normal bir dosya olmalıdır;
+API'nin kuyruğa yazdığı canonical yol worker tarafından tekrar doğrulanır.
+`IMPORT_ROOT` ve ata dizinleri güvenilir, untrusted kullanıcı/process'lere karşı
+salt-okunur handoff alanıdır. Kuyruğa alma ile job bitişi arasında dosya veya yol
+bileşeni yazılamaz/yeniden adlandırılamaz; mevcut kontroller eşzamanlı yerel
+rename yetkisine karşı bir sandbox değildir.
 
 ```text
 source_registered
@@ -141,7 +152,16 @@ kullanicilar kendi kaynagini inceleyemez.
 
 `POST /sources/{id}/documents/bulk-reviews`, moderator ve uzmanlarin en fazla
 200 bekleyen belgeyi tek kararla incelemesini saglar. Istek her belge icin
-`document_id` ve reviewer'in ekranda gordugu `document_version` degerini tasir.
+`document_id`, reviewer'in ekranda gordugu `document_version` degerini ve once
+`POST /sources/{id}/documents/claims` ile alinan `claim_token` degerini tasir.
+
+Claim alma sorgusu PostgreSQL `FOR UPDATE SKIP LOCKED` kullanir. Ayni belge ayni
+anda iki inceleyiciye dagitilmaz. Claim 15 dakika gecerlidir; acik arayuz her 5
+dakikada bir yeniler. Sekme kapanirsa veya kullanici paketi birakirsa claim
+silinir; process/istemci kaybinda lease dolunca belge otomatik olarak yeniden
+dagitilabilir. Karar transaction'i reviewer kimligi, claim token'i, son kullanma
+zamani ve belge surumunu birlikte dogrular. Token baska kullaniciya aktarilsa
+bile sahiplik kontrolunu gecemez.
 
 Tum belgeler tek PostgreSQL transaction'i icinde kilitlenir. Belgelerden biri
 degismis, daha once ayni reviewer tarafindan incelenmis veya artik beklemede
@@ -155,6 +175,7 @@ yazilir.
   "documents": [
     {"document_id": "...", "document_version": 1}
   ],
+  "claim_token": "...",
   "decision": "approved",
   "quality_score": 4,
   "reason": null

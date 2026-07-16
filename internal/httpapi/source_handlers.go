@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"net/http"
-	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -171,12 +170,13 @@ func (s *Server) queueSourceIngest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	request.LocalPath = strings.TrimSpace(request.LocalPath)
-	if request.LocalPath == "" || !filepath.IsAbs(request.LocalPath) {
-		writeError(w, http.StatusUnprocessableEntity, "invalid_local_path", "Sunucu üzerindeki mutlak dosya yolu zorunludur.")
+	resolvedPath, err := resolveImportFile(s.importRoot, request.LocalPath)
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, "invalid_local_path", "Dosya IMPORT_ROOT altında, sembolik bağ içermeyen normal bir dosya olmalıdır.")
 		return
 	}
 	principal, _ := principalFrom(r.Context())
-	jobID, err := s.sources.QueueLocalIngest(r.Context(), r.PathValue("id"), request.LocalPath, principal.Subject)
+	jobID, err := s.sources.QueueLocalIngest(r.Context(), r.PathValue("id"), resolvedPath, principal.Subject)
 	if errors.Is(err, repository.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "source_not_found", "Kaynak bulunamadı veya daha önce içeri alınmış.")
 		return

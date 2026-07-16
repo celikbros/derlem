@@ -50,6 +50,10 @@ func main() {
 		logger.Error("staging initialization failed", "error", err)
 		os.Exit(1)
 	}
+	if err := os.MkdirAll(cfg.ImportRoot, 0o700); err != nil {
+		logger.Error("import root initialization failed", "error", err)
+		os.Exit(1)
+	}
 
 	tokens := auth.NewTokenManager(cfg.JWTSecret, cfg.JWTIssuer, cfg.JWTTTL)
 	sessions := auth.NewSessionStore(pool, cfg.SessionIdleTTL)
@@ -59,7 +63,7 @@ func main() {
 		FailureWindow:       cfg.LoginFailureWindow,
 		LockoutDuration:     cfg.LoginLockoutDuration,
 	}, cfg.JWTSecret)
-	api := httpapi.NewServer(pool, objectStore, tokens, sessions, loginLimiter, logger, cfg.WebOrigin, cfg.StagingRoot, cfg.MaxUploadBytes)
+	api := httpapi.NewServer(pool, objectStore, tokens, sessions, loginLimiter, logger, cfg.WebOrigin, cfg.StagingRoot, cfg.ImportRoot, cfg.MaxUploadBytes)
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           api.Handler(),

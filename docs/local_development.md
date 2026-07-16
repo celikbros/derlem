@@ -40,6 +40,8 @@ LOGIN_IP_FAILURE_LIMIT=30
 BOOTSTRAP_ADMIN_EMAIL=admin@derlem.local
 BOOTSTRAP_ADMIN_PASSWORD=strong-local-password
 STORAGE_ROOT=./var/storage
+STAGING_ROOT=./var/staging
+IMPORT_ROOT=./var/import
 ```
 
 Oturum ve brute-force korumasının ayrıntıları
@@ -88,6 +90,27 @@ Belge ornekleme ayarlari:
 DOCUMENT_SAMPLE_SIZE=200
 MAX_DOCUMENT_BYTES=262144
 ```
+
+PDF/DOCX extraction güvenlik sınırları:
+
+```text
+EXTRACTION_MAX_SOURCE_BYTES=104857600
+EXTRACTION_MAX_DOCX_ENTRIES=2048
+EXTRACTION_MAX_DOCX_UNCOMPRESSED_BYTES=268435456
+EXTRACTION_MAX_PDF_PAGES=1000
+EXTRACTION_MAX_OUTPUT_CHARS=33554432
+```
+
+Worker parser'ı açmadan önce uzantıyla magic/format uyumunu doğrular. DOCX ZIP
+girdi ve açılmış toplam içerik boyutu, PDF ise sayfa sayısı; bütün formatlarda
+çıkarılan toplam metin sınırını aşarsa iş
+açık bir extraction hatasıyla reddedilir. Bu sınırları yalnızca güvenilir
+belgeler için ve kaynak tüketimini ölçerek yükseltin.
+
+Uzun işlerde worker `WORKER_HEARTBEAT_INTERVAL` (varsayılan `30s`) aralığında
+lease yeniler. Heartbeat `WORKER_LEASE_TIMEOUT` (varsayılan `5m`) boyunca
+gelmezse başka bir worker işi güvenli retry/failure geçişine alır. Heartbeat
+aralığı timeout değerinden kısa olmalıdır.
 
 ## Kaynak Triage Raporu
 
@@ -169,6 +192,8 @@ job ve denetim kaydini tutar.
 
 ## Yerel Dosya Yolu Uyarisi
 
-`POST /sources/{id}/ingest` yalnizca guvenilir admin/data manager kullanicilari
-icin yerel gelistirme yoludur. Public katkida sunucu dosya yolu alinmayacak;
-uretimde upload intent + S3/MinIO presigned upload kullanilacaktir.
+`POST /sources/{id}/ingest` yalnizca `admin` rolune aciktir. API sadece
+`IMPORT_ROOT` altindaki sembolik bag icermeyen normal dosyalari kabul eder;
+worker isi calistirmadan once ayni siniri yeniden dogrular. Dosyayi once bu
+koke kopyalayip mutlak yolunu gonderin. Public katkida sunucu dosya yolu
+alinmayacak; uretimde upload intent + S3/MinIO presigned upload kullanilacaktir.

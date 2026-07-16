@@ -32,7 +32,8 @@ there without an explicit, non-empty role list.
 | Auth logout/logout-all | Every authenticated role | Revokes the current or all server-side sessions |
 | Source catalog/detail | `admin`, `data_manager`, `editor`, `moderator`, `expert_reviewer` | Closed to contributors and consumers |
 | PII scans, sampled documents, quality, review history | `admin`, `data_manager`, `editor`, `moderator`, `expert_reviewer` | Raw/quarantined text uses the same boundary |
-| Source creation, ingest, upload | `admin`, `data_manager` | Write operations are audited |
+| Source creation and upload | `admin`, `data_manager` | Write operations are audited |
+| Server-local file ingest | `admin` only | Path is restricted to `IMPORT_ROOT` and checked independently by API and worker |
 | Source metadata update | `admin`, `data_manager`, `editor` | Optimistic version check required |
 | Document content update | `admin`, `editor` | Creates a new immutable object version |
 | Source/document/similarity decisions | `admin`, `moderator`, `expert_reviewer` | Self-review and blind-review rules also apply |

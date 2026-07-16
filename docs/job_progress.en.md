@@ -57,8 +57,9 @@ adds the `estimated_tokens` capacity estimate.
 ## Persistence Policy
 
 - Workers persist progress approximately every 64 MiB of input.
-- Before ingest progress is persisted, the checkpoint is flushed and `fsync`ed;
-  a retry resumes from the verified byte offset bound to the same job UUID.
+- Before ingest progress is persisted, the attempt-scoped checkpoint is flushed
+  and `fsync`ed. A normal retry atomically promotes it and resumes from the
+  verified byte offset; a stale-lease retry starts clean to avoid a live writer.
 - A separate PostgreSQL connection commits progress outside the long corpus
   transaction, making it visible while work continues.
 - A retry clears stale `result` and `last_error` values.

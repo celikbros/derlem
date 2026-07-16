@@ -10,7 +10,7 @@ içindedir; dışarıda script gerekmez.
 
 Tek tip (sağlayıcıdan bağımsız) HTTP katmanı; istediğinizi seçersiniz:
 
-| Sağlayıcı | Anahtar env (varsayılan) | Varsayılan model | Stil |
+| Sağlayıcı | Sabit worker anahtar env | Varsayılan model | Stil |
 |---|---|---|---|
 | Claude (Anthropic) | `ANTHROPIC_API_KEY` | `claude-opus-4-8` | anthropic |
 | ChatGPT (OpenAI) | `OPENAI_API_KEY` | `gpt-4o` | openai |
@@ -25,12 +25,19 @@ sağlayıcı çıkarsa `PROVIDERS` sözlüğüne bir satır yeter (migration ger
 
 ## Güvenlik — API anahtarı
 
-- **API anahtarı arayüze GİRİLMEZ.** Yalnızca anahtarı taşıyan worker ortam
-  değişkeninin ADI girilir (ör. `ANTHROPIC_API_KEY`).
+- **API anahtarı ve ortam değişkeni adı arayüze GİRİLMEZ.** Kullanıcı
+  yalnızca allowlist'teki sağlayıcıyı seçer; worker, o sağlayıcının
+  `ProviderSpec.api_key_env` sabitinden hangi anahtarı okuyacağını belirler.
 - Anahtar değeri ne veritabanına, ne iş yüküne, ne üretim manifestine yazılır.
-  Worker, işi çalıştırırken kendi ortamından okur.
+  Sabit ortam değişkeni adı yalnızca üretim manifestinde provenance olarak
+  tutulur. Eski veya sahte bir iş yükündeki `api_key_env` alanı worker tarafından
+  yok sayılır.
 - Bu, güvenlik backlog'undaki `SEC-P0-05` (secret yönetimi) ile uyumludur;
   production'da anahtarlar secret manager'dan worker ortamına verilecektir.
+- LLM anahtarlarını API/web ile paylaşılan ortam dosyasına koymayın. Systemd
+  kurulumunda yalnız worker birimine enjekte edilen
+  `/etc/derlem/derlem-worker.env` dosyasını kullanın. Böylece anahtarlar API/web
+  process ortamına girmez; tam OS izolasyonu ayrı servis kimlikleri gerektirir.
 - Ekleme, dış API + anahtar içeri alındığı için yeni saldırı yüzeyi doğurur;
   bu bilinçli kabuldür (yol haritası kaydı).
 
@@ -38,13 +45,13 @@ sağlayıcı çıkarsa `PROVIDERS` sözlüğüne bir satır yeter (migration ger
 
 1. Kaynak kaydı açılır (tip `synthetic_*`, amaç `instruction`/`pretrain`...,
    lisans `kendi-uretimimiz`, hak `cleared`, kanıt = bu belge veya üretim notu).
-2. Kaynak detayında **Distilasyon** bölümü: sağlayıcı, model, anahtar env,
-   sistem yönergesi, prompt şablonu (`{konu}` yer tutucusu), konular (her satır
+2. Kaynak detayında **Distilasyon** bölümü: sağlayıcı, model, sistem
+   yönergesi, prompt şablonu (`{konu}` yer tutucusu), konular (her satır
    bir belge) veya konu yoksa belge sayısı.
 3. Worker `distill_source` işi: sağlayıcıyı N kez çağırır, her çıktıyı bir belge
    (bir satır) olarak yazar, **üretim manifestini immutable depoya alır**
-   (`source.distilled` audit'i + manifest SHA256), sonra dosyayı normal
-   staged-ingest zincirine sokar.
+   (`source.distilled` audit'i + manifest SHA256), sonra child staged-ingest
+   işi ile parent başarısını tek veritabanı transaction'ında atomik yayımlar.
 4. Gerisi standarttır: PII taraması, tekrar kontrolü, risk puanlı örneklem,
    **insan incelemesi**. **Sentetik olmak kapı muafiyeti getirmez** — modelin
    ürettiği metinde de PII, tekrar veya çöp olabilir; 200 örnek yine incelenir.
@@ -60,6 +67,12 @@ sağlayıcı çıkarsa `PROVIDERS` sözlüğüne bir satır yeter (migration ger
 
 - Model kimliği doğrulaması yapılmaz; yanlış model sağlayıcıda 404 verir ve iş
   net hatayla düşer.
+- Sağlayıcı çağrıları henüz prompt başına kalıcı checkpoint/idempotency anahtarı
+  kullanmaz. Geç çağrıda worker kaybı veya hata olursa retry ilk prompt'tan
+  başlayabilir ve ücretli çağrıları tekrar edebilir. Production genişlemesi
+  öncesinde sağlayıcı maliyet kotası, tahmin/onay kapısı ve prompt başına
+  durable checkpoint zorunludur; mevcut lease parent/child veri yarışını çözer,
+  dış sağlayıcı maliyetini idempotent yapmaz.
 - Yakında: üretim manifestini kaynağın `lineage_ref`'ine otomatik bağlama,
   saf-insan havuzu için `synthetic` etiket filtresi (v0.5 katkı modeliyle),
   hız/oran sınırı ve maliyet tahmini.

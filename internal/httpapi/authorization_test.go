@@ -92,6 +92,23 @@ func TestConsumerCannotReadDraftRelease(t *testing.T) {
 	}
 }
 
+func TestLocalFileIngestIsAdminOnly(t *testing.T) {
+	const pattern = "POST /api/v1/sources/{id}/ingest"
+	for _, route := range protectedRoutes(&Server{}) {
+		if route.pattern != pattern {
+			continue
+		}
+		if !slices.Equal(route.roles, []string{roleAdmin}) {
+			t.Fatalf("local ingest roles = %v, want admin only", route.roles)
+		}
+		for _, role := range applicationRoles {
+			assertRoleAccess(t, route.roles, role, role == roleAdmin)
+		}
+		return
+	}
+	t.Fatalf("route %q not found", pattern)
+}
+
 func assertRoleAccess(t *testing.T, allowedRoles []string, role string, wantAllowed bool) {
 	t.Helper()
 	called := false

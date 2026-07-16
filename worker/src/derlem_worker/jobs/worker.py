@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import json
 import os
+from pathlib import Path
 import socket
 import time
 import traceback
@@ -125,14 +125,25 @@ class Worker(QueueMixin, IngestJobsMixin, GateJobsMixin, SampleJobsMixin, Releas
         if job is None:
             return False
 
+        with self._maintain_job_lease(job):
+            self._run_claimed_job(job)
+        return True
+
+    def _run_claimed_job(self, job) -> None:
+        converted_path = None
+        snapshot_path = None
         try:
             if job.job_type in {"ingest_local_file", "ingest_staged_file"}:
-                ingest_path = self._ingest_path(job)
-                ingest_path, extraction, converted_path = self._maybe_extract(job, ingest_path)
+                source_path = self._ingest_path(job)
+                snapshot_path = self._snapshot_ingest_source(job, source_path)
+                ingest_path = snapshot_path
+                ingest_path, extraction, converted_path = self._maybe_extract(
+                    job, ingest_path, source_name=source_path.name
+                )
                 with psycopg.connect(self.config.database_url) as progress_connection:
                     outcome = self.store.ingest_file_resumable(
                         ingest_path,
-                        checkpoint_id=job.id,
+                        checkpoint_id=self._ingest_checkpoint_id(job),
                         progress_callback=lambda progress: self._write_job_progress(
                             progress_connection,
                             job,
@@ -145,10 +156,9 @@ class Worker(QueueMixin, IngestJobsMixin, GateJobsMixin, SampleJobsMixin, Releas
                         ),
                     )
                 with psycopg.connect(self.config.database_url) as connection:
+                    self._assert_job_ownership(connection, job)
                     self._complete_ingest(connection, job, outcome, extraction=extraction)
                 self._discard_ingest_checkpoint(job, outcome.stored)
-                if converted_path is not None:
-                    converted_path.unlink(missing_ok=True)
                 if job.job_type == "ingest_staged_file":
                     Path(str(job.payload.get("staged_path", ""))).unlink(missing_ok=True)
                 LOGGER.info(
@@ -160,10 +170,12 @@ class Worker(QueueMixin, IngestJobsMixin, GateJobsMixin, SampleJobsMixin, Releas
             elif job.job_type == "scan_pii":
                 object_sha256, report = self._scan_pii(job)
                 with psycopg.connect(self.config.database_url) as connection:
+                    self._assert_job_ownership(connection, job)
                     self._complete_pii_scan(connection, job, object_sha256, report)
                 LOGGER.info("job_succeeded job_id=%s pii_status=%s", job.id, report.status)
             elif job.job_type == "check_exact_duplicate":
                 with psycopg.connect(self.config.database_url) as connection:
+                    self._assert_job_ownership(connection, job)
                     status, duplicate_of = self._complete_exact_duplicate_check(connection, job)
                 LOGGER.info(
                     "job_succeeded job_id=%s duplicate_status=%s duplicate_of=%s",
@@ -187,6 +199,7 @@ class Worker(QueueMixin, IngestJobsMixin, GateJobsMixin, SampleJobsMixin, Releas
             elif job.job_type in {"sample_documents", "resample_documents"}:
                 object_sha256, report, stored_samples = self._sample_documents(job)
                 with psycopg.connect(self.config.database_url) as connection:
+                    self._assert_job_ownership(connection, job)
                     self._complete_document_sampling(
                         connection,
                         job,
@@ -221,16 +234,6 @@ class Worker(QueueMixin, IngestJobsMixin, GateJobsMixin, SampleJobsMixin, Releas
                 )
             elif job.job_type == "distill_source":
                 result = self._distill_source(job)
-                with psycopg.connect(self.config.database_url) as connection:
-                    connection.execute(
-                        """
-                        UPDATE background_jobs
-                        SET status = 'succeeded', result = %s::jsonb, completed_at = now(), updated_at = now()
-                        WHERE id = %s AND status = 'running'
-                        """,
-                        (json.dumps(result), job.id),
-                    )
-                    connection.commit()
                 LOGGER.info(
                     "job_succeeded job_id=%s provider=%s document_count=%s",
                     job.id, result["provider"], result["document_count"],
@@ -247,8 +250,14 @@ class Worker(QueueMixin, IngestJobsMixin, GateJobsMixin, SampleJobsMixin, Releas
                     error,
                     permanent=isinstance(error, ReleaseGateError),
                 )
-        return True
-
+        finally:
+            # Derived extraction files are attempt-local and can always be
+            # regenerated on retry. Never leave them in staging after a
+            # downstream storage/database/lease failure.
+            if converted_path is not None:
+                self._remove_attempt_artifact(converted_path, job_id=job.id)
+            if snapshot_path is not None:
+                self._remove_attempt_artifact(snapshot_path, job_id=job.id)
     def run_forever(self) -> None:
         LOGGER.info("worker_started worker_id=%s", self.worker_id)
         while True:

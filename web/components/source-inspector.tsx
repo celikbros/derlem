@@ -33,13 +33,13 @@ const purposeLabels: Record<string, string> = {
   post_training: "Post-training",
 };
 
-const distillationProviders: Record<string, { label: string; model: string; env: string }> = {
-  anthropic: { label: "Claude (Anthropic)", model: "claude-opus-4-8", env: "ANTHROPIC_API_KEY" },
-  openai: { label: "ChatGPT (OpenAI)", model: "gpt-4o", env: "OPENAI_API_KEY" },
-  google: { label: "Gemini (Google)", model: "gemini-1.5-pro", env: "GEMINI_API_KEY" },
-  xai: { label: "Grok (xAI)", model: "grok-2-latest", env: "XAI_API_KEY" },
-  alibaba: { label: "Qwen (Alibaba)", model: "qwen-plus", env: "DASHSCOPE_API_KEY" },
-  echo: { label: "Echo (test, ağ gerektirmez)", model: "echo", env: "" },
+const distillationProviders: Record<string, { label: string; model: string }> = {
+  anthropic: { label: "Claude (Anthropic)", model: "claude-opus-4-8" },
+  openai: { label: "ChatGPT (OpenAI)", model: "gpt-4o" },
+  google: { label: "Gemini (Google)", model: "gemini-1.5-pro" },
+  xai: { label: "Grok (xAI)", model: "grok-2-latest" },
+  alibaba: { label: "Qwen (Alibaba)", model: "qwen-plus" },
+  echo: { label: "Echo (test, ağ gerektirmez)", model: "echo" },
 };
 
 const findingLabels: Record<string, string> = {
@@ -353,7 +353,6 @@ export function SourceInspector({
         body: JSON.stringify({
           provider: String(data.get("provider") ?? "echo"),
           model: String(data.get("model") ?? ""),
-          api_key_env: String(data.get("api_key_env") ?? ""),
           system_prompt: String(data.get("system_prompt") ?? ""),
           prompt_template: String(data.get("prompt_template") ?? ""),
           topics,
@@ -739,12 +738,11 @@ export function SourceInspector({
               </select>
             </label>
             <label>Model<input name="model" defaultValue={distillationProviders[distillProvider]?.model ?? ""} key={distillProvider} /></label>
-            <label>API anahtarı ortam değişkeni<input name="api_key_env" defaultValue={distillationProviders[distillProvider]?.env ?? ""} key={`env-${distillProvider}`} /></label>
             <label>Sistem yönergesi (opsiyonel)<textarea name="system_prompt" rows={2} placeholder="Sen bir Türkçe ders kitabı yazarısın." /></label>
             <label>Prompt şablonu (&#123;konu&#125; yer tutucusu kullanılabilir)<textarea name="prompt_template" rows={2} required placeholder="{konu} konusunu lise seviyesinde açıkla." /></label>
             <label>Konular (her satır bir belge; boşsa aşağıdaki sayı kadar tekrarlar)<textarea name="topics" rows={3} placeholder={"newton yasaları\nfotosentez\nosmanlı tarihi"} /></label>
             <label>Konu yoksa belge sayısı<input name="count" type="number" min={0} max={500} defaultValue={0} /></label>
-            <p className="muted-copy">API anahtarı arayüze GİRİLMEZ; worker ortam değişkeninden okunur ve hiçbir yere yazılmaz. Test için ağ gerektirmeyen “Echo” sağlayıcısını kullanabilirsiniz. Üretilen içerik yine PII, tekrar ve insan inceleme kapılarından geçer.</p>
+            <p className="muted-copy">API anahtarı arayüze GİRİLMEZ; seçilen sağlayıcının sabit anahtarı yalnız worker ortamından okunur ve hiçbir yere yazılmaz. Test için ağ gerektirmeyen “Echo” sağlayıcısını kullanabilirsiniz. Üretilen içerik yine PII, tekrar ve insan inceleme kapılarından geçer.</p>
             <button className="secondary-button" type="submit" disabled={distilling}>
               {distilling ? <LoaderCircle className="spin" size={17} /> : <Sparkles size={17} />}
               {distilling ? "Kuyruğa alınıyor" : "Üret"}

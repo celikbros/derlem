@@ -35,6 +35,8 @@ there without an explicit, non-empty role list.
 | Source creation and upload | `admin`, `data_manager` | Write operations are audited |
 | Server-local file ingest | `admin` only | Path is restricted to `IMPORT_ROOT` and checked independently by API and worker |
 | Source metadata update | `admin`, `data_manager`, `editor` | Optimistic version check required |
+| Contribution submit/list/withdraw | `admin`, `contributor` | Deliberately closed to reviewer roles: reviewing one's own contribution is structurally prevented |
+| Contribution pool and bundling | `admin`, `data_manager` | Bundles pass through the normal ingest gates; contributor identity never enters the bundle file |
 | Document content update | `admin`, `editor` | Creates a new immutable object version |
 | Source/document/similarity decisions | `admin`, `moderator`, `expert_reviewer` | Self-review and blind-review rules also apply |
 | Background jobs | `admin`, `data_manager` | Job payload/results are closed to other roles |

@@ -57,6 +57,8 @@ func TestReadRouteAuthorizationMatrix(t *testing.T) {
 		"GET /api/v1/similarity-calibrations":                    reviewers,
 		"GET /api/v1/similarity-calibrations/{id}/pairs":         reviewers,
 		"GET /api/v1/similarity-pairs/{id}":                      reviewers,
+		"GET /api/v1/contributions":                              {roleAdmin, roleDataManager},
+		"GET /api/v1/contributions/mine":                         {roleAdmin, roleContributor},
 	}
 
 	tested := map[string]bool{}

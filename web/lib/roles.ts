@@ -4,7 +4,7 @@
 
 export type RoleStart = {
   /** İlk adımların geçtiği ekran; hoş geldin kartındaki düğme buraya götürür. */
-  view: "sources" | "review" | "releases" | "users" | "guide";
+  view: "sources" | "review" | "releases" | "users" | "contribute" | "guide";
   /** Düğme metni: "İncelemeye başla". */
   label: string;
 };
@@ -125,15 +125,20 @@ export const ROLE_INFO: RoleInfo[] = [
     role: "contributor",
     label: "contributor",
     title: "Katkıcı (contributor)",
-    summary: "Henüz işlem yok (katkı kuyruğu v0.5’te)",
-    who: "Dış katkı sağlayacak kişi (yakında).",
+    summary: "Soru-cevap çifti ve serbest metin katkısı",
+    who: "Kendi ürettiği metinle veri havuzunu besleyen kişi.",
     duties: [
-      "Şimdilik yalnızca oturum açabilir; katkı kuyruğu v0.5 sürümünde planlıdır.",
+      "Katkılar ekranından soru-cevap çifti veya serbest metin gönderir.",
+      "Gönderdiği katkıların durumunu izler; demetlenmemiş katkısını geri çekebilir.",
+      "Katkılar doğrudan corpus'a girmez: havuz kaynağa demetlenir ve PII, tekrar ve insan inceleme kapılarından geçer.",
     ],
     firstSteps: [
-      "Katkı kuyruğu v0.5 ile açılacak; şimdilik Rehber'den veri yolculuğunu tanıyın.",
+      "Katkılar ekranını açın ve görev tipini seçin: soru-cevap çifti veya serbest metin.",
+      "Metninizi yazın, alan (domain) etiketini ekleyin ve kullanım şartını onaylayıp gönderin.",
+      "Gönderdikleriniz listenizde birikir; demetlenmeden önce hatalı katkıyı geri çekebilirsiniz.",
+      "Katkılarınız kaynağa demetlenince normal kalite kapılarından geçer; sonucu durum sütunundan izlersiniz.",
     ],
-    start: { view: "guide", label: "Rehber'i aç" },
+    start: { view: "contribute", label: "Katkı vermeye başla" },
   },
   {
     role: "consumer_team",

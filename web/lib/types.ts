@@ -100,6 +100,30 @@ export type DocumentReviewClaim = {
   documents: Document[];
 };
 
+export type Contribution = {
+  id: string;
+  contributor_id: string;
+  task_type: "qa_pair" | "free_text";
+  domain: string;
+  prompt: string;
+  body: string;
+  terms_ack_version: string;
+  status: "submitted" | "withdrawn" | "bundled";
+  source_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PendingContribution = {
+  id: string;
+  task_type: "qa_pair" | "free_text";
+  domain: string;
+  prompt: string;
+  body: string;
+  contributor_name: string;
+  created_at: string;
+};
+
 export type DocumentQualitySummary = {
   source_id: string;
   rubric_version: "multidimensional-v1";

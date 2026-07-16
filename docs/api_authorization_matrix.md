@@ -34,6 +34,8 @@ Yeni bir veri endpoint'i açık rol listesi olmadan kaydedilemez.
 | Belge içerik güncelleme | `admin`, `editor` | Yeni immutable nesne sürümü oluşturur |
 | Kaynak/belge/benzerlik kararı | `admin`, `moderator`, `expert_reviewer` | Self-review ve kör review kuralları ayrıca uygulanır; belge kararı reviewer'a ait, süresi dolmamış claim gerektirir |
 | Arka plan işleri | `admin`, `data_manager` | Job payload/result diğer rollere kapalıdır |
+| Katkı gönderme/listeleme/geri çekme | `admin`, `contributor` | İnceleyici rollerine bilinçli kapalı: kendi katkısını inceleme durumu yapısal olarak engellenir |
+| Katkı havuzu ve kaynağa demetleme | `admin`, `data_manager` | Demet normal ingest kapılarından geçer; katkıcı kimliği demet dosyasına yazılmaz |
 | Release liste/detay | `admin`, `data_manager`, `consumer_team` | Consumer yalnız `frozen` release görür; draft için `404` alır |
 | Release oluşturma/export | `admin`, `data_manager` | Export yalnız frozen release için üretilir |
 | Release freeze | `admin` | İnsan kritik kapısıdır |

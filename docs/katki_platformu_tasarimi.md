@@ -2,6 +2,11 @@
 
 **Tarih:** 2026-07-06
 **Durum:** Tasarım — v0.5 katkı kuyruğunun kitlesel ölçek vizyonu
+**Güncelleme (2026-07-16):** Çekirdek katkı kuyruğu ofis ölçeğinde uygulandı
+(sahibin moratoryum istisnası kararı, gelen ilk gerçek ekip için): uygulama
+içi qa_pair/free_text gönderimi, geri çekme, havuzun kaynağa demetlenmesi ve
+mevcut kapılardan geçiş canlıdır (Faz A-B arası). Güven kademeleri, N-onay,
+altın görevler, self-signup/CLA/OIDC bu belgedeki ön koşullara bağlı kalır.
 **Vizyon:** Çok sayıda gönüllü/uzmanın (hedef: yüz binler kayıtlı, binlerce aktif)
 Türkçe yapay zekâ verisine katkı vermesi: soru-cevap, çeviri, yorum/derecelendirme,
 veri bağışı ve kalite kontrolü.

@@ -22,6 +22,11 @@ POST  /sources/{id}/documents/claims
 POST  /sources/{id}/documents/bulk-reviews
 POST  /document-review-claims/{token}/renew
 DELETE /document-review-claims/{token}
+POST  /contributions
+GET   /contributions/mine
+DELETE /contributions/{id}
+GET   /contributions
+POST  /contribution-bundles
 GET   /documents/{id}
 PATCH /documents/{id}
 GET   /documents/{id}/reviews
@@ -44,6 +49,24 @@ GET   /releases/{id}/sources/{source_id}/artifact
 gonderilir; kayit arada degistiyse API `409 version_conflict` dondurur.
 `content_purpose` update sozlesmesinde yoktur ve veritabani trigger'i tarafindan
 da degistirilemez.
+
+## Katkı Kuyruğu
+
+`POST /contributions` ile katkıcı (`contributor`) soru-cevap çifti
+(`qa_pair`) veya serbest metin (`free_text`) gönderir; kullanım şartı onayı
+(`accept_terms`) zorunludur ve sürümü (`office-v1`) kayda işlenir. Katkı
+doğrudan corpus'a girmez: `submitted` durumunda havuzda bekler, katkıcı
+demetlenmeden önce `DELETE /contributions/{id}` ile geri çekebilir.
+
+`POST /contribution-bundles` (yalnız `admin`/`data_manager`) seçilen görev
+tipindeki tüm bekleyen katkıları tek transaction içinde bir kaynağa demetler:
+JSONL staging'e yazılır, kaynak + `ingest_staged_file` job'u + audit olayları
+eklenir ve katkılar kaynağa bağlanır. İçerik amacı görev tipinden türetilir
+(`qa_pair` → `instruction`, `free_text` → `pretrain`). Demet dosyasına
+katkıcı kimliği yazılmaz; satırlar `{"id": "<katkı-uuid>", "text": "..."}`
+biçimindedir. Demetlenen kaynak normal PII/tekrar/örneklem/insan inceleme
+kapılarından geçer. Katkı gönderme inceleyici rollerine bilinçli kapalıdır;
+böylece kimse kendi katkısını içeren kaynağı inceleyemez.
 
 ## Ingest Zinciri
 

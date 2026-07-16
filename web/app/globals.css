@@ -3466,3 +3466,40 @@ dialog::backdrop {
     padding-top: 0;
   }
 }
+
+/* ===== Katkı kuyruğu (2026-07-16) ===== */
+
+.contribution-form {
+  margin-bottom: 16px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.contribution-form h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 6px;
+  font-size: 14.5px;
+}
+
+.contribution-form .form-grid {
+  margin: 10px 0 12px;
+}
+
+.terms-check {
+  flex-direction: row !important;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #52605a;
+}
+
+.terms-check input {
+  margin-top: 2px;
+  width: auto;
+}

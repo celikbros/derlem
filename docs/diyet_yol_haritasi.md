@@ -53,6 +53,15 @@ distilasyon → 3. i18n). Liste dışı yeni özellik hâlâ yasaktır. Faz 0
 teslimatı iptal değil, ertelidir: ön-inceleme raporu hazır, insan onayı
 ~20 dk; veriler tamamlanınca release daha zengin içerikle dondurulur.
 
+**REVİZYON (2026-07-16, sahip kararı):** İlk gerçek ekip (5-15 kişi, ofis
+ağı) sisteme giriyor — moratoryumun "ikinci insan" koşulu fiilen gerçekleşti.
+Sahip kararıyla iki iş teslimat kapsamında açıldı: (a) rol bazlı onboarding
+ve ofis ağı kurulumu, (b) `contributor` rolünü çalışır yapan çekirdek katkı
+kuyruğu (uygulama içi qa_pair/free_text → havuz → kaynağa demetleme → mevcut
+kapılar). Kitlesel katkı mekanizmaları (güven kademeleri, N-onay, altın
+görevler, self-signup) açılmadı; katki_platformu_tasarimi.md ön koşullarına
+bağlı kalır.
+
 **Ölçüt:** Moratoryum süresince `feat:` commit sayısı = 0.
 
 ### Faz 2 — BUDAMA (moratoryumla paralel; bugün başladı)

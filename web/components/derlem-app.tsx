@@ -18,6 +18,7 @@ import {
   LogIn,
   LogOut,
   PackageCheck,
+  PenLine,
   Plus,
   RefreshCw,
   Search,
@@ -27,6 +28,7 @@ import {
 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { ContributionsPanel } from "@/components/contributions-panel";
 import { GuidePanel } from "@/components/guide-panel";
 import { JobsPanel } from "@/components/jobs-panel";
 import { ReleasePanel } from "@/components/release-panel";
@@ -43,12 +45,13 @@ type SourceList = {
   next_cursor?: string;
 };
 
-type ActiveView = "sources" | "review" | "similarity" | "releases" | "jobs" | "users" | "guide";
+type ActiveView = "sources" | "review" | "similarity" | "releases" | "jobs" | "users" | "contribute" | "guide";
 
 const sourceWorkspaceRoles = ["admin", "data_manager", "editor", "moderator", "expert_reviewer"];
 const reviewerRoles = ["admin", "moderator", "expert_reviewer"];
 const releaseRoles = ["admin", "data_manager", "consumer_team"];
 const jobRoles = ["admin", "data_manager"];
+const contributionViewRoles = ["admin", "data_manager", "contributor"];
 
 const purposeLabels: Record<string, string> = {
   pretrain: "Pretrain",
@@ -123,6 +126,16 @@ const viewHelpContent: Partial<Record<ActiveView, { purpose: string; tips: ViewT
     tips: [
       { text: "Rolü veya durumu değişen kullanıcının açık oturumları otomatik olarak düşer." },
       { text: "Son aktif admin devre dışı bırakılamaz; kendi hesabınızın admin rolünü kaldıramazsınız." },
+    ],
+  },
+  contribute: {
+    purpose: "Katkı kuyruğu: kendi ürettiğiniz soru-cevap çiftleri ve metinler burada havuzda birikir, kaynağa demetlenir ve normal kalite kapılarından geçer.",
+    tips: [
+      { text: "Görev tipini seçin, metninizi yazın ve kullanım şartını onaylayıp gönderin; katkınız listenizde birikir.", roles: ["contributor", "admin"] },
+      { text: "Demetlenmemiş katkınızı geri çekebilirsiniz; demetlenen katkı değişmez kaynağın parçasıdır.", roles: ["contributor", "admin"] },
+      { text: "Yalnız kendi ürettiğiniz metni gönderin; başka yerden kopyalanan içerik hak/lisans kapısına takılır.", roles: ["contributor"] },
+      { text: "“Kaynağa demetle” bekleyen havuzu tek kaynağa yazar: soru-cevap → instruction, serbest metin → pretrain.", roles: ["admin", "data_manager"] },
+      { text: "Demetlenen kaynak PII, tekrar ve örneklem incelemesinden geçer; katkıcılar kendi metnini inceleyemez.", roles: ["admin", "data_manager"] },
     ],
   },
 };
@@ -292,6 +305,7 @@ export function DerlemApp() {
   const canAccessReview = hasAnyRole(user, reviewerRoles);
   const canAccessReleases = hasAnyRole(user, releaseRoles);
   const canAccessJobs = hasAnyRole(user, jobRoles);
+  const canAccessContributions = hasAnyRole(user, contributionViewRoles);
 
   async function logout() {
     const response = await fetch("/api/session/logout", { method: "POST" });
@@ -368,6 +382,13 @@ export function DerlemApp() {
               <span>›</span>
             </button>
           )}
+          {canAccessContributions && (
+            <button aria-label="Katkılar" aria-pressed={activeView === "contribute"} className={`nav-item${activeView === "contribute" ? " active" : ""}`} type="button" onClick={() => { setActiveView("contribute"); setSelected(null); }}>
+              <PenLine size={18} aria-hidden="true" />
+              Katkılar
+              <span>›</span>
+            </button>
+          )}
           {user.roles.includes("admin") && (
             <button aria-label="Kullanıcılar" aria-pressed={activeView === "users"} className={`nav-item${activeView === "users" ? " active" : ""}`} type="button" onClick={() => { setActiveView("users"); setSelected(null); }}>
               <UsersRound size={18} aria-hidden="true" />
@@ -441,7 +462,7 @@ export function DerlemApp() {
 
         {activeView === "guide" ? (
           <GuidePanel user={user} />
-        ) : activeView === "users" ? <UsersPanel currentUserID={user.id} onNotice={setNotice} /> : activeView === "jobs" ? <JobsPanel onNotice={setNotice} /> : activeView === "releases" ? <ReleasePanel sources={sources} user={user} onNotice={setNotice} /> : activeView === "similarity" ? <SimilarityReviewPanel user={user} onNotice={setNotice} /> : <section className={`catalog-layout${selected ? " with-inspector" : ""}`}>
+        ) : activeView === "contribute" ? <ContributionsPanel user={user} onNotice={setNotice} onBundled={() => void loadSources()} /> : activeView === "users" ? <UsersPanel currentUserID={user.id} onNotice={setNotice} /> : activeView === "jobs" ? <JobsPanel onNotice={setNotice} /> : activeView === "releases" ? <ReleasePanel sources={sources} user={user} onNotice={setNotice} /> : activeView === "similarity" ? <SimilarityReviewPanel user={user} onNotice={setNotice} /> : <section className={`catalog-layout${selected ? " with-inspector" : ""}`}>
           <div className="catalog-panel">
             <div className="table-toolbar">
               <label className="search-field">
@@ -686,11 +707,12 @@ function hasAnyRole(user: User, allowedRoles: string[]) {
 
 function defaultViewFor(user: User): ActiveView {
   // Yönetici ve veri yöneticisi katalogdan, inceleyici doğrudan işinin
-  // başından (İnceleme) başlar; ilk oturumda "şimdi ne yapacağım" sorusu
-  // ekran seçimiyle de cevaplanmış olur.
+  // başından (İnceleme), katkıcı Katkılar'dan başlar; ilk oturumda "şimdi
+  // ne yapacağım" sorusu ekran seçimiyle de cevaplanmış olur.
   if (hasAnyRole(user, ["admin", "data_manager"])) return "sources";
   if (hasAnyRole(user, ["moderator", "expert_reviewer"])) return "review";
   if (hasAnyRole(user, sourceWorkspaceRoles)) return "sources";
+  if (hasAnyRole(user, ["contributor"])) return "contribute";
   if (hasAnyRole(user, releaseRoles)) return "releases";
   return "guide";
 }
@@ -703,6 +725,7 @@ function viewHeading(view: ActiveView) {
     releases: { eyebrow: "Release Builder", title: "Sürümler" },
     jobs: { eyebrow: "Worker kuyruğu", title: "Arka plan işleri" },
     users: { eyebrow: "Yönetim", title: "Kullanıcılar" },
+    contribute: { eyebrow: "Katkı kuyruğu", title: "Katkılar" },
     guide: { eyebrow: "Yardım", title: "Derlem rehberi" },
   };
   return headings[view];

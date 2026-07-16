@@ -38,6 +38,9 @@ var (
 	reviewerRoles       = []string{roleAdmin, roleModerator, roleExpertReviewer}
 	jobReaderRoles      = []string{roleAdmin, roleDataManager}
 	releaseReaderRoles  = []string{roleAdmin, roleDataManager, roleConsumerTeam}
+	// Katkı gönderme bilinçli olarak inceleyici rollerine kapalıdır: kendi
+	// katkısını içeren kaynağı inceleme durumu yapısal olarak engellenir.
+	contributionRoles = []string{roleAdmin, roleContributor}
 )
 
 type protectedRoute struct {
@@ -73,6 +76,11 @@ func protectedRoutes(s *Server) []protectedRoute {
 		{"POST /api/v1/sources/{id}/documents/bulk-reviews", reviewerRoles, s.bulkReviewDocuments},
 		{"POST /api/v1/document-review-claims/{token}/renew", reviewerRoles, s.renewDocumentReviewClaim},
 		{"DELETE /api/v1/document-review-claims/{token}", reviewerRoles, s.releaseDocumentReviewClaim},
+		{"POST /api/v1/contributions", contributionRoles, s.submitContribution},
+		{"GET /api/v1/contributions/mine", contributionRoles, s.listMyContributions},
+		{"DELETE /api/v1/contributions/{id}", contributionRoles, s.withdrawContribution},
+		{"GET /api/v1/contributions", sourceManagerRoles, s.listPendingContributions},
+		{"POST /api/v1/contribution-bundles", sourceManagerRoles, s.bundleContributions},
 		{"GET /api/v1/documents/{id}", sourceWorkspaceRoles, s.getDocument},
 		{"PATCH /api/v1/documents/{id}", documentEditorRoles, s.updateDocument},
 		{"GET /api/v1/documents/{id}/reviews", sourceWorkspaceRoles, s.listDocumentReviews},

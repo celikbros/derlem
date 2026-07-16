@@ -76,6 +76,7 @@ tabloyu doldurun:
 | Örnek belgeleri okuyup onaylayacak | `moderator` |
 | Hassas kararlar + benzerlik etiketleme | `expert_reviewer` |
 | Metin/künye düzeltecek | `editor` |
+| Soru-cevap çifti veya kendi metnini yazacak | `contributor` |
 | Çıktı release'lerini indirecek | `consumer_team` |
 
 Kurallar:
@@ -109,6 +110,9 @@ Yine de sözlü özet isterseniz:
   anda çalışabilir.
 - **Veri yöneticilerine:** "Kaynaklar → *Yeni kaynak* → künyeyi doldur →
   satıra tıklayıp dosyanı yükle → gerisini İşler ekranından izle."
+- **Katkıcılara:** "Katkılar → görev tipini seç (soru-cevap veya serbest
+  metin) → yaz, şartı onayla, gönder. Katkın havuzda birikir; kaynağa
+  demetlenince normal kalite kapılarından geçer."
 
 ## 5. Sorun giderme
 

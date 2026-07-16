@@ -88,10 +88,18 @@ Amaç: Güçlü bir modele tıp konularında ders-kitabı tarzı metin ürettirm
 
 Amaç: hukuk uzmanlarına soru-cevap çifti yazdırmak (fine-tuning verisi).
 
-Bugünkü yol (katkı kuyruğu v0.5 gelene kadar): çiftler dışarıda kanonik JSONL
-olarak toplanır (`derlem.canonical-sample.v1` formatında conversation
-kayıtları), tek dosya halinde `İçerik amacı: Instruction` olan bir kaynak
-olarak yüklenir. Soru-cevap yazan kişi o kaynağın inceleyicisi olamaz.
+**Uygulama içi yol (2026-07-16'dan beri):** yazacak kişilere `contributor`
+rolü verilir. Katkıcı **Katkılar** ekranından soru-cevap çiftini veya serbest
+metnini yazar, kullanım şartını onaylar ve gönderir; katkılar havuzda birikir.
+Veri yöneticisi havuzu **"Kaynağa demetle"** ile tek kaynağa dönüştürür
+(soru-cevap → `Instruction`, serbest metin → `Pretrain`); demet normal
+PII/tekrar/örneklem/insan inceleme kapılarından geçer. Katkı gönderme
+inceleyici rollerine kapalıdır — kimse kendi metnini içeren kaynağı
+inceleyemez.
+
+Toplu dış üretim alternatifi: çiftler dışarıda kanonik JSONL olarak toplanır
+(`derlem.canonical-sample.v1` formatında conversation kayıtları), tek dosya
+halinde `İçerik amacı: Instruction` olan bir kaynak olarak yüklenir.
 Eval seti hedefleniyorsa amaç `Eval` seçilir ve **asla** pretrain/instruction
 havuzuyla karışmaz — program bunu zorla ayırır.
 

@@ -17,7 +17,27 @@ import (
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
 
+// migrateLockKey, aynı PostgreSQL veritabanında eşzamanlı Migrate
+// çağrılarını (ör. aynı anda açılan birden çok API kopyası veya paralel
+// test paketleri) cluster çapında sıraya sokan advisory lock anahtarıdır.
+// CREATE EXTENSION IF NOT EXISTS dahil bazı DDL'ler eşzamanlı çalışmaya
+// dayanıklı değildir.
+const migrateLockKey int64 = 0x6465726c656d0001 // "derlem" + 0001
+
 func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
+	lockConn, err := pool.Acquire(ctx)
+	if err != nil {
+		return fmt.Errorf("acquire migration lock connection: %w", err)
+	}
+	defer lockConn.Release()
+	if _, err := lockConn.Exec(ctx, "SELECT pg_advisory_lock($1)", migrateLockKey); err != nil {
+		return fmt.Errorf("acquire migration advisory lock: %w", err)
+	}
+	defer func() {
+		// Unlock başarısız olsa bile bağlantı kapanınca lock düşer.
+		_, _ = lockConn.Exec(context.WithoutCancel(ctx), "SELECT pg_advisory_unlock($1)", migrateLockKey)
+	}()
+
 	if _, err := pool.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS schema_migrations (
 			version text PRIMARY KEY,

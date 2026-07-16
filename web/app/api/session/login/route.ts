@@ -27,7 +27,11 @@ export async function POST(request: NextRequest) {
   cookieStore.set("derlem_token", payload.access_token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    // DERLEM_COOKIE_SECURE=false yalnız güvenilir ofis ağında düz HTTP ile
+    // erişim içindir (docs/ofis_kurulumu.md); Secure çerez HTTPS dışına
+    // yazılmadığından bu kaçış olmadan LAN girişleri sessizce düşer.
+    // İnternete açık production'da asla kullanmayın.
+    secure: process.env.DERLEM_COOKIE_SECURE === "false" ? false : process.env.NODE_ENV === "production",
     path: "/",
     expires: expiresAt,
   });

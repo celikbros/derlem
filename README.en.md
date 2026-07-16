@@ -371,6 +371,7 @@ credentials. Never commit real secrets.
 | `EXTRACTION_MAX_OUTPUT_CHARS` | Aggregate normalized extracted-text limit; defaults to 32 Mi characters |
 | `NEXT_PUBLIC_LOCAL_LOGIN_EMAIL` | Account displayed only on the local login card |
 | `NEXT_PUBLIC_LOCAL_LOGIN_PASSWORD` | Password displayed only on the local login card |
+| `DERLEM_COOKIE_SECURE` | `Secure` flag of the web session cookie; set to `false` only for plain-HTTP access on a trusted office LAN ([Office Setup](docs/ofis_kurulumu.md)) |
 
 `NEXT_PUBLIC_LOCAL_LOGIN_*` values are visible in the browser bundle. Use them
 only in the ignored `web/.env.local` file and in local development.

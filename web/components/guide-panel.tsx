@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, ClipboardCheck, Database, GitCompareArrows, Library, ListTodo, PackageCheck, ShieldCheck } from "lucide-react";
+import { BookOpen, ClipboardCheck, Database, GitCompareArrows, Library, ListTodo, PackageCheck, Rocket, ShieldCheck } from "lucide-react";
 
 import { roleInfoByRole } from "@/lib/roles";
 import type { User } from "@/lib/types";
@@ -10,15 +10,36 @@ export function GuidePanel({ user }: { user: User }) {
   return (
     <section className="guide-layout" aria-label="Derlem kullanım rehberi">
       <div className="guide-card guide-intro">
-        <h3><BookOpen size={17} aria-hidden="true" /> Derlem nedir?</h3>
+        <h3><BookOpen size={17} aria-hidden="true" /> Derlem nedir, neden var?</h3>
         <p>
-          Derlem, LLM ve tokenizer eğitiminde kullanılacak metin verisini yöneten bir veri
-          atölyesidir. Kimse buraya elle metin yazmaz: var olan corpus dosyaları sisteme alınır,
-          otomatik kalite kapılarından geçirilir, insan incelemesiyle onaylanır ve eğitim
-          ekiplerine değişmez (frozen) paketler olarak sunulur. Çıktılar modelden ve
-          tokenizer’dan bağımsızdır; aynı paketi herhangi bir model ekibi kullanabilir.
+          Bir dil modeli ancak verisi kadar iyidir — ve internetten toplanmış veri çoğu zaman
+          hakları belirsiz, tekrarlı ve kirlidir. Derlem bu sorunu çözer: LLM ve tokenizer
+          eğitiminde kullanılacak metin verisini <strong>hakları belli</strong>,{" "}
+          <strong>kalitesi insan onaylı</strong> ve <strong>tekrarı ayıklanmış</strong> hale
+          getiren bir veri atölyesidir. Kimse buraya elle metin yazmaz: var olan corpus
+          dosyaları sisteme alınır, otomatik kalite kapılarından geçirilir, insan incelemesiyle
+          onaylanır ve eğitim ekiplerine değişmez (frozen) paketler olarak sunulur.
+        </p>
+        <p>
+          Çıktılar modelden ve tokenizer’dan bağımsızdır; aynı paketi herhangi bir model ekibi
+          kullanabilir. Sizin bu zincirde verdiğiniz her karar (puan, onay, ret, etiket) audit
+          kaydına yazılır ve üretilen veri bankasının güven temelini oluşturur.
         </p>
       </div>
+
+      {userRoles.length > 0 && (
+        <div className="guide-card">
+          <h3><Rocket size={17} aria-hidden="true" /> İlk günün yol haritası</h3>
+          {userRoles.map((role) => (
+            <div className="guide-role" key={role}>
+              <strong>{roleInfoByRole[role].title}</strong>
+              <ol className="guide-steps">
+                {roleInfoByRole[role].firstSteps.map((step) => <li key={step}>{step}</li>)}
+              </ol>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="guide-card">
         <h3>Veri yolculuğu: altı adım</h3>
@@ -39,8 +60,9 @@ export function GuidePanel({ user }: { user: User }) {
           </li>
           <li>
             <strong>İnsan incelemesi.</strong> İnceleyici, İnceleme ekranındaki kuyruktan
-            kaynağı açar; örnek belgeleri okuyup kalite puanı verir, hak/lisans kanıtını
-            doğrular. Tüm kapılar temizse kaynağı onaylar.
+            kaynağı açar ve “Güvenli paket al” ile kendi belge paketini alır; aynı belge
+            asla iki kişiye dağıtılmaz. Örnekleri okuyup kalite puanı verir, hak/lisans
+            kanıtını doğrular. Tüm kapılar temizse kaynağı onaylar.
           </li>
           <li>
             <strong>Release ve freeze.</strong> Aynı amaçtaki onaylı kaynaklardan Sürümler

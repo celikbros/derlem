@@ -2,6 +2,7 @@
 
 import {
   AlertTriangle,
+  ArrowRight,
   BookOpen,
   CheckCircle2,
   ClipboardCheck,
@@ -33,7 +34,7 @@ import { SimilarityReviewPanel } from "@/components/similarity-review-panel";
 import { SourceInspector } from "@/components/source-inspector";
 import { UsersPanel } from "@/components/users-panel";
 import { messageFrom, requestJSON } from "@/lib/client-api";
-import { ROLE_INFO, roleSummaryByLabel as accountHints } from "@/lib/roles";
+import { ROLE_INFO, roleInfoByRole, roleSummaryByLabel as accountHints } from "@/lib/roles";
 import type { Source, User } from "@/lib/types";
 import { APP_BUILD, APP_VERSION, versionLabel } from "@/lib/version";
 
@@ -86,9 +87,12 @@ const viewHelpContent: Partial<Record<ActiveView, { purpose: string; tips: ViewT
     ],
   },
   review: {
-    purpose: "Karar bekleyen kaynakların öncelik sıralı kuyruğu. Önce örnek belgeleri okuyup puanlarsınız, tüm örnekler bitince kaynak kararını verirsiniz.",
+    purpose: "Karar bekleyen kaynakların öncelik sıralı kuyruğu. Belge kararı verebilmek için önce kendinize bir iş paketi alırsınız; tüm örnekler karara bağlanınca kaynak kararı verilir.",
     tips: [
-      { text: "Belgeleri seçip toplu incelemeyle tek seferde 200'e kadar puanlayabilirsiniz; şüpheli belgeyi ayrı açıp reddedin." },
+      { text: "Kaynağı açıp “Güvenli paket al” ile 10-20 belgelik paketinizi alın; belgeler 15 dakika yalnız size atanır ve açık sekme paketi otomatik yeniler.", roles: ["admin", "moderator", "expert_reviewer"] },
+      { text: "Yalnız kendi paketinizdeki belgelerde karar verebilirsiniz — başka inceleyicinin belgesi size dağıtılmaz, çakışma olmaz.", roles: ["admin", "moderator", "expert_reviewer"] },
+      { text: "Paketinizdeki belgeleri seçip toplu kararla tek seferde puanlayabilirsiniz; şüpheli belgeyi ayrı açıp reddedin." },
+      { text: "Ara verecekseniz “Paketi bırak” deyin; sekme kapansa bile belgeler en geç 15 dakikada havuza döner.", roles: ["admin", "moderator", "expert_reviewer"] },
       { text: "Kendi yüklediğiniz kaynağı onaylayamazsınız (bağımsız inceleme kuralı)." },
       { text: "“Onayla” pasifse detay panelindeki kapı listesi eksik koşulu gösterir: incelenmemiş örnek, hak durumu, PII veya tekrar." },
     ],
@@ -123,7 +127,7 @@ const viewHelpContent: Partial<Record<ActiveView, { purpose: string; tips: ViewT
   },
 };
 
-function WelcomeTip({ user, onOpenGuide }: { user: User; onOpenGuide: () => void }) {
+function WelcomeTip({ user, onNavigate }: { user: User; onNavigate: (view: ActiveView) => void }) {
   const storageKey = `derlem-welcome-dismissed-${user.id}`;
   const [dismissed, setDismissed] = useState(true);
   useEffect(() => {
@@ -133,9 +137,8 @@ function WelcomeTip({ user, onOpenGuide }: { user: User; onOpenGuide: () => void
     return () => window.clearTimeout(timer);
   }, [storageKey]);
   if (dismissed) return null;
-  const primaryRole = user.roles[0] ?? "";
-  const roleLine = accountHints[primaryRole.replace("data_manager", "manager").replace("expert_reviewer", "expert").replace("consumer_team", "consumer")]
-    ?? "Rolünüze göre yapabilecekleriniz Rehber'de listelenir.";
+  const primaryRole = user.roles.find((role) => roleInfoByRole[role]);
+  const info = primaryRole ? roleInfoByRole[primaryRole] : undefined;
   function dismiss() {
     window.localStorage.setItem(storageKey, "1");
     setDismissed(true);
@@ -145,16 +148,32 @@ function WelcomeTip({ user, onOpenGuide }: { user: User; onOpenGuide: () => void
       <div className="welcome-tip-body">
         <strong>Derlem’e hoş geldiniz.</strong>
         <p>
-          Burası bir veri atölyesidir: metin dosyaları alınır, kalite kapılarından geçirilir,
-          insan incelemesiyle onaylanır ve eğitime hazır paketler üretilir. Sizin rolünüz:
-          <em> {roleLine.toLocaleLowerCase("tr-TR")}</em>.
+          Derlem, LLM eğitiminde kullanılacak metnin <em>hakları belli</em>, <em>kalitesi insan
+          onaylı</em> ve <em>tekrarı ayıklanmış</em> biçimde toplandığı veri atölyesidir. Kimse
+          buraya elle metin yazmaz: dosyalar alınır, otomatik kapılardan geçer ve insan onayıyla
+          eğitime hazır değişmez paketlere dönüşür. Bu zincirdeki her karar size güvenilir.
         </p>
+        {info && (
+          <>
+            <p className="welcome-tip-role">
+              <strong>Rolünüz:</strong> {info.title} — {info.who.toLocaleLowerCase("tr-TR")}
+            </p>
+            <ol className="welcome-tip-steps">
+              {info.firstSteps.map((step) => <li key={step}>{step}</li>)}
+            </ol>
+          </>
+        )}
         <p className="welcome-tip-hint">
-          Her ekranın başındaki <strong>“Bu ekranda ne yapabilirim?”</strong> kutusunu açın;
-          tam akış için soldaki Rehber’e bakın.
+          Takıldığınız her ekranda üstteki <strong>“Bu ekranda ne yapabilirim?”</strong> kutusunu
+          açın; akışın tamamı soldaki Rehber’dedir.
         </p>
         <div className="welcome-tip-actions">
-          <button type="button" className="primary-button" onClick={() => { dismiss(); onOpenGuide(); }}>
+          {info && info.start.view !== "guide" && (
+            <button type="button" className="primary-button" onClick={() => { dismiss(); onNavigate(info.start.view); }}>
+              <ArrowRight size={16} aria-hidden="true" /> {info.start.label}
+            </button>
+          )}
+          <button type="button" className={info && info.start.view !== "guide" ? "secondary-button" : "primary-button"} onClick={() => { dismiss(); onNavigate("guide"); }}>
             <BookOpen size={16} aria-hidden="true" /> Rehber’i aç
           </button>
           <button type="button" className="text-button" onClick={dismiss}>Anladım, kapat</button>
@@ -390,7 +409,7 @@ export function DerlemApp() {
           )}
         </header>
 
-        <WelcomeTip user={user} onOpenGuide={() => { setActiveView("guide"); setSelected(null); }} />
+        <WelcomeTip user={user} onNavigate={(view) => { setActiveView(view); setSelected(null); }} />
 
         <ViewHelp view={activeView} user={user} />
 
@@ -666,6 +685,11 @@ function hasAnyRole(user: User, allowedRoles: string[]) {
 }
 
 function defaultViewFor(user: User): ActiveView {
+  // Yönetici ve veri yöneticisi katalogdan, inceleyici doğrudan işinin
+  // başından (İnceleme) başlar; ilk oturumda "şimdi ne yapacağım" sorusu
+  // ekran seçimiyle de cevaplanmış olur.
+  if (hasAnyRole(user, ["admin", "data_manager"])) return "sources";
+  if (hasAnyRole(user, ["moderator", "expert_reviewer"])) return "review";
   if (hasAnyRole(user, sourceWorkspaceRoles)) return "sources";
   if (hasAnyRole(user, releaseRoles)) return "releases";
   return "guide";

@@ -6,7 +6,8 @@ küçük bir deneme dosyasıyla yaşamasını sağlar. Servislerin kurulumu içi
 çalışıyor olmalı (API, worker, web).
 
 Ekranların ve rollerin özeti için web arayüzündeki **Rehber** sekmesine de
-bakabilirsiniz.
+bakabilirsiniz. Bir ekibi aynı ofis ağından bu kuruluma bağlayacaksanız:
+[Ofis Ağı Kurulumu](ofis_kurulumu.md).
 
 ## 0. Deneme dosyası hazırlayın
 

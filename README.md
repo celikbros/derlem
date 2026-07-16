@@ -377,6 +377,7 @@ Başlıca ayarlar:
 | `EXTRACTION_MAX_OUTPUT_CHARS` | Çıkarılan normalize metnin toplam üst sınırı; varsayılan 32 Mi karakter |
 | `NEXT_PUBLIC_LOCAL_LOGIN_EMAIL` | Yalnızca local login kartında gösterilecek hesap |
 | `NEXT_PUBLIC_LOCAL_LOGIN_PASSWORD` | Yalnızca local login kartında gösterilecek parola |
+| `DERLEM_COOKIE_SECURE` | Web oturum çerezinin `Secure` bayrağı; yalnız güvenilir ofis ağında düz HTTP için `false` ([Ofis Kurulumu](docs/ofis_kurulumu.md)) |
 
 `NEXT_PUBLIC_LOCAL_LOGIN_*` değerleri browser bundle'ında görünür. Yalnızca
 ignore edilen `web/.env.local` dosyasında ve local geliştirme ortamında kullanın.

@@ -9,6 +9,7 @@ var (
 	ErrNotFound   = errors.New("not found")
 	ErrConflict   = errors.New("version conflict")
 	ErrSelfReview = errors.New("self review is not allowed")
+	ErrClaimLost  = errors.New("document review claim is missing, expired, or owned by another reviewer")
 )
 
 type GateError struct {

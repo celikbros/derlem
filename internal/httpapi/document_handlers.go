@@ -214,6 +214,71 @@ func (s *Server) listDocumentReviews(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"items": reviews})
 }
 
+func (s *Server) claimSourceDocuments(w http.ResponseWriter, r *http.Request) {
+	var input domain.ClaimDocumentsInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	principal, _ := principalFrom(r.Context())
+	claim, err := s.documents.ClaimForReview(
+		r.Context(), r.PathValue("id"), principal.Subject, input.Limit,
+		slices.Contains(principal.Roles, "admin"),
+	)
+	if errors.Is(err, repository.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "source_not_found", "Kaynak bulunamadı.")
+		return
+	}
+	if errors.Is(err, repository.ErrSelfReview) {
+		writeError(w, http.StatusForbidden, "self_review_forbidden", "Kendi kaynağınızdaki belge örneklerini üstlenemezsiniz.")
+		return
+	}
+	var gateError *repository.GateError
+	if errors.As(err, &gateError) {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
+			"error": map[string]any{
+				"code": "document_claim_validation_failed", "message": "İş paketi boyutu geçerli değil.", "reasons": gateError.Reasons,
+			},
+		})
+		return
+	}
+	if err != nil {
+		s.logger.Error("claim source documents failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "Belge iş paketi alınamadı.")
+		return
+	}
+	writeJSON(w, http.StatusCreated, claim)
+}
+
+func (s *Server) renewDocumentReviewClaim(w http.ResponseWriter, r *http.Request) {
+	principal, _ := principalFrom(r.Context())
+	renewal, err := s.documents.RenewReviewClaim(r.Context(), r.PathValue("token"), principal.Subject)
+	if errors.Is(err, repository.ErrClaimLost) {
+		writeError(w, http.StatusConflict, "review_claim_lost", "İş paketinin süresi doldu veya paket artık size ait değil.")
+		return
+	}
+	if err != nil {
+		s.logger.Error("renew document review claim failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "İş paketinin süresi uzatılamadı.")
+		return
+	}
+	writeJSON(w, http.StatusOK, renewal)
+}
+
+func (s *Server) releaseDocumentReviewClaim(w http.ResponseWriter, r *http.Request) {
+	principal, _ := principalFrom(r.Context())
+	err := s.documents.ReleaseReviewClaim(r.Context(), r.PathValue("token"), principal.Subject)
+	if errors.Is(err, repository.ErrClaimLost) {
+		writeError(w, http.StatusConflict, "review_claim_lost", "İş paketi artık size ait değil.")
+		return
+	}
+	if err != nil {
+		s.logger.Error("release document review claim failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "İş paketi bırakılamadı.")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *Server) reviewDocument(w http.ResponseWriter, r *http.Request) {
 	var input domain.ReviewDocumentInput
 	if !decodeJSON(w, r, &input) {
@@ -233,6 +298,10 @@ func (s *Server) reviewDocument(w http.ResponseWriter, r *http.Request) {
 	}
 	if errors.Is(err, repository.ErrSelfReview) {
 		writeError(w, http.StatusForbidden, "self_review_forbidden", "Kendi kaynağınızdaki belge örneğini onaylayamazsınız.")
+		return
+	}
+	if errors.Is(err, repository.ErrClaimLost) {
+		writeError(w, http.StatusConflict, "review_claim_lost", "Bu belge için geçerli iş paketiniz yok. Yeni bir iş paketi alın.")
 		return
 	}
 	if errors.Is(err, repository.ErrConflict) {
@@ -279,6 +348,10 @@ func (s *Server) bulkReviewDocuments(w http.ResponseWriter, r *http.Request) {
 	}
 	if errors.Is(err, repository.ErrSelfReview) {
 		writeError(w, http.StatusForbidden, "self_review_forbidden", "Kendi kaynağınızdaki belge örneklerini onaylayamazsınız.")
+		return
+	}
+	if errors.Is(err, repository.ErrClaimLost) {
+		writeError(w, http.StatusConflict, "review_claim_lost", "Seçilen belgelerin tamamı geçerli iş paketinize ait değil. Yeni bir iş paketi alın.")
 		return
 	}
 	if errors.Is(err, repository.ErrConflict) {

@@ -94,6 +94,12 @@ export type DocumentReview = {
   created_at: string;
 };
 
+export type DocumentReviewClaim = {
+  claim_token: string;
+  expires_at: string;
+  documents: Document[];
+};
+
 export type DocumentQualitySummary = {
   source_id: string;
   rubric_version: "multidimensional-v1";

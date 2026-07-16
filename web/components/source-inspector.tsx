@@ -22,7 +22,7 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import { JobStatus } from "@/components/jobs-panel";
 import { messageFrom, requestJSON } from "@/lib/client-api";
-import type { BackgroundJob, Document, DocumentQualitySummary, DocumentReview, DocumentSampleGeneration, PIIScan, Review, Source, User } from "@/lib/types";
+import type { BackgroundJob, Document, DocumentQualitySummary, DocumentReview, DocumentReviewClaim, DocumentSampleGeneration, PIIScan, Review, Source, User } from "@/lib/types";
 
 const purposeLabels: Record<string, string> = {
   pretrain: "Pretrain",
@@ -100,6 +100,9 @@ export function SourceInspector({
   const [documentContent, setDocumentContent] = useState("");
   const [selectedDocumentIDs, setSelectedDocumentIDs] = useState<Set<string>>(new Set());
   const [bulkReviewing, setBulkReviewing] = useState(false);
+  const [reviewClaim, setReviewClaim] = useState<DocumentReviewClaim | null>(null);
+  const [claimBatchSize, setClaimBatchSize] = useState(20);
+  const [claiming, setClaiming] = useState(false);
   const [resampling, setResampling] = useState(false);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -107,6 +110,54 @@ export function SourceInspector({
   const [distillProvider, setDistillProvider] = useState("echo");
   const editDialog = useRef<HTMLDialogElement>(null);
   const documentDialog = useRef<HTMLDialogElement>(null);
+  const reviewClaimRef = useRef<DocumentReviewClaim | null>(null);
+  const claimedSourceRef = useRef(source.id);
+
+  useEffect(() => {
+    reviewClaimRef.current = reviewClaim;
+  }, [reviewClaim]);
+
+  useEffect(() => {
+    if (claimedSourceRef.current === source.id) return;
+    const token = reviewClaimRef.current?.claim_token;
+    if (token) {
+      void fetch(`/api/document-review-claims/${encodeURIComponent(token)}`, { method: "DELETE" });
+    }
+    claimedSourceRef.current = source.id;
+    reviewClaimRef.current = null;
+    setReviewClaim(null);
+    setSelectedDocumentIDs(new Set());
+  }, [source.id]);
+
+  useEffect(() => () => {
+    const token = reviewClaimRef.current?.claim_token;
+    if (token) {
+      void fetch(`/api/document-review-claims/${encodeURIComponent(token)}`, {
+        method: "DELETE",
+        keepalive: true,
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    const token = reviewClaim?.claim_token;
+    if (!token) return;
+    const timer = window.setInterval(() => {
+      void requestJSON<{ expires_at: string; document_count: number }>(
+        `/api/document-review-claims/${encodeURIComponent(token)}/renew`,
+        { method: "POST" },
+      ).then((renewal) => {
+        setReviewClaim((current) => current?.claim_token === token
+          ? { ...current, expires_at: renewal.expires_at }
+          : current);
+      }).catch((error) => {
+        setReviewClaim(null);
+        setSelectedDocumentIDs(new Set());
+        onNotice(messageFrom(error));
+      });
+    }, 5 * 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, [onNotice, reviewClaim?.claim_token]);
 
   const loadActivity = useCallback(async () => {
     try {
@@ -121,10 +172,13 @@ export function SourceInspector({
       setReviews(reviewPayload.items);
       setScans(scanPayload.items);
       setJobs(jobPayload.items);
-      setDocuments(documentPayload.items);
+      const mergedDocuments = new Map(documentPayload.items.map((document) => [document.id, document]));
+      reviewClaimRef.current?.documents.forEach((document) => mergedDocuments.set(document.id, document));
+      const visibleDocuments = [...mergedDocuments.values()];
+      setDocuments(visibleDocuments);
       setSampleGenerations(generationPayload.items);
       setQualitySummary(qualityPayload);
-      const pendingIDs = new Set(documentPayload.items
+      const pendingIDs = new Set(visibleDocuments
         .filter((document) => document.status === "sampled" || document.status === "edited")
         .map((document) => document.id));
       setSelectedDocumentIDs((current) => new Set([...current].filter((id) => pendingIDs.has(id))));
@@ -201,6 +255,8 @@ export function SourceInspector({
   const pendingDocuments = documents
     .filter((document) => document.status === "sampled" || document.status === "edited")
     .sort((left, right) => right.risk_score - left.risk_score || left.source_ordinal - right.source_ordinal);
+  const claimedDocumentIDs = new Set(reviewClaim?.documents.map((document) => document.id) ?? []);
+  const claimedPendingDocuments = pendingDocuments.filter((document) => claimedDocumentIDs.has(document.id));
   const riskyDocuments = pendingDocuments.filter((document) => document.risk_score > 0);
   const approvedDocuments = documents.filter((document) => document.status === "approved");
   const flaggedDocuments = documents.filter((document) => document.status === "rejected" || document.status === "sensitive_review");
@@ -213,7 +269,8 @@ export function SourceInspector({
       : documentStatusFilter === "flagged"
         ? flaggedDocuments
         : documents;
-  const selectableDocuments = documentStatusFilter === "risk" ? riskyDocuments : pendingDocuments;
+  const selectableDocuments = (documentStatusFilter === "risk" ? riskyDocuments : pendingDocuments)
+    .filter((document) => claimedDocumentIDs.has(document.id));
   const riskSampleCount = documents.filter((document) => document.risk_score > 0).length;
   const reviewedCount = source.reviewed_document_count;
   const sampleCount = source.sampled_document_count;
@@ -333,10 +390,58 @@ export function SourceInspector({
     }
   }
 
+  async function acquireReviewClaim() {
+    setClaiming(true);
+    try {
+      const claim = await requestJSON<DocumentReviewClaim>(`/api/sources/${source.id}/documents/claims`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ limit: claimBatchSize }),
+      });
+      if (claim.documents.length === 0) {
+        onNotice("Dağıtılabilecek bekleyen belge kalmadı veya tüm belgeler başka inceleyicilerde.");
+        return;
+      }
+      setReviewClaim(claim);
+      setSelectedDocumentIDs(new Set());
+      setDocuments((current) => {
+        const merged = new Map(current.map((document) => [document.id, document]));
+        claim.documents.forEach((document) => merged.set(document.id, document));
+        return [...merged.values()];
+      });
+      setDocumentStatusFilter("pending");
+      onNotice(`${claim.documents.length.toLocaleString("tr-TR")} belgeli güvenli iş paketi alındı.`);
+    } catch (error) {
+      onNotice(messageFrom(error));
+    } finally {
+      setClaiming(false);
+    }
+  }
+
+  async function releaseReviewClaim() {
+    const token = reviewClaim?.claim_token;
+    if (!token) return;
+    setClaiming(true);
+    try {
+      const response = await fetch(`/api/document-review-claims/${encodeURIComponent(token)}`, { method: "DELETE" });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error?.message ?? "İş paketi bırakılamadı.");
+      }
+      setReviewClaim(null);
+      setSelectedDocumentIDs(new Set());
+      onNotice("İş paketi güvenle bırakıldı; kalan belgeler yeniden dağıtılabilir.");
+    } catch (error) {
+      onNotice(messageFrom(error));
+    } finally {
+      setClaiming(false);
+    }
+  }
+
   async function openNextPendingDocument() {
-    const nextDocument = pendingDocuments[0];
+    const nextDocument = claimedPendingDocuments[0];
     if (!nextDocument) {
-      onNotice("İncelenecek bekleyen örnek kalmadı.");
+      onNotice(reviewClaim ? "Bu iş paketinde bekleyen örnek kalmadı." : "Önce güvenli bir iş paketi alın.");
       return;
     }
     await openDocument(nextDocument);
@@ -357,6 +462,11 @@ export function SourceInspector({
         }),
       });
       setDocuments((current) => current.map((document) => document.id === updated.id ? updated : document));
+      setReviewClaim((current) => {
+        if (!current) return current;
+        const remaining = current.documents.filter((document) => document.id !== updated.id);
+        return remaining.length > 0 ? { ...current, documents: remaining } : null;
+      });
       setActiveDocument(updated);
       setDocumentReviews([]);
       documentDialog.current?.close();
@@ -369,7 +479,10 @@ export function SourceInspector({
 
   async function submitDocumentReview(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!activeDocument) return;
+    if (!activeDocument || !reviewClaim || !claimedDocumentIDs.has(activeDocument.id)) {
+      onNotice("Bu belge size atanmış geçerli bir iş paketinde değil.");
+      return;
+    }
     const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
     const decision = submitter?.value;
     if (!decision) return;
@@ -396,6 +509,7 @@ export function SourceInspector({
             reason: reason || null,
             ...qualityScores,
             document_version: activeDocument.current_version,
+            claim_token: reviewClaim.claim_token,
           }),
         },
       );
@@ -408,10 +522,13 @@ export function SourceInspector({
         return next;
       });
       setDocumentReviews((current) => [payload.review, ...current]);
+      const remainingClaimDocuments = reviewClaim.documents.filter((document) => document.id !== payload.document.id);
+      setReviewClaim(remainingClaimDocuments.length > 0 ? { ...reviewClaim, documents: remainingClaimDocuments } : null);
       onChanged(payload.source);
       form.reset();
       const nextPending = updatedDocuments.find((document) =>
-        document.id !== payload.document.id && (document.status === "sampled" || document.status === "edited")
+        remainingClaimDocuments.some((claimed) => claimed.id === document.id)
+        && (document.status === "sampled" || document.status === "edited")
       );
       if (nextPending) {
         onNotice("Belge inceleme kararı kaydedildi. Sıradaki örnek açılıyor.");
@@ -421,6 +538,8 @@ export function SourceInspector({
         onNotice("Belge inceleme kararı kaydedildi. Bekleyen örnek kalmadı.");
       }
     } catch (error) {
+      setReviewClaim(null);
+      setSelectedDocumentIDs(new Set());
       onNotice(messageFrom(error));
     }
   }
@@ -442,7 +561,7 @@ export function SourceInspector({
     event.preventDefault();
     const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
     const decision = submitter?.value;
-    if (!decision || selectedDocumentIDs.size === 0) return;
+    if (!decision || selectedDocumentIDs.size === 0 || !reviewClaim) return;
     const form = event.currentTarget;
     const data = new FormData(form);
     const reason = String(data.get("reason") ?? "").trim();
@@ -477,16 +596,22 @@ export function SourceInspector({
           })),
           decision,
           reason: reason || null,
+          claim_token: reviewClaim.claim_token,
           ...qualityScores,
         }),
       });
       const updatedByID = new Map(payload.documents.map((document) => [document.id, document]));
       setDocuments((current) => current.map((document) => updatedByID.get(document.id) ?? document));
       setSelectedDocumentIDs(new Set());
+      const reviewedIDs = new Set(payload.documents.map((document) => document.id));
+      const remainingClaimDocuments = reviewClaim.documents.filter((document) => !reviewedIDs.has(document.id));
+      setReviewClaim(remainingClaimDocuments.length > 0 ? { ...reviewClaim, documents: remainingClaimDocuments } : null);
       onChanged(payload.source);
       form.reset();
       onNotice(`${payload.documents.length.toLocaleString("tr-TR")} belge için toplu karar kaydedildi.`);
     } catch (error) {
+      setReviewClaim(null);
+      setSelectedDocumentIDs(new Set());
       onNotice(messageFrom(error));
     } finally {
       setBulkReviewing(false);
@@ -726,6 +851,37 @@ export function SourceInspector({
             ))}
           </div>
         )}
+        {canReview && (
+          <div className="bulk-review-form" aria-label="Güvenli inceleme iş paketi">
+            {reviewClaim ? (
+              <div className="bulk-selection-row">
+                <span>
+                  <strong>{reviewClaim.documents.length.toLocaleString("tr-TR")}</strong> belge size ayrıldı · süre {formatDate(reviewClaim.expires_at)}
+                </span>
+                <button className="text-button" type="button" disabled={claiming} onClick={() => void releaseReviewClaim()}>
+                  Paketi bırak
+                </button>
+              </div>
+            ) : (
+              <div className="bulk-selection-row">
+                <label>
+                  Paket boyutu
+                  <select value={claimBatchSize} onChange={(event) => setClaimBatchSize(Number(event.target.value))}>
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                    <option value={200}>200</option>
+                  </select>
+                </label>
+                <button className="primary-button" type="button" disabled={claiming || source.document_sampling_status !== "sampled" || reviewedCount >= sampleCount} onClick={() => void acquireReviewClaim()}>
+                  {claiming ? <LoaderCircle className="spin" size={16} /> : <ClipboardCheck size={16} />} Güvenli paket al
+                </button>
+              </div>
+            )}
+            <small>Belgeler 15 dakika boyunca yalnız size atanır; açık oturum paketi otomatik yeniler.</small>
+          </div>
+        )}
         <div className="document-filter-tabs" role="tablist" aria-label="Belge örneği filtresi">
           <button type="button" aria-pressed={documentStatusFilter === "pending"} onClick={() => setDocumentStatusFilter("pending")}>Bekleyen {pendingDocuments.length}</button>
           <button type="button" aria-pressed={documentStatusFilter === "risk"} onClick={() => setDocumentStatusFilter("risk")}>Riskli {riskyDocuments.length}</button>
@@ -759,7 +915,7 @@ export function SourceInspector({
         )}
         <div className="document-list">
           {filteredDocuments.map((document) => {
-            const canSelect = canReview && (document.status === "sampled" || document.status === "edited");
+            const canSelect = canReview && claimedDocumentIDs.has(document.id) && (document.status === "sampled" || document.status === "edited");
             return (
               <div key={document.id} className={`document-list-row${canSelect ? " selectable" : ""}`}>
                 {canSelect && (
@@ -854,7 +1010,7 @@ export function SourceInspector({
                 <div className="dialog-actions"><button className="primary-button" type="submit"><Save size={16} />Yeni sürümü kaydet</button></div>
               </form>
             )}
-            {canReview && (
+            {canReview && claimedDocumentIDs.has(activeDocument.id) && (
               <form className="document-review-form" onSubmit={submitDocumentReview}>
                 <h3><CheckCircle2 size={16} /> Belge moderasyonu</h3>
                 <div className="document-review-fields">

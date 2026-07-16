@@ -46,6 +46,7 @@ type ReviewDocumentInput struct {
 	Decision        string  `json:"decision"`
 	Reason          *string `json:"reason"`
 	DocumentVersion int64   `json:"document_version"`
+	ClaimToken      string  `json:"claim_token"`
 }
 
 type BulkReviewDocumentItem struct {
@@ -55,9 +56,25 @@ type BulkReviewDocumentItem struct {
 
 type BulkReviewDocumentsInput struct {
 	DocumentQualityScores
-	Documents []BulkReviewDocumentItem `json:"documents"`
-	Decision  string                   `json:"decision"`
-	Reason    *string                  `json:"reason"`
+	Documents  []BulkReviewDocumentItem `json:"documents"`
+	Decision   string                   `json:"decision"`
+	Reason     *string                  `json:"reason"`
+	ClaimToken string                   `json:"claim_token"`
+}
+
+type ClaimDocumentsInput struct {
+	Limit int `json:"limit"`
+}
+
+type DocumentReviewClaim struct {
+	ClaimToken string     `json:"claim_token"`
+	ExpiresAt  time.Time  `json:"expires_at"`
+	Documents  []Document `json:"documents"`
+}
+
+type DocumentReviewClaimRenewal struct {
+	ExpiresAt     time.Time `json:"expires_at"`
+	DocumentCount int64     `json:"document_count"`
 }
 
 type BulkDocumentReviewResult struct {

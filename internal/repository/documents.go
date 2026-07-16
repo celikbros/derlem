@@ -2,16 +2,23 @@ package repository
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
+	"time"
 
 	"github.com/celikbros/derlem/internal/domain"
 	"github.com/celikbros/derlem/internal/storage"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+const documentReviewClaimLease = 15 * time.Minute
+
+var uuidPattern = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 
 type Documents struct {
 	pool *pgxpool.Pool
@@ -137,6 +144,18 @@ func (r *Documents) QueueResample(ctx context.Context, sourceID, actorID string)
 	if documentReviewCount > 0 {
 		reasons = append(reasons, "sample_reviews_exist")
 	}
+	var activeClaimCount int64
+	if err := tx.QueryRow(ctx, `
+		SELECT count(*)
+		FROM document_review_claims AS claim
+		JOIN documents AS document ON document.id = claim.document_id
+		WHERE document.source_id = $1 AND claim.expires_at > now()
+	`, sourceID).Scan(&activeClaimCount); err != nil {
+		return "", err
+	}
+	if activeClaimCount > 0 {
+		reasons = append(reasons, "sample_review_claims_active")
+	}
 	if len(reasons) > 0 {
 		return "", &GateError{Reasons: reasons}
 	}
@@ -204,6 +223,195 @@ func (r *Documents) Get(ctx context.Context, id string) (domain.Document, error)
 		return domain.Document{}, ErrNotFound
 	}
 	return document, err
+}
+
+func (r *Documents) ClaimForReview(
+	ctx context.Context,
+	sourceID, actorID string,
+	limit int,
+	allowSelfReview bool,
+) (domain.DocumentReviewClaim, error) {
+	if limit < 1 || limit > 200 {
+		return domain.DocumentReviewClaim{}, &GateError{Reasons: []string{"invalid_claim_limit"}}
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return domain.DocumentReviewClaim{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	var sourceCreator, samplingStatus string
+	if err := tx.QueryRow(ctx,
+		"SELECT created_by::text, document_sampling_status FROM sources WHERE id = $1 FOR SHARE", sourceID,
+	).Scan(&sourceCreator, &samplingStatus); errors.Is(err, pgx.ErrNoRows) {
+		return domain.DocumentReviewClaim{}, ErrNotFound
+	} else if err != nil {
+		return domain.DocumentReviewClaim{}, err
+	}
+	if sourceCreator == actorID && !allowSelfReview {
+		return domain.DocumentReviewClaim{}, ErrSelfReview
+	}
+	if samplingStatus != "sampled" {
+		return domain.DocumentReviewClaim{}, &GateError{Reasons: []string{"source_not_sampled"}}
+	}
+
+	claimToken, err := newUUID()
+	if err != nil {
+		return domain.DocumentReviewClaim{}, fmt.Errorf("generate document review claim token: %w", err)
+	}
+	var expiresAt time.Time
+	if err := tx.QueryRow(ctx, `
+		SELECT now() + make_interval(secs => $1)
+	`, int(documentReviewClaimLease.Seconds())).Scan(&expiresAt); err != nil {
+		return domain.DocumentReviewClaim{}, err
+	}
+	rows, err := tx.Query(ctx, `
+		WITH candidates AS (
+			SELECT document.id
+			FROM documents AS document
+			LEFT JOIN document_review_claims AS active_claim
+			  ON active_claim.document_id = document.id
+			 AND active_claim.expires_at > now()
+			WHERE document.source_id = $1
+			  AND document.is_active
+			  AND document.status IN ('sampled', 'edited')
+			  AND active_claim.document_id IS NULL
+			ORDER BY document.risk_score DESC, document.source_ordinal ASC
+			FOR UPDATE OF document SKIP LOCKED
+			LIMIT $4
+		)
+		INSERT INTO document_review_claims(
+			document_id, reviewer_id, claim_token, document_version, claimed_at, expires_at
+		)
+		SELECT document.id, $2::uuid, $3::uuid, document.current_version, now(), $5
+		FROM candidates
+		JOIN documents AS document ON document.id = candidates.id
+		ON CONFLICT (document_id) DO UPDATE
+		SET reviewer_id = EXCLUDED.reviewer_id,
+			claim_token = EXCLUDED.claim_token,
+			document_version = EXCLUDED.document_version,
+			claimed_at = EXCLUDED.claimed_at,
+			expires_at = EXCLUDED.expires_at
+		WHERE document_review_claims.expires_at <= now()
+		RETURNING document_id::text
+	`, sourceID, actorID, claimToken, limit, expiresAt)
+	if err != nil {
+		return domain.DocumentReviewClaim{}, err
+	}
+	documentIDs := make([]string, 0, limit)
+	for rows.Next() {
+		var documentID string
+		if err := rows.Scan(&documentID); err != nil {
+			rows.Close()
+			return domain.DocumentReviewClaim{}, err
+		}
+		documentIDs = append(documentIDs, documentID)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return domain.DocumentReviewClaim{}, err
+	}
+	rows.Close()
+
+	documents := make([]domain.Document, 0, len(documentIDs))
+	if len(documentIDs) > 0 {
+		rows, err = tx.Query(ctx, `
+			SELECT `+documentColumns+`
+			FROM documents
+			WHERE id = ANY($1::uuid[])
+			ORDER BY risk_score DESC, source_ordinal ASC
+		`, documentIDs)
+		if err != nil {
+			return domain.DocumentReviewClaim{}, err
+		}
+		for rows.Next() {
+			document, err := scanDocument(rows)
+			if err != nil {
+				rows.Close()
+				return domain.DocumentReviewClaim{}, err
+			}
+			documents = append(documents, document)
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return domain.DocumentReviewClaim{}, err
+		}
+		rows.Close()
+
+		details, _ := json.Marshal(map[string]any{
+			"document_count": len(documents),
+			"expires_at":     expiresAt,
+		})
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO audit_events(actor_id, action, entity_type, entity_id, details)
+			VALUES ($1, 'documents.review_claimed', 'source', $2, $3::jsonb)
+		`, actorID, sourceID, details); err != nil {
+			return domain.DocumentReviewClaim{}, fmt.Errorf("audit document review claim: %w", err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return domain.DocumentReviewClaim{}, err
+	}
+	return domain.DocumentReviewClaim{
+		ClaimToken: claimToken,
+		ExpiresAt:  expiresAt,
+		Documents:  documents,
+	}, nil
+}
+
+func (r *Documents) RenewReviewClaim(
+	ctx context.Context,
+	claimToken, actorID string,
+) (domain.DocumentReviewClaimRenewal, error) {
+	claimToken = strings.TrimSpace(claimToken)
+	if !uuidPattern.MatchString(claimToken) {
+		return domain.DocumentReviewClaimRenewal{}, ErrClaimLost
+	}
+	rows, err := r.pool.Query(ctx, `
+		UPDATE document_review_claims AS claim
+		SET expires_at = now() + make_interval(secs => $3)
+		FROM documents AS document
+		WHERE claim.claim_token = $1::uuid
+		  AND claim.reviewer_id = $2::uuid
+		  AND claim.expires_at > now()
+		  AND document.id = claim.document_id
+		  AND document.is_active
+		  AND document.status IN ('sampled', 'edited')
+		  AND document.current_version = claim.document_version
+		RETURNING claim.expires_at
+	`, claimToken, actorID, int(documentReviewClaimLease.Seconds()))
+	if err != nil {
+		return domain.DocumentReviewClaimRenewal{}, err
+	}
+	defer rows.Close()
+	var count int64
+	var expiresAt time.Time
+	for rows.Next() {
+		if err := rows.Scan(&expiresAt); err != nil {
+			return domain.DocumentReviewClaimRenewal{}, err
+		}
+		count++
+	}
+	if err := rows.Err(); err != nil {
+		return domain.DocumentReviewClaimRenewal{}, err
+	}
+	if count == 0 {
+		return domain.DocumentReviewClaimRenewal{}, ErrClaimLost
+	}
+	return domain.DocumentReviewClaimRenewal{ExpiresAt: expiresAt, DocumentCount: count}, nil
+}
+
+func (r *Documents) ReleaseReviewClaim(ctx context.Context, claimToken, actorID string) error {
+	claimToken = strings.TrimSpace(claimToken)
+	if !uuidPattern.MatchString(claimToken) {
+		return ErrClaimLost
+	}
+	_, err := r.pool.Exec(ctx, `
+		DELETE FROM document_review_claims
+		WHERE claim_token = $1::uuid AND reviewer_id = $2::uuid
+	`, claimToken, actorID)
+	return err
 }
 
 func (r *Documents) UpdateContent(
@@ -328,6 +536,9 @@ func (r *Documents) Review(
 	if !document.IsActive {
 		return domain.Source{}, domain.Document{}, domain.DocumentReview{}, ErrConflict
 	}
+	if document.Status != "sampled" && document.Status != "edited" {
+		return domain.Source{}, domain.Document{}, domain.DocumentReview{}, ErrConflict
+	}
 	if document.CurrentVersion != input.DocumentVersion {
 		return domain.Source{}, domain.Document{}, domain.DocumentReview{}, ErrConflict
 	}
@@ -338,6 +549,9 @@ func (r *Documents) Review(
 	}
 	if sourceCreator == actorID && !allowSelfReview {
 		return domain.Source{}, domain.Document{}, domain.DocumentReview{}, ErrSelfReview
+	}
+	if err := validateReviewClaim(ctx, tx, document, input.ClaimToken, actorID); err != nil {
+		return domain.Source{}, domain.Document{}, domain.DocumentReview{}, err
 	}
 
 	nextStatus, reason, err := normalizeDocumentReview(
@@ -376,6 +590,10 @@ func (r *Documents) BulkReview(
 ) (domain.BulkDocumentReviewResult, error) {
 	if len(input.Documents) == 0 || len(input.Documents) > 200 {
 		return domain.BulkDocumentReviewResult{}, &GateError{Reasons: []string{"invalid_document_count"}}
+	}
+	input.ClaimToken = strings.TrimSpace(input.ClaimToken)
+	if !uuidPattern.MatchString(input.ClaimToken) {
+		return domain.BulkDocumentReviewResult{}, ErrClaimLost
 	}
 	nextStatus, reason, err := normalizeDocumentReview(
 		input.Decision, input.Reason, input.DocumentQualityScores,
@@ -443,6 +661,33 @@ func (r *Documents) BulkReview(
 	if len(documents) != len(documentIDs) {
 		return domain.BulkDocumentReviewResult{}, ErrNotFound
 	}
+	claimRows, err := tx.Query(ctx, `
+		SELECT claim.document_id
+		FROM document_review_claims AS claim
+		JOIN documents AS document ON document.id = claim.document_id
+		WHERE claim.document_id = ANY($1::uuid[])
+		  AND claim.reviewer_id = $2::uuid
+		  AND claim.claim_token = $3::uuid
+		  AND claim.expires_at > now()
+		  AND claim.document_version = document.current_version
+		ORDER BY claim.document_id
+		FOR UPDATE OF claim
+	`, documentIDs, actorID, input.ClaimToken)
+	if err != nil {
+		return domain.BulkDocumentReviewResult{}, err
+	}
+	claimedCount := 0
+	for claimRows.Next() {
+		claimedCount++
+	}
+	if err := claimRows.Err(); err != nil {
+		claimRows.Close()
+		return domain.BulkDocumentReviewResult{}, err
+	}
+	claimRows.Close()
+	if claimedCount != len(documentIDs) {
+		return domain.BulkDocumentReviewResult{}, ErrClaimLost
+	}
 	var lockedSourceID string
 	if err := tx.QueryRow(ctx,
 		"SELECT id::text FROM sources WHERE id = $1 FOR UPDATE", sourceID,
@@ -464,6 +709,7 @@ func (r *Documents) BulkReview(
 			Decision:              input.Decision,
 			Reason:                reason,
 			DocumentVersion:       document.CurrentVersion,
+			ClaimToken:            input.ClaimToken,
 		}
 		updated, review, err := reviewDocumentTx(
 			ctx, tx, document, reviewInput, nextStatus, reason, actorID,
@@ -509,6 +755,50 @@ func (r *Documents) BulkReview(
 	return domain.BulkDocumentReviewResult{
 		Source: source, Documents: updatedDocuments, Reviews: reviews,
 	}, nil
+}
+
+func validateReviewClaim(
+	ctx context.Context,
+	tx pgx.Tx,
+	document domain.Document,
+	claimToken, actorID string,
+) error {
+	claimToken = strings.TrimSpace(claimToken)
+	if !uuidPattern.MatchString(claimToken) {
+		return ErrClaimLost
+	}
+	var valid bool
+	if err := tx.QueryRow(ctx, `
+		SELECT true
+		FROM document_review_claims
+		WHERE document_id = $1::uuid
+		  AND reviewer_id = $2::uuid
+		  AND claim_token = $3::uuid
+		  AND document_version = $4
+		  AND expires_at > now()
+		FOR UPDATE
+	`, document.ID, actorID, claimToken, document.CurrentVersion).Scan(&valid); errors.Is(err, pgx.ErrNoRows) {
+		return ErrClaimLost
+	} else if err != nil {
+		return err
+	}
+	if !valid {
+		return ErrClaimLost
+	}
+	return nil
+}
+
+func newUUID() (string, error) {
+	value := make([]byte, 16)
+	if _, err := rand.Read(value); err != nil {
+		return "", err
+	}
+	value[6] = (value[6] & 0x0f) | 0x40
+	value[8] = (value[8] & 0x3f) | 0x80
+	return fmt.Sprintf(
+		"%08x-%04x-%04x-%04x-%012x",
+		value[0:4], value[4:6], value[6:8], value[8:10], value[10:16],
+	), nil
 }
 
 func normalizeDocumentReview(

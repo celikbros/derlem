@@ -11,6 +11,20 @@ permissions:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: derlem
+          POSTGRES_PASSWORD: derlem
+          POSTGRES_DB: derlem_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U derlem -d derlem_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
@@ -21,12 +35,29 @@ jobs:
           # satırı yok sayılırdı).
           go-version-file: go.mod
           cache: true
-      - run: go test ./...
+      - name: Test backend and migrations
+        env:
+          DERLEM_TEST_DATABASE_URL: postgres://derlem:derlem@localhost:5432/derlem_test?sslmode=disable
+        run: go test ./...
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
   worker:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: derlem
+          POSTGRES_PASSWORD: derlem
+          POSTGRES_DB: derlem_worker_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U derlem -d derlem_worker_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -35,6 +66,8 @@ jobs:
           cache: pip
       - run: python -m pip install -e "worker[dev]"
       - run: python -m pytest worker/tests
+        env:
+          DERLEM_TEST_DATABASE_URL: postgresql://derlem:derlem@localhost:5432/derlem_worker_test?sslmode=disable
       - name: pip-audit
         run: |
           python -m pip install pip-audit

@@ -153,16 +153,22 @@ def snapshot_counts(database_url: str) -> dict[str, int]:
         import psycopg
     except ImportError:
         return {}
+    # Sayım listesi restore tatbikatının doğrulama tabanıdır: burada olmayan bir
+    # tablodaki sessiz kayıp tatbikatta yakalanmaz. Bu yüzden liste sabit değil,
+    # şemadan türetilir — yeni migration bir tablo eklediğinde otomatik kapsanır.
+    # (Yedeğin kendisi zaten tam: pg_dump tabloyu filtrelemez.)
     counts: dict[str, int] = {}
-    tables = (
-        "users", "sources", "storage_objects", "documents", "document_versions",
-        "document_reviews", "reviews", "pii_scans", "releases", "release_sources",
-        "release_exports", "background_jobs", "audit_events",
-        "similarity_calibration_runs", "similarity_review_pairs", "similarity_pair_reviews",
-    )
     with psycopg.connect(database_url) as connection, connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+            ORDER BY table_name
+            """
+        )
+        tables = [str(row[0]) for row in cursor.fetchall()]
         for table in tables:
-            cursor.execute(f"SELECT count(*) FROM {table}")
+            cursor.execute(f'SELECT count(*) FROM "{table}"')
             counts[table] = int(cursor.fetchone()[0])
     return counts
 

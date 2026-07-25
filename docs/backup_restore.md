@@ -26,8 +26,10 @@ Ne yapar:
    ile şifreler ve düz kopyayı siler. Manifest'e hem şifreli hem düz SHA256 yazılır.
 2. Object store aynasını **artımlı** günceller: içerik adresli olduğu için var
    olan nesne kopyalanmaz ve **asla silinmez** (yanlışlıkla silmeye karşı doğal koruma).
-3. `var/reports` kopyalanır; 16 tablonun satır sayımı ve tüm çıktıların özeti
-   `manifests/backup_<zaman>.json` dosyasına yazılır.
+3. `var/reports` kopyalanır; **şemadaki tüm tabloların** satır sayımı ve tüm çıktıların
+   özeti `manifests/backup_<zaman>.json` dosyasına yazılır. Liste sabit değildir,
+   `information_schema`'dan türetilir — yeni migration bir tablo eklediğinde
+   doğrulama kapsamı kendiliğinden genişler.
 
 Not: `var/derived` yedeğe alınmaz; temiz aday deterministik olarak yeniden
 üretilebilir ve kendisi zaten object store'da bir nesnedir.
@@ -43,7 +45,7 @@ Ne doğrular (herhangi biri tutmazsa çıkış kodu 1):
 
 1. Şifreli dump çözülür; düz SHA256 manifest ile karşılaştırılır.
 2. Dump, **ayrı** `derlem_restore_drill` veritabanına geri yüklenir (canlı DB'ye
-   asla dokunulmaz); 16 tablonun sayımı yedek anındaki manifestle birebir
+   asla dokunulmaz); **tüm tabloların** sayımı yedek anındaki manifestle birebir
    karşılaştırılır.
 3. Yedek aynasındaki **her nesnenin** SHA256'sı yeniden hesaplanır ve dosya
    adıyla doğrulanır (bit çürümesi/bozulma kontrolü).
@@ -76,3 +78,13 @@ Ne doğrular (herhangi biri tutmazsa çıkış kodu 1):
 | Tarih | Yedek | Sonuç | Kanıt |
 |---|---|---|---|
 | 2026-07-06 | `backup_20260705_213712` (şifreli dump + 724 nesne, 25 GB) | **PASS** — 16 tablo sayımı birebir; 724/724 nesne SHA256 doğru; katalog + frozen manifest zinciri tam; süre ~6 dk | `D:\DERLEM-BACKUP\manifests\restore_drill_20260705_213916.json` |
+
+> **Bu kaydın sınırı (2026-07-26'da eklendi).** Yukarıdaki PASS damgası o günkü kod
+> gereği yalnız **16 tabloyu** karşılaştırdı; `document_fingerprints`,
+> `document_sample_memberships`, `document_sample_generations`, `roles`, `user_roles`
+> ve `contributions` doğrulama dışındaydı. Sayım listesi 07-26'da şemadan türetilecek
+> şekilde düzeltildi; bundan sonraki tatbikatlar tüm tabloları kapsar.
+>
+> **Ayrıca:** kanıt dosyasının yolu (`D:\DERLEM-BACKUP`) bugün erişilemiyor — bu makinede
+> D: sürücüsü yok. Yedek kökünün nerede tutulacağı açık bir karardır; 2026-07-16'daki
+> depo kaybı bu boşlukta yaşandı (bkz. [veri_kurtarma_2026_07.md](veri_kurtarma_2026_07.md)).

@@ -21,11 +21,14 @@ hash ile ispatlanabilir bir işlemdir; kimlik değişmediği için kayıtlar ken
 | 5 | Örneklenen 300 belge nesnesi (200 aktif + 100 superseded), temiz adaydan satır sırasıyla yeniden üretildi (`sample_jobs` tarifi: `strip → _document_from_line → text.encode("utf-8")`) | **300/300 SHA tuttu · 0 uyuşmazlık · 0 bulunamayan** |
 | 6 | Depodan okunan belge metinleri denetlendi | karakter sayıları `documents.char_count` ile birebir; Türkçe metin sağlam |
 
-**Bugünkü depo durumu:** 302/742 nesne yerinde (26,42 GB = kayıtlı hacmin ~%100'ü).
-Eksik kalan 440 nesnenin tamamı **smoke/test verisidir** (Risk Sampling Smoke 200 belge,
-Resample 20, distilasyon/extraction/UI smoke kayıtları). Faz-2 teslimatı için gerekli
-nesnelerin **tamamı hazırdır**; smoke artıkları geri getirilmedi (kaynak dosyaları da yok,
-üretim değeri yok). Bu bilinçli bir karardır, eksiklik değil.
+**Depo durumu (07-25 akşamı):** 302/742 nesne yerinde (26,42 GB = kayıtlı hacmin ~%100'ü).
+Faz-2 teslimatı için gerekli nesnelerin tamamı hazırdı.
+
+> **DÜZELTME (2026-07-26).** Bu belgenin ilk hâli "eksik kalan 440 nesnenin tamamı
+> smoke/test verisidir" diyordu. **Bu yanlıştı.** Ölçüm, 440'ın içinde smoke olmayan
+> denetim artefaktları bulunduğunu gösterdi: **7 frozen release'in 7 manifesti**, 3 export
+> manifesti, 2 export gövdesi ve 2 benzerlik kalibrasyon raporu. Bunlar v0.1 kilometre
+> taşının kanıtıdır. Hepsi 07-26'da geri getirildi; ayrıntı aşağıda.
 
 ## Yan bulgu — "224 satır farkı" AÇIKLANDI
 
@@ -45,6 +48,50 @@ yazıyor; ilk koşuda toplanmadığı için açıklanamamış görünüyordu. **
 
 PII dağılımı (yeniden üretim, ilk koşuyla aynı): telefon 114.437 · e-posta 86.435 ·
 kart 13.830 · IBAN 2.087 · TCKN 665 bulgu (satır bazında: 52.727 / 50.957 / 10.520 / 1.423 / 362).
+
+## İkinci faz — denetim artefaktlarının kurtarılması (2026-07-26)
+
+Kalan 440 nesne yeniden incelendi. **18 nesne geri getirildi**, depo 302 → **320/742**
+oldu. Kalan 422 eksik nesnenin toplamı yalnızca **394 KB'dir** (büyük dosyalar zaten
+birinci fazda yerine konmuştu).
+
+| Artefakt | Durum | Yöntem |
+|---|---|---|
+| 7 frozen release manifesti | **7/7 yerinde** | Veritabanından deterministik yeniden üretim |
+| 3 export manifesti | **3/3 yerinde** | v1 şeması: DB'den üretim · v2 şeması: DB + gövdeden üretim |
+| 3 export gövdesi | **3/3 yerinde** | OneDrive yedeğinden (SHA256 doğrulamalı) |
+| 2 benzerlik kalibrasyon raporu | **yerinde** | OneDrive yedeğinden |
+| 4 muhtelif (distilasyon staging, yükleme parçası) | yerinde | OneDrive yedeğinden |
+
+**Yöntem 1 — veritabanından yeniden üretim.** `build_release_manifest()` saf bir
+fonksiyondur; girdilerinin tamamı (release satırı, `release_sources` anlık görüntüsü,
+`gate_results` jsonb, `frozen_at`) veritabanında durur ve katalog hiç kaybolmamıştı.
+Serileştirme deterministiktir (`sort_keys=True`, sabit ayraçlar, UTF-8). Yedi manifestin
+yedisi de üretildi ve **kayıtlı `manifest_sha256` ile bayt-bayt eşleşti**.
+
+**Yöntem 2 — OneDrive yedeği.** `C:\Users\alice\OneDrive\aaaaaaa yedek\CELIKBROS PROJECTS\derlem`
+altındaki yedek **16 Temmuz 17:45** tarihlidir; `var/` ağacının silinmesinden (22:44)
+yaklaşık 5 saat önce alınmış olduğu için kayıp dosyaların bir kısmını taşıyordu. Yedek
+ağacı (1896 dosya) boyut filtresiyle taranıp aday dosyalar hash'lendi; 12 nesne SHA256
+ile birebir eşleşti.
+
+**Çapraz doğrulama.** İki yöntem 3 manifestte kesişti (`near-dedup-smoke`,
+`quality-mixture-smoke`, `quality-mixture-v2-smoke`). Yedekteki dosyalar orijinal freeze
+işinin ürünü; veritabanından üretilenler onlarla aynı hash'i verdi. Yani yeniden üretim
+yöntemi bağımsız olarak doğrulanmıştır — varsayım değildir.
+
+**Kalan 422 nesne** (394 KB): 414 smoke belge nesnesi, 5 küçük metin, 3 küçük JSON.
+Üretim değeri yoktur; kaynak dosyaları da bulunmadığı için yeniden üretilemezler.
+Bu, ölçülmüş bir karardır — birinci fazdaki gibi varsayım değil.
+
+**Yedekleme doğrulama boşluğu (kayda geçer):** `deploy/scripts/derlem_backup.py`
+`snapshot_counts()` yalnız 16 tablo sayıyordu; veritabanında 26 tablo var. **Yedeğin
+içeriği eksik değildi** — `pg_dump --format=custom` tabloyu filtrelemez, tüm veritabanını
+döker. Eksik olan **doğrulamaydı**: 2026-07-06 tatbikatının "16 tablo birebir" damgası,
+`document_fingerprints` (11,9M satır), `document_sample_memberships`,
+`document_sample_generations`, `roles`, `user_roles` ve `contributions` tablolarını hiç
+karşılaştırmıyordu. Yani bu tablolardaki sessiz bir kayıp tatbikatta yakalanamazdı.
+Sayım listesi 07-26'da 26 tabloya tamamlandı.
 
 ## Öğrenilen ders (kayda geçer)
 

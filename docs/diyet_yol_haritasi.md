@@ -25,6 +25,16 @@ bürokrasiyi budar.
 
 **Ölçüt:** Gerçek teslimat sayısı 0 → 1. DGX Spark v1 girdisi verilmiş olur.
 
+**Durum güncellemesi (2026-07-25) — VERİ KAYBI ve KURTARMA:** 2026-07-16'da içerik
+adresli depo boşalmıştı (742/742 nesne, 26,42 GB); katalog etkilenmemişti. Bu tarihte
+"frozen release beklemeye dayanıklıdır" varsayımı fiilen GEÇERSİZDİ — donduracak nesne
+diskte yoktu. Faz-2 zinciri bayt-bayt geri getirildi ve SHA'larla doğrulandı
+(bkz. [veri_kurtarma_2026_07.md](veri_kurtarma_2026_07.md)); teslimat için gereken
+nesnelerin tamamı yerinde. **Tek bloker yine 200 örnek incelemesi** — artık teknik
+engel YOK, belgelerin tam metni erişilebilir. Tüketici tarafı değişti: Gardash eğitimi
+yeni `afacan` projesinde yürüyor ve zincirini (tokenize → eğitim → .gpk → motor) uçtan
+uca kanıtladı; teslimatı bekleyen taraf artık DGX değil, Afacan'ın pilot koşusudur.
+
 **Durum güncellemesi (2026-07-12):** DGX Spark donanımı gecikti; Gardash
 teslimatı beklemeye alındı (sahip kararı). Faz 0 artık takvim-kritik DEĞİL.
 Teslimat yine kapatılır (frozen release beklemeye dayanıklıdır; donanım

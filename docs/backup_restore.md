@@ -17,8 +17,21 @@
 
 ```powershell
 $env:BACKUP_PASSPHRASE = '<kasadaki parola>'
-.\.venv\Scripts\python.exe deploy\scripts\derlem_backup.py --backup-root D:\DERLEM-BACKUP --passphrase-env BACKUP_PASSPHRASE
+.\.venv\Scripts\python.exe deploy\scripts\derlem_backup.py `
+  --backup-root "$env:OneDrive\Derlem Yedek" `
+  --pg-bin "C:\Program Files\PostgreSQL\18\bin" `
+  --passphrase-env BACKUP_PASSPHRASE
 ```
+
+**Yedek kökü (2026-07-29 itibarıyla): `%OneDrive%\Derlem Yedek`.** Önceki runbook
+`D:\DERLEM-BACKUP` diyordu; o sürücü bu makinede yok (2026-07-16 depo kaybı bu boşlukta
+yaşandı). Google Drive denendi ve **yetmedi** — 15 GB'lık kotanın 9,3 GB'ı doluydu, ayna
+ise 26,4 GB. OneDrive geniş plan olduğu için hedef oraya alındı.
+
+> **Uyarı — aynı sepet riski.** OneDrive hem yedeği hem Faz-2 ham kaynaklarını taşıyor.
+> Ham kaynaklar, iki büyük corpus nesnesinin (13,57 + 12,85 GB) deterministik yeniden
+> üretim girdisidir; ikisi aynı yerde durduğu sürece bu bir tek-nokta-arızasıdır.
+> Offsite/ikinci kopya `SEC-P0-06`'nın açık ayağı olarak kalıyor.
 
 Ne yapar:
 
@@ -38,7 +51,10 @@ Not: `var/derived` yedeğe alınmaz; temiz aday deterministik olarak yeniden
 
 ```powershell
 $env:BACKUP_PASSPHRASE = '<kasadaki parola>'
-.\.venv\Scripts\python.exe deploy\scripts\derlem_restore_drill.py --backup-root D:\DERLEM-BACKUP --passphrase-env BACKUP_PASSPHRASE
+.\.venv\Scripts\python.exe deploy\scripts\derlem_restore_drill.py `
+  --backup-root "$env:OneDrive\Derlem Yedek" `
+  --pg-bin "C:\Program Files\PostgreSQL\18\bin" `
+  --passphrase-env BACKUP_PASSPHRASE
 ```
 
 Ne doğrular (herhangi biri tutmazsa çıkış kodu 1):
@@ -53,6 +69,15 @@ Ne doğrular (herhangi biri tutmazsa çıkış kodu 1):
    release manifest nesnesinin yedekte var olduğu kanıtlanır (zincir bütünlüğü).
 5. Rapor `manifests/restore_drill_<zaman>.json` olarak yazılır; tatbikat
    veritabanı silinir (`--keep` ile korunabilir).
+
+> **4. maddenin bilinen sonucu:** 2026-07-16 kaybından geriye kalan 422 nesne
+> (394 KB, tamamı smoke artığı) katalogda kayıtlı ama hiçbir yerde yok. Zincir
+> kontrolü bunları haklı olarak işaretlediği için tatbikat **kalıcı olarak FAIL
+> döner** — yedeğin kalitesinden bağımsız. Bu, gerçek bir arızayı gizleyebilecek
+> bir "sürekli kırmızı alarm" durumudur; çözümü ya bu 422 katalog kaydının
+> uzlaştırılması ya da tatbikata "bilinen-kayıp" listesi eklenmesidir. Karar
+> verilene kadar tatbikat raporu **sorun sayısı 422 ve hepsi
+> `katalog nesnesi yedekte yok` tipinde** ise BAŞARILI kabul edilmelidir.
 
 ## Gerçek felakette geri dönüş
 
@@ -78,6 +103,15 @@ Ne doğrular (herhangi biri tutmazsa çıkış kodu 1):
 | Tarih | Yedek | Sonuç | Kanıt |
 |---|---|---|---|
 | 2026-07-06 | `backup_20260705_213712` (şifreli dump + 724 nesne, 25 GB) | **PASS** — 16 tablo sayımı birebir; 724/724 nesne SHA256 doğru; katalog + frozen manifest zinciri tam; süre ~6 dk | `D:\DERLEM-BACKUP\manifests\restore_drill_20260705_213916.json` |
+| 2026-07-29 | `backup_20260729_172433` (**şifresiz** dump 539 MB + 320 nesne, 26,42 GB) | **Koşullu geçer** — 26/26 tablo sayımı birebir (ilk kez tam kapsam); 320/320 nesne SHA256 doğru, 0 bozulma; zincir kontrolü 422 nesne için "yedekte yok" dedi ve bunlar diskte zaten eksik olan 422 nesnenin **birebir aynısı** (07-16 kaybı, tamamı smoke, 394 KB). Yedek 1 dk 22 sn, tatbikat 8 dk 18 sn | `%OneDrive%\Derlem Yedek\manifests\restore_drill_20260729_172618.json` |
+
+**2026-07-29 tatbikatının açık kalan iki maddesi:**
+
+1. **Dump şifresiz.** Yedek buluta (OneDrive) senkronlanıyor ve dump `users` tablosunu,
+   yani parola özetlerini içeriyor. Runbook şifrelemeyi öngörüyor (`--passphrase-env`),
+   `openssl 3.5.7` makinede mevcut. Parola sahibi tarafından belirlenip kasaya konduktan
+   sonra yedek şifreli olarak yeniden alınmalıdır.
+2. **Kalıcı FAIL** (yukarıdaki 4. madde notu) — 422 orphan katalog kaydı için karar bekliyor.
 
 > **Bu kaydın sınırı (2026-07-26'da eklendi).** Yukarıdaki PASS damgası o günkü kod
 > gereği yalnız **16 tabloyu** karşılaştırdı; `document_fingerprints`,

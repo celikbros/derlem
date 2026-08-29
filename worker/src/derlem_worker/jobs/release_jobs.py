@@ -138,7 +138,11 @@ class ReleaseJobsMixin:
                 release_paths,
                 max_document_bytes=self.config.max_document_bytes,
             )
-            if decontamination.status != "passed":
+            # Yalniz GERCEK bir eslesme freeze'i durdurur. "not_evaluated"
+            # (referans kumesi bos) durdurmaz -- durumu manifeste durustce
+            # yazip devam eder; aksi halde eval/holdout kaynagi alinmadan
+            # hicbir pretrain release'i dondurulemezdi.
+            if decontamination.status == "blocked":
                 raise ReleaseGateError(
                     "Eval or holdout content was found in the pretrain release",
                     {"decontamination": decontamination.to_dict()},

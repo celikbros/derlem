@@ -33,6 +33,24 @@ def test_exact_decontamination_blocks_matching_document(tmp_path: Path) -> None:
     assert result.sample_matches[0].source_ordinal == 2
 
 
+def test_exact_decontamination_reports_not_evaluated_without_references(tmp_path: Path) -> None:
+    """Referans kumesi bosken 'passed' yazilmamali.
+
+    Frozen manifest degismez; hak edilmemis bir "dekontaminasyon gecti" muhru
+    geri alinamaz. Bos referans durust bir etiket almali.
+    """
+    release = tmp_path / "pretrain.txt"
+    release.write_text("egitim belgesi\n", encoding="utf-8")
+
+    result = exact_decontamination([], [("p" * 64, release)], max_document_bytes=1024)
+
+    assert result.status == "not_evaluated"
+    assert result.reference_source_count == 0
+    assert result.match_count == 0
+    # Release tarafi yine sayilmis olmali; dokum kaybolmasin.
+    assert result.release_document_count == 1
+
+
 def test_exact_decontamination_passes_without_overlap(tmp_path: Path) -> None:
     reference = tmp_path / "holdout.txt"
     release = tmp_path / "pretrain.txt"

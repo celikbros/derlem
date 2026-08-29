@@ -184,8 +184,20 @@ def exact_decontamination(
         finally:
             connection.close()
 
+    if not references:
+        # Referans kumesi bos: karsilastirilacak hicbir sey yoktu. Burada
+        # "passed" yazmak frozen manifeste hak edilmemis bir "dekontaminasyon
+        # gecti" muhru basar ve manifest degismez oldugu icin geri alinamaz.
+        # Yanibasindaki approximate kapi ayni durumda zaten durust davraniyor
+        # (not_applicable + no_eval_or_holdout_sources); tutarsizlik bizdeydi.
+        # reference_source_count = 0 da manifeste yaziliyor, yani etiket ile
+        # sayac birbirini dogruluyor.
+        status = "not_evaluated"
+    else:
+        status = "passed" if match_count == 0 else "blocked"
+
     return DecontaminationResult(
-        status="passed" if match_count == 0 else "blocked",
+        status=status,
         method="document-text-sha256-v1",
         reference_source_count=len(references),
         reference_document_count=reference_document_count,

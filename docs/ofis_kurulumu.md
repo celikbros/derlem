@@ -61,6 +61,31 @@ yeniden çalıştırılmalıdır.
 
 ## 3. Hesap ritüeli (admin, ~2 dakika/kişi)
 
+> ### ⚠️ Önce yapılacak: yedeği şifreleyin (geri dönüşü olmayan eşik)
+>
+> Buradaki **ilk gerçek hesabı açtığınız an** veritabanı gerçek parola özetleri
+> taşımaya başlar. Yedek aracı veritabanının tamamını kopyaladığı için bu
+> özetler yedeğe de girer.
+>
+> Bugüne kadar bu bir sorun değildi: sistemdeki 8 hesabın hepsi
+> `@derlem.local` yerel test hesabıydı ve parolaları zaten giriş ekranında
+> yazıyordu — korunacak bir sır yoktu. Gerçek kişiler için durum değişir.
+> İnsanlar parolalarını başka yerlerde de kullanır; sızan bir özetin zararı
+> Derlem ile sınırlı kalmaz.
+>
+> **İlk gerçek hesabı açmadan önce, sırayla:**
+>
+> 1. Bir yedek parolası belirleyin ve **kasaya / parola yöneticisine yazın.**
+>    Bu parolayı kaybederseniz yedek kurtarılamaz hale gelir — şifresiz yedekten
+>    daha kötü bir sonuçtur.
+> 2. Yedeği şifreli olarak yeniden alın:
+>    [Backup/Restore](backup_restore.md) → `--passphrase-env BACKUP_PASSPHRASE`.
+> 3. Şifresiz eski dump'ı (`db/derlem_*.dump`) silin; şifreli sürüm `.dump.enc`
+>    uzantısıyla gelir.
+>
+> Ayrıca bölüm **2d**'deki kontrolü yapın: giriş ekranındaki test hesabı
+> kartları kapalı olmalı. İki iş de aynı eşiğin parçasıdır.
+
 Hesaplar **Kullanıcılar** ekranından tek tek açılır. Önce kağıt üstünde şu
 tabloyu doldurun:
 
@@ -131,7 +156,8 @@ Yine de sözlü özet isterseniz:
   varsayımıdır.
 - Kullanıcı kendi parolasını değiştiremez; parola yönetimi admin'dedir.
 - Bu kurulum tek makinedir: yedekleme sorumluluğu sunucu sahibindedir
-  ([Backup/Restore](backup_restore.md)).
+  ([Backup/Restore](backup_restore.md)). **Gerçek hesap açılmışsa yedek şifreli
+  olmalıdır** — bölüm 3'ün başındaki eşiğe bakın.
 - İnternete açılacaksa: TLS, gerçek secret yönetimi ve
   [Production Deployment](production_deployment.md) + güvenlik backlog'u
   zorunludur.

@@ -107,10 +107,14 @@ Ne doğrular (herhangi biri tutmazsa çıkış kodu 1):
 
 **2026-07-29 tatbikatının açık kalan iki maddesi:**
 
-1. **Dump şifresiz.** Yedek buluta (OneDrive) senkronlanıyor ve dump `users` tablosunu,
-   yani parola özetlerini içeriyor. Runbook şifrelemeyi öngörüyor (`--passphrase-env`),
-   `openssl 3.5.7` makinede mevcut. Parola sahibi tarafından belirlenip kasaya konduktan
-   sonra yedek şifreli olarak yeniden alınmalıdır.
+1. **Dump şifresiz — bugün kabul, ilk gerçek hesapta değil.** Yedek buluta (OneDrive)
+   senkronlanıyor ve dump `users` tablosunu, yani parola özetlerini içeriyor. Bugün bu
+   bilinçli bir kabuldür: tablodaki 8 hesabın hepsi `@derlem.local` yerel test hesabıdır
+   ve parolaları giriş ekranında zaten görünür — şifreleme koruyacak bir sır bulamaz,
+   buna karşılık kaybedilebilecek bir parola ekler. **Eşik, ilk gerçek kullanıcı
+   hesabının açılmasıdır**; o noktada şifreleme zorunlu hale gelir
+   (bkz. [Ofis Kurulumu](ofis_kurulumu.md) bölüm 3). Araçlar hazır:
+   `--passphrase-env` destekleniyor ve `openssl 3.5.7` makinede mevcut.
 2. **Kalıcı FAIL** (yukarıdaki 4. madde notu) — 422 orphan katalog kaydı için karar bekliyor.
 
 > **Bu kaydın sınırı (2026-07-26'da eklendi).** Yukarıdaki PASS damgası o günkü kod

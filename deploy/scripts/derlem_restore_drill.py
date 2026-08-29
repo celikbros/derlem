@@ -112,11 +112,34 @@ def verify_objects(backup_objects: Path) -> tuple[int, list[str]]:
     return checked, problems
 
 
-def verify_catalog_chain(drill_url: str, backup_objects: Path) -> tuple[int, list[str]]:
+def load_known_lost(path: Path) -> set[str]:
+    """2026-07-16 kaybindan kalan, kalici kayip kabul edilmis nesneler.
+
+    Amac tatbikatin ise yarar kalmasidir: bu nesneler sorun sayilmaz, ama
+    listede OLMAYAN yeni bir kayip yine BASARISIZ dondurur. Dosya yoksa
+    kume bostur, yani davranis eskisi gibi kati kalir.
+    """
+    if not path.exists():
+        return set()
+    known: set[str] = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.split("#", 1)[0].strip()
+        if len(line) == 64 and all(c in "0123456789abcdef" for c in line):
+            known.add(line)
+    return known
+
+
+def verify_catalog_chain(
+    drill_url: str,
+    backup_objects: Path,
+    known_lost: set[str] | None = None,
+) -> tuple[int, int, list[str]]:
     import psycopg
 
+    known_lost = known_lost or set()
     problems: list[str] = []
     referenced = 0
+    known_lost_hits = 0
     with psycopg.connect(drill_url) as connection, connection.cursor() as cursor:
         cursor.execute("SELECT sha256 FROM storage_objects")
         hashes = [row[0] for row in cursor.fetchall()]
@@ -124,14 +147,22 @@ def verify_catalog_chain(drill_url: str, backup_objects: Path) -> tuple[int, lis
         releases = cursor.fetchall()
     for digest in hashes:
         referenced += 1
+        digest = str(digest).strip()
         candidate = backup_objects / "sha256" / digest[:2] / digest[2:4] / digest
-        if not candidate.exists():
-            problems.append(f"katalog nesnesi yedekte yok: {digest}")
+        if candidate.exists():
+            continue
+        if digest in known_lost:
+            known_lost_hits += 1
+            continue
+        problems.append(f"katalog nesnesi yedekte yok: {digest}")
+    # Frozen release manifestleri denetim artefaktidir: bunlar known-lost
+    # listesiyle AFFEDILMEZ, eksikse her zaman sorun sayilir.
     for name, version, digest in releases:
+        digest = str(digest).strip()
         candidate = backup_objects / "sha256" / digest[:2] / digest[2:4] / digest
         if not candidate.exists():
             problems.append(f"frozen manifest nesnesi yedekte yok: {name}-{version} {digest}")
-    return referenced, problems
+    return referenced, known_lost_hits, problems
 
 
 def main() -> None:
@@ -179,7 +210,10 @@ def main() -> None:
         problems += verify_counts(drill_url, dict(manifest.get("table_counts", {})))
         checked_objects, object_problems = verify_objects(backup_root / "objects")
         problems += object_problems
-        referenced, chain_problems = verify_catalog_chain(drill_url, backup_root / "objects")
+        known_lost = load_known_lost(repo_root / "deploy" / "known_lost_objects.txt")
+        referenced, known_lost_hits, chain_problems = verify_catalog_chain(
+            drill_url, backup_root / "objects", known_lost
+        )
         problems += chain_problems
     finally:
         if not args.keep:
@@ -193,6 +227,8 @@ def main() -> None:
         "tables_verified": len(dict(manifest.get("table_counts", {}))),
         "backup_objects_rehashed": checked_objects,
         "catalog_objects_checked": referenced,
+        "known_lost_objects_declared": len(known_lost),
+        "known_lost_objects_hit": known_lost_hits,
         "problems": problems,
         "result": "PASS" if not problems else "FAIL",
     }

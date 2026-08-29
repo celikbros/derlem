@@ -28,6 +28,16 @@ $env:BACKUP_PASSPHRASE = '<kasadaki parola>'
 yaşandı). Google Drive denendi ve **yetmedi** — 15 GB'lık kotanın 9,3 GB'ı doluydu, ayna
 ise 26,4 GB. OneDrive geniş plan olduğu için hedef oraya alındı.
 
+> **Uyarı — nesne aynası buluta taşınıyor (ölçüldü 2026-08-29).** OneDrive "Files
+> On-Demand", yedek alındıktan bir ay sonra 320 nesnenin **294'ünü (24,61 GB)**
+> yerelden kaldırıp `RECALL_ON_DATA_ACCESS` (yalnızca-bulut) hâline getirmişti.
+> Dosyalar kaybolmuş değil, ama **yerel ikinci kopya fiilen yok**: her doğrulama ve
+> her gerçek restore önce 24,6 GB'ı yeniden indirir. Bunun iki sonucu var:
+> (1) aylık tatbikat artık ücretsiz değil, (2) "yerel + bulut iki kopya" varsayımı
+> geçersiz. Yerel kopya isteniyorsa klasör OneDrive'da *"Bu cihazda her zaman tut"*
+> olarak işaretlenmelidir (24,6 GB yerel disk tutar). Dump ve manifest dosyaları
+> yerel kaldı; taşınan yalnız `objects/` aynasıdır.
+>
 > **Uyarı — aynı sepet riski.** OneDrive hem yedeği hem Faz-2 ham kaynaklarını taşıyor.
 > Ham kaynaklar, iki büyük corpus nesnesinin (13,57 + 12,85 GB) deterministik yeniden
 > üretim girdisidir; ikisi aynı yerde durduğu sürece bu bir tek-nokta-arızasıdır.
@@ -70,14 +80,28 @@ Ne doğrular (herhangi biri tutmazsa çıkış kodu 1):
 5. Rapor `manifests/restore_drill_<zaman>.json` olarak yazılır; tatbikat
    veritabanı silinir (`--keep` ile korunabilir).
 
-> **4. maddenin bilinen sonucu:** 2026-07-16 kaybından geriye kalan 422 nesne
-> (394 KB, tamamı smoke artığı) katalogda kayıtlı ama hiçbir yerde yok. Zincir
-> kontrolü bunları haklı olarak işaretlediği için tatbikat **kalıcı olarak FAIL
-> döner** — yedeğin kalitesinden bağımsız. Bu, gerçek bir arızayı gizleyebilecek
-> bir "sürekli kırmızı alarm" durumudur; çözümü ya bu 422 katalog kaydının
-> uzlaştırılması ya da tatbikata "bilinen-kayıp" listesi eklenmesidir. Karar
-> verilene kadar tatbikat raporu **sorun sayısı 422 ve hepsi
-> `katalog nesnesi yedekte yok` tipinde** ise BAŞARILI kabul edilmelidir.
+### Bilinen kayıp nesneler (4. maddenin ayarı)
+
+2026-07-16 kaybından geriye kalan 422 nesne (394 KB, tamamı smoke artığı) katalogda
+kayıtlı ama hiçbir yerde yok. Zincir kontrolü bunları haklı olarak işaretliyordu ve
+tatbikat **kalıcı olarak FAIL** dönüyordu — yedeğin kalitesinden bağımsız olarak.
+Sürekli kırmızı yanan bir alarm, bir gün gerçek bir arızayı gizler.
+
+Çözüm (2026-08-29): [`deploy/known_lost_objects.txt`](../deploy/known_lost_objects.txt).
+Zincir kontrolü bu listedeki nesneleri sorun saymaz, **ama listede olmayan yeni bir
+kayıp yine BAŞARISIZ döndürür.** Yani alarm sessizleşmez, yalnız bilinen gürültüden
+arınır. Ölçülen etki: `422 sorun → 0 sorun`, `known_lost_objects_hit: 422`.
+
+Kurallar:
+
+- **Frozen release manifestleri bu listeyle affedilmez.** Denetim artefaktı oldukları
+  için eksiklerse her zaman sorun sayılırlar (kodda ayrı döngü).
+- Bir nesne sonradan bulunup depoya konursa listeden **silinmelidir**.
+- Listeye satır eklemek, bir veri kaybını **kalıcı kabul etmek** demektir; ancak
+  kurtarma denenip tükendikten sonra yapılır. Dosyanın başlığı gerekçeyi taşır.
+- Dosya yoksa küme boştur; davranış eskisi gibi katı kalır.
+
+Rapora iki alan eklendi: `known_lost_objects_declared` ve `known_lost_objects_hit`.
 
 ## Gerçek felakette geri dönüş
 
@@ -105,6 +129,8 @@ Ne doğrular (herhangi biri tutmazsa çıkış kodu 1):
 | 2026-07-06 | `backup_20260705_213712` (şifreli dump + 724 nesne, 25 GB) | **PASS** — 16 tablo sayımı birebir; 724/724 nesne SHA256 doğru; katalog + frozen manifest zinciri tam; süre ~6 dk | `D:\DERLEM-BACKUP\manifests\restore_drill_20260705_213916.json` |
 | 2026-07-29 | `backup_20260729_172433` (**şifresiz** dump 539 MB + 320 nesne, 26,42 GB) | **Koşullu geçer** — 26/26 tablo sayımı birebir (ilk kez tam kapsam); 320/320 nesne SHA256 doğru, 0 bozulma; zincir kontrolü 422 nesne için "yedekte yok" dedi ve bunlar diskte zaten eksik olan 422 nesnenin **birebir aynısı** (07-16 kaybı, tamamı smoke, 394 KB). Yedek 1 dk 22 sn, tatbikat 8 dk 18 sn | `%OneDrive%\Derlem Yedek\manifests\restore_drill_20260729_172618.json` |
 
+| 2026-08-29 | `backup_20260729_172433` (aynı yedek, bir ay sonra) | **Kısmi doğrulama — geçti.** `pg_restore` çıkış kodu 0; 26/26 tablo sayımı yedek manifestiyle birebir → **yedek geri yüklenebilir.** Zincir kontrolü bilinen-kayıp listesiyle **0 sorun** (422 bilinen-kayıp eşleşmesi). **Nesne yeniden-hash'leme KOŞULMADI:** 320 nesnenin 294'ü (24,61 GB) OneDrive tarafından buluta taşınmıştı; 24,6 GB indirme gerektirdiği için atlandı. Klasör sonradan *"bu cihazda her zaman tut"* olarak sabitlendi | bu belge (ayrı rapor dosyası üretilmedi — tam tatbikat değil) |
+
 **2026-07-29 tatbikatının açık kalan iki maddesi:**
 
 1. **Dump şifresiz — bugün kabul, ilk gerçek hesapta değil.** Yedek buluta (OneDrive)
@@ -115,7 +141,10 @@ Ne doğrular (herhangi biri tutmazsa çıkış kodu 1):
    hesabının açılmasıdır**; o noktada şifreleme zorunlu hale gelir
    (bkz. [Ofis Kurulumu](ofis_kurulumu.md) bölüm 3). Araçlar hazır:
    `--passphrase-env` destekleniyor ve `openssl 3.5.7` makinede mevcut.
-2. **Kalıcı FAIL** (yukarıdaki 4. madde notu) — 422 orphan katalog kaydı için karar bekliyor.
+2. ~~**Kalıcı FAIL** — 422 orphan katalog kaydı için karar bekliyor.~~
+   **Kapandı (2026-08-29):** `deploy/known_lost_objects.txt` eklendi; zincir kontrolü
+   422 → 0 sorun veriyor ve yeni kayıplar hâlâ yakalanıyor. Yukarıdaki
+   *Bilinen kayıp nesneler* bölümüne bakın.
 
 > **Bu kaydın sınırı (2026-07-26'da eklendi).** Yukarıdaki PASS damgası o günkü kod
 > gereği yalnız **16 tabloyu** karşılaştırdı; `document_fingerprints`,

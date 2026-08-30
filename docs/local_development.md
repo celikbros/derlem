@@ -76,7 +76,33 @@ Set-Location web
 npm run dev
 ```
 
-Arayuz `http://localhost:3000`, API `http://localhost:8080` adresindedir.
+Arayuz `http://localhost:18400`, API `http://localhost:18401` adresindedir.
+
+## Port sozlesmesi: 18400-18409
+
+**Derlem asla standart/yaygin port kullanmaz.** Bu bir tercih degil, olculmus bir
+zorunluluk: bu makinede `:8080`'i `examentor`, bir donem `:3000`'i `bioexamine`
+tutuyordu ve Derlem baslatilinca hangi servise gittigi belirsizlesiyordu.
+
+| Port | Servis |
+|---|---|
+| **18400** | Web (Next.js) |
+| **18401** | Go API |
+| 18402-18409 | Derlem'e ayrildi (worker metrikleri, ikinci ortam vb.) |
+
+Kurallar:
+
+- **49152 ve ustu KULLANILMAZ.** Windows'un dinamik port araligi orada baslar
+  (`netsh int ipv4 show dynamicport tcp`); isletim sistemi giden baglantilara o
+  portlari atayabilir ve sabit servisle carpisir.
+- Yaygin portlardan uzak durulur: 80, 443, 3000, 3001, 5000, 5173, 8000, 8080,
+  8081, 8443, 9000. Bunlar baska projelerin varsayilanidir.
+- Yeni bir servis eklenirse **18402'den devam edilir**, rastgele port secilmez.
+- Portlar `.env` (`HTTP_ADDR`, `WEB_ORIGIN`), `web/.env.local`
+  (`DERLEM_API_URL`) ve `web/package.json` (`dev`/`start` icin `-p`) olmak uzere
+  uc yerde tanimlidir; biri degisirse ucu birden degismelidir.
+
+Kontrol: `netstat -ano | findstr ":184"` — yalniz Derlem'in surecleri gorunmelidir.
 
 Worker bir dosyayi ice aldiktan sonra otomatik olarak `scan_pii` ve
 `check_exact_duplicate` islerini acar. TCKN, IBAN, e-posta, telefon ve odeme
@@ -148,6 +174,21 @@ dosyalarda uzun surebilir. Hizli duman testi icin:
 
 Uretilen `.manifest.json` dosyasi ham metin veya PII degeri icermez; yalnizca
 hangi tur satirlarin kac adet cikarildigini ve cikti SHA256 bilgisini tutar.
+
+Surumlu Turkce web kalite filtresiyle v2 alt-kumesi uretmek icin:
+
+```powershell
+.\.venv\Scripts\python.exe -m derlem_worker.clean_candidate `
+  --source-id <CLEARED_PARENT_SOURCE_ID> `
+  --output-path .\var\import\candidate_v2.txt `
+  --quality-policy tr-web-v1 `
+  --quality-rejections-path .\var\import\candidate_v2.rejections.jsonl
+```
+
+Ret JSONL'i ham metin veya eslesen terim tasimaz; yalnizca parent
+`source_ordinal` ve surumlu neden kodlarini tutar. Final hedefte `--force`
+kullanilmaz. Gardas'a ozel insan ve ingest sirasi icin
+`docs/gardas_clean_candidate_v2_runbook.md` belgesine bak.
 
 ## SimHash Kalibrasyonu
 

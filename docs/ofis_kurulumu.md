@@ -26,7 +26,7 @@ API'ye iletir (`DERLEM_API_URL`).
 ipconfig | Select-String "IPv4"
 ```
 
-Örnek çıktı: `192.168.1.42`. Ekibin kullanacağı adres: `http://192.168.1.42:3000`
+Örnek çıktı: `192.168.1.42`. Ekibin kullanacağı adres: `http://192.168.1.42:18400`
 
 **b. Güvenlik duvarında 3000 portunu açın** (yönetici PowerShell, bir kere):
 
@@ -57,7 +57,7 @@ Bu değişkenler build sırasında gömülür; değiştirdiyseniz `npm run build
 yeniden çalıştırılmalıdır.
 
 **e. Başka bir cihazdan doğrulayın:** telefon veya ikinci bilgisayardan
-`http://<IP>:3000` açılıp giriş yapılabiliyorsa kurulum tamamdır.
+`http://<IP>:18400` açılıp giriş yapılabiliyorsa kurulum tamamdır.
 
 ## 3. Hesap ritüeli (admin, ~2 dakika/kişi)
 
@@ -120,7 +120,7 @@ Kurallar:
 
 ## 4. Ekibe ilk gün söylenecekler
 
-Herkese verin: **adres** (`http://<IP>:3000`), **e-posta** ve **geçici parola**.
+Herkese verin: **adres** (`http://<IP>:18400`), **e-posta** ve **geçici parola**.
 
 Uygulama gerisini kendisi anlatır: girişte herkes rolüne göre doğru ekrana
 iner, karşılama kartı rolünün ilk adımlarını sıralar, her ekranın başındaki

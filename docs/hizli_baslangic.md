@@ -26,7 +26,7 @@ derlemesi veya Gardas gibi mevcut bir corpus'un çıktısı).
 
 ## 1. Giriş yapın
 
-`http://localhost:3000` adresini açın ve admin hesabıyla girin
+`http://localhost:18400` adresini açın ve admin hesabıyla girin
 (local hesaplar: [Local Rol Test Kullanıcıları](local_role_testing.md)).
 Sol menüde rolünüze açık ekranlar listelenir.
 

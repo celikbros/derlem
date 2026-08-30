@@ -218,14 +218,14 @@ eklenir. Sertifika geldikten sonra HTTP trafiği HTTPS'e yönlendirilmelidir.
 API:
 
 ```bash
-curl -fsS http://127.0.0.1:8080/health/live
-curl -fsS http://127.0.0.1:8080/health/ready
+curl -fsS http://127.0.0.1:18401/health/live
+curl -fsS http://127.0.0.1:18401/health/ready
 ```
 
 Web:
 
 ```bash
-curl -fsSI http://127.0.0.1:3000
+curl -fsSI http://127.0.0.1:18400
 curl -fsSI https://derlem.example.com
 ```
 

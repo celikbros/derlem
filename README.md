@@ -413,10 +413,10 @@ Set-Location web
 npm run dev
 ```
 
-- Web: `http://localhost:3000`
-- API: `http://localhost:8080`
-- Liveness: `http://localhost:8080/health/live`
-- Readiness: `http://localhost:8080/health/ready`
+- Web: `http://localhost:18400`
+- API: `http://localhost:18401`
+- Liveness: `http://localhost:18401/health/live`
+- Readiness: `http://localhost:18401/health/ready`
 
 Ayrıntılı yönergeler: [docs/local_development.md](docs/local_development.md)
 

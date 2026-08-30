@@ -641,9 +641,9 @@ adayından henüz büyük frozen release veya export üretilmemiştir.
 
 ## 15. API ve Kullanıcı Akışları
 
-Yerel API kökü: `http://localhost:8080/api/v1`
+Yerel API kökü: `http://localhost:18401/api/v1`
 
-Web: `http://localhost:3000`
+Web: `http://localhost:18400`
 
 Ana endpoint grupları:
 

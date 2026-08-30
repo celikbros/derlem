@@ -285,7 +285,7 @@ tek-nokta-arızası. Offsite ikinci kopya bizde açık madde.
 *":8080 loopback'te ikinci bir derlem API'si göründü"* tespitiniz **yanlış** — o süreç
 `bioexamine`'in backend'i. Ama işaret ettiğiniz **gerçek sorun var:** `.env`'deki
 `HTTP_ADDR=:8080` bu makinede `examentor` ve `bioexamine` tarafından işgal edilmiş durumda,
-`:3000` de dolu. Derlem'e kendi port aralığını vereceğiz. Ölçüp bildirdiğiniz için
+`:3000` de dolu. Derlem'e kendi port bloğu verildi: **18400-18409** (web 18400, API 18401). Standart portlardan bilinçli olarak uzak durduk. Ölçüp bildirdiğiniz için
 teşekkürler; `:8090` çözümünüz doğru refleksti.
 
 ---

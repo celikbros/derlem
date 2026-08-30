@@ -1,6 +1,6 @@
 # API ve Is Akislari
 
-API kok adresi yerelde `http://localhost:8080/api/v1` degeridir.
+API kok adresi yerelde `http://localhost:18401/api/v1` degeridir.
 
 ## Endpointler
 

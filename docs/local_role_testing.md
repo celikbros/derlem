@@ -50,5 +50,5 @@ Kanonik endpoint/rol sınırları için
 
 ```powershell
 $body = @{ email = "manager@derlem.local"; password = "DerlemTest123!" } | ConvertTo-Json
-Invoke-RestMethod -Method Post -Uri "http://localhost:8080/api/v1/auth/login" -ContentType "application/json" -Body $body
+Invoke-RestMethod -Method Post -Uri "http://localhost:18401/api/v1/auth/login" -ContentType "application/json" -Body $body
 ```

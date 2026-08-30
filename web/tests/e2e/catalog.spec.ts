@@ -22,7 +22,7 @@ test("login and inspect the source catalog", async ({ page }, testInfo) => {
     path: path.join(screenshotDirectory, `jobs-${testInfo.project.name}.png`),
     fullPage: true,
   });
-  await page.getByRole("button", { name: "Kaynaklar" }).click();
+  await page.getByRole("button", { name: "Kaynaklar", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Veri kaynakları" })).toBeVisible();
   const sampleSource = page.getByRole("button", { name: /Derlem Ornek Katki Verisi/ });
   if (await sampleSource.count() === 1) {

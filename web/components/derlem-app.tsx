@@ -306,6 +306,7 @@ export function DerlemApp() {
   const canAccessReleases = hasAnyRole(user, releaseRoles);
   const canAccessJobs = hasAnyRole(user, jobRoles);
   const canAccessContributions = hasAnyRole(user, contributionViewRoles);
+  const focusedReview = activeView === "review" && selected !== null;
 
   async function logout() {
     const response = await fetch("/api/session/logout", { method: "POST" });
@@ -430,11 +431,11 @@ export function DerlemApp() {
           )}
         </header>
 
-        <WelcomeTip user={user} onNavigate={(view) => { setActiveView(view); setSelected(null); }} />
+        {!focusedReview && <WelcomeTip user={user} onNavigate={(view) => { setActiveView(view); setSelected(null); }} />}
 
-        <ViewHelp view={activeView} user={user} />
+        {!focusedReview && <ViewHelp view={activeView} user={user} />}
 
-        {(activeView === "sources" || activeView === "review") && <section className="summary-strip" aria-label={activeView === "review" ? "İnceleme özeti" : "Kaynak özeti"}>
+        {!focusedReview && (activeView === "sources" || activeView === "review") && <section className="summary-strip" aria-label={activeView === "review" ? "İnceleme özeti" : "Kaynak özeti"}>
           {activeView === "review" ? (
             <>
               <Summary icon={<ClipboardCheck />} label="Kuyruktaki kaynak" value={reviewQueueSources.length} tone="blue" />
@@ -462,7 +463,7 @@ export function DerlemApp() {
 
         {activeView === "guide" ? (
           <GuidePanel user={user} />
-        ) : activeView === "contribute" ? <ContributionsPanel user={user} onNotice={setNotice} onBundled={() => void loadSources()} /> : activeView === "users" ? <UsersPanel currentUserID={user.id} onNotice={setNotice} /> : activeView === "jobs" ? <JobsPanel onNotice={setNotice} /> : activeView === "releases" ? <ReleasePanel sources={sources} user={user} onNotice={setNotice} /> : activeView === "similarity" ? <SimilarityReviewPanel user={user} onNotice={setNotice} /> : <section className={`catalog-layout${selected ? " with-inspector" : ""}`}>
+        ) : activeView === "contribute" ? <ContributionsPanel user={user} onNotice={setNotice} onBundled={() => void loadSources()} /> : activeView === "users" ? <UsersPanel currentUserID={user.id} onNotice={setNotice} /> : activeView === "jobs" ? <JobsPanel onNotice={setNotice} /> : activeView === "releases" ? <ReleasePanel sources={sources} user={user} onNotice={setNotice} /> : activeView === "similarity" ? <SimilarityReviewPanel user={user} onNotice={setNotice} /> : <section className={`catalog-layout${focusedReview ? " review-workspace" : selected ? " with-inspector" : ""}`}>
           <div className="catalog-panel">
             <div className="table-toolbar">
               <label className="search-field">
@@ -514,7 +515,7 @@ export function DerlemApp() {
             </div>
           </div>
 
-          {selected && <SourceInspector source={selected} user={user} onClose={() => setSelected(null)} onNotice={setNotice} onRefresh={loadSources} onChanged={(updated) => { setSelected(updated); setSources((current) => current.map((source) => source.id === updated.id ? updated : source)); }} />}
+          {selected && <SourceInspector source={selected} user={user} reviewMode={focusedReview} onClose={() => setSelected(null)} onNotice={setNotice} onRefresh={loadSources} onChanged={(updated) => { setSelected(updated); setSources((current) => current.map((source) => source.id === updated.id ? updated : source)); }} />}
         </section>}
       </main>
 
@@ -569,6 +570,17 @@ export function DerlemApp() {
             <label className="full-width">Kaynak URL’si<input name="source_url" type="url" /></label>
             <label className="full-width">Lisans kanıtı<input name="license_evidence_ref" /></label>
             <label className="full-width">Köken bilgisi<input name="lineage_ref" placeholder="Dosya yolu, URL veya kayıt referansı" required /></label>
+            <label className="full-width">
+              Türetildiği kaynak
+              <select name="derived_from_source_id" defaultValue="">
+                <option value="">Bağımsız kaynak</option>
+                {sources.map((source) => (
+                  <option key={source.id} value={source.id}>
+                    {source.name} ({source.id.slice(0, 8)})
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
           <div className="dialog-actions">
             <button className="text-button" type="button" onClick={() => createDialog.current?.close()}>İptal</button>

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from derlem_worker.triage import collect_pii_line_triage, release_blockers
+from derlem_worker.triage import collect_pii_line_triage, release_blockers, render_markdown
 
 
 def test_collect_pii_line_triage_records_counts_without_values(tmp_path: Path) -> None:
@@ -82,3 +82,36 @@ def test_release_blockers_pass_when_quality_gates_and_reviews_are_complete() -> 
     }
 
     assert release_blockers(source) == []
+
+
+def test_markdown_lists_all_lineage_exclusions() -> None:
+    first = "06ac330e-350f-45f0-b596-3dd4aa1dbc57"
+    second = "f63352dd-fdd1-4e4b-a8d2-b167b3c856cf"
+    report = {
+        "generated_at": "2026-08-19T00:00:00+00:00",
+        "source": {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "name": "clean-v2",
+        },
+        "release_blockers": [],
+        "latest_jobs": {
+            "index_document_fingerprints": {
+                "result": {
+                    "total_documents": 2,
+                    "indexed_documents": 2,
+                    "skipped_oversized": 0,
+                    "skipped_too_short": 0,
+                }
+            }
+        },
+        "normalized_dedup_audit": {
+            "action": "source.normalized_dedup_checked",
+            "details": {"lineage_excluded_source_ids": [first, second]},
+        },
+    }
+
+    markdown = render_markdown(report)
+
+    assert "Lineage-excluded sources" in markdown
+    assert first in markdown
+    assert second in markdown

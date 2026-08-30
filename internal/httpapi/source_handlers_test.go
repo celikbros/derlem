@@ -22,6 +22,33 @@ func TestCreateSourceValidationRequiresKnownPurpose(t *testing.T) {
 	}
 }
 
+func TestCreateSourceValidationRejectsInvalidDerivedParentID(t *testing.T) {
+	parentID := "not-a-uuid"
+	input := domain.CreateSourceInput{
+		Name: "Source", SourceType: "jsonl", ContentPurpose: "pretrain",
+		License: "internal", RightsStatus: "unknown", Language: "tr",
+		Domain: "general", LineageRef: "source.jsonl", DerivedFromSourceID: &parentID,
+	}
+	if message := normalizeAndValidateSource(&input); !strings.Contains(message, "UUID") {
+		t.Fatalf("unexpected validation message: %q", message)
+	}
+}
+
+func TestCreateSourceValidationNormalizesDerivedParentID(t *testing.T) {
+	parentID := " 06AC330E-350F-45F0-B596-3DD4AA1DBC57 "
+	input := domain.CreateSourceInput{
+		Name: "Source", SourceType: "jsonl", ContentPurpose: "pretrain",
+		License: "internal", RightsStatus: "unknown", Language: "tr",
+		Domain: "general", LineageRef: "source.jsonl", DerivedFromSourceID: &parentID,
+	}
+	if message := normalizeAndValidateSource(&input); message != "" {
+		t.Fatalf("unexpected validation failure: %s", message)
+	}
+	if input.DerivedFromSourceID == nil || *input.DerivedFromSourceID != "06ac330e-350f-45f0-b596-3dd4aa1dbc57" {
+		t.Fatalf("parent id was not normalized: %#v", input.DerivedFromSourceID)
+	}
+}
+
 func TestUpdateSourceValidationRequiresEvidenceForClearedRights(t *testing.T) {
 	input := domain.UpdateSourceInput{
 		Name: "Source", SourceType: "jsonl", License: "internal",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from datetime import datetime
 import hashlib
 import json
 import math
@@ -13,7 +14,7 @@ from derlem_worker.sampling import _bounded_lines, _document_from_line
 from derlem_worker.canonical import CanonicalSampleError, parse_canonical_sample
 
 
-QUALITY_BASIS = "active-current-sample-document-review-v1"
+QUALITY_BASIS = "active-pinned-campaign-or-legacy-review-v1"
 QUALITY_RUBRIC = "multidimensional-v1"
 QUALITY_DIMENSIONS = (
     ("overall", "quality_score"),
@@ -88,6 +89,250 @@ class ReleaseGateError(RuntimeError):
     def __init__(self, message: str, gate_results: dict[str, object]) -> None:
         super().__init__(message)
         self.gate_results = gate_results
+
+
+def _is_canonical_utc_microsecond(value: object) -> bool:
+    if not isinstance(value, str):
+        return False
+    try:
+        parsed = datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.%fZ")
+    except ValueError:
+        return False
+    return parsed.strftime("%Y-%m-%dT%H:%M:%S.%fZ") == value
+
+
+def validate_release_contract_evidence(
+    release: dict[str, object],
+    sources: Iterable[dict[str, object]],
+    quality_reviews: Iterable[dict[str, object]],
+) -> dict[str, object]:
+    source_list = [dict(source) for source in sources]
+    review_list = [dict(review) for review in quality_reviews]
+    snapshot_sha256 = str(release.get("contract_snapshot_sha256") or "")
+    implementation_sha256 = str(release.get("implementation_bundle_sha256") or "")
+    if (
+        release.get("contract_snapshot_status") != "present"
+        or not _is_sha256(snapshot_sha256)
+        or not _is_sha256(implementation_sha256)
+    ):
+        raise ReleaseGateError(
+            "Release contract snapshot is missing",
+            {
+                "contract_snapshot": {
+                    "status": "blocked",
+                    "reason": "release_contract_snapshot_missing",
+                }
+            },
+        )
+
+    expected_by_source: dict[str, dict[str, object]] = {}
+    for source in source_list:
+        source_id = str(source.get("source_id") or "")
+        evidence_status = str(source.get("review_evidence_status") or "")
+        data_origin = str(source.get("data_origin") or "")
+        production_run_id = source.get("production_run_id")
+        production_run_id = (
+            str(production_run_id) if production_run_id is not None else None
+        )
+        run_implementation_digest = source.get("production_run_implementation_digest")
+        run_config_sha256 = source.get("production_run_config_sha256")
+        run_input_manifest_sha256 = source.get("production_run_input_manifest_sha256")
+        completion_job_id = source.get("production_run_completion_job_id")
+        completion_job_id = (
+            str(completion_job_id) if completion_job_id is not None else None
+        )
+        completion_manifest_sha256 = source.get(
+            "production_run_output_manifest_sha256"
+        )
+        completion_output_sha256 = source.get("production_run_output_sha256")
+        completion_output_byte_size = source.get(
+            "production_run_output_byte_size"
+        )
+        completion_output_record_count = source.get(
+            "production_run_output_record_count"
+        )
+        completion_at_utc = source.get("production_run_completed_at_utc")
+        completion_values = (
+            completion_job_id,
+            completion_manifest_sha256,
+            completion_output_sha256,
+            completion_output_byte_size,
+            completion_output_record_count,
+            completion_at_utc,
+        )
+        campaign_id = source.get("review_campaign_id")
+        campaign_id = str(campaign_id) if campaign_id is not None else None
+        if (
+            not source_id
+            or str(source.get("contract_source_id") or "") != source_id
+            or not _is_sha256(str(source.get("profile_config_sha256") or ""))
+            or source.get("profile_config_schema_artifact_kind")
+            != "profile_config_schema"
+            or not _is_sha256(
+                str(source.get("profile_config_schema_sha256") or "")
+            )
+            or not str(source.get("profile_implementation_key") or "").strip()
+            or not _is_sha256(
+                str(source.get("profile_implementation_digest") or "")
+            )
+            or not _is_sha256(str(source.get("purpose_contract_sha256") or ""))
+            or not _is_sha256(str(source.get("source_implementation_bundle_sha256") or ""))
+            or data_origin not in {"unknown", "human", "model", "hybrid"}
+            or (data_origin in {"model", "hybrid"} and not production_run_id)
+            or (
+                data_origin in {"model", "hybrid"}
+                and (
+                    any(value is None for value in completion_values)
+                    or not completion_job_id
+                    or not _is_sha256(str(completion_manifest_sha256 or ""))
+                    or not _is_sha256(str(completion_output_sha256 or ""))
+                    or str(completion_output_sha256) != str(source.get("source_sha256"))
+                    or int(completion_output_byte_size or -1)
+                    != int(source.get("byte_size") or -2)
+                    or int(completion_output_byte_size or 0) <= 0
+                    or int(completion_output_record_count or 0) <= 0
+                    or int(completion_output_record_count or -1)
+                    != int(source.get("line_count") or -2)
+                    or not _is_canonical_utc_microsecond(completion_at_utc)
+                )
+            )
+            or (
+                data_origin not in {"model", "hybrid"}
+                and any(value is not None for value in completion_values)
+            )
+            or not _is_sha256(str(source.get("license_evidence_ref_sha256") or ""))
+            or not _is_sha256(str(source.get("lineage_ref_sha256") or ""))
+            or int(source.get("sample_generation") or 0) <= 0
+            or not _is_sha256(str(source.get("sample_source_sha256") or ""))
+            or not str(source.get("sample_sampling_method") or "").strip()
+            or int(source.get("sample_count") or 0) <= 0
+            or int(source.get("sample_membership_count") or 0) <= 0
+            or int(source.get("sample_membership_count") or 0)
+            != int(source.get("sample_count") or 0)
+            or not _is_sha256(
+                str(source.get("sample_membership_root_sha256") or "")
+            )
+            or (
+                production_run_id is not None
+                and not _is_sha256(str(run_implementation_digest or ""))
+            )
+            or (
+                production_run_id is None
+                and any(
+                    value is not None
+                    for value in (
+                        run_implementation_digest,
+                        run_config_sha256,
+                        run_input_manifest_sha256,
+                    )
+                )
+            )
+            or (
+                run_config_sha256 is not None
+                and not _is_sha256(str(run_config_sha256))
+            )
+            or (
+                run_input_manifest_sha256 is not None
+                and not _is_sha256(str(run_input_manifest_sha256))
+            )
+            or evidence_status not in {"campaign_pinned", "absent_pre_registry"}
+            or (evidence_status == "campaign_pinned" and not campaign_id)
+            or (evidence_status == "absent_pre_registry" and campaign_id is not None)
+            or (
+                evidence_status == "absent_pre_registry"
+                and str(source.get("data_profile_key") or "") != "legacy-auto"
+            )
+        ):
+            raise ReleaseGateError(
+                "Release source contract snapshot is incomplete",
+                {
+                    "contract_snapshot": {
+                        "status": "blocked",
+                        "reason": "release_source_contract_snapshot_missing",
+                        "source_id": source_id,
+                    }
+                },
+            )
+        expected_by_source[source_id] = {
+            "review_evidence_status": evidence_status,
+            "review_campaign_id": campaign_id,
+            "rubric_version": str(source.get("rubric_version") or ""),
+            "sample_generation": int(source.get("sample_generation") or 0),
+            "sample_count": int(source.get("sample_count") or 0),
+            "sample_membership_count": int(
+                source.get("sample_membership_count") or 0
+            ),
+        }
+
+    covered_by_source = {source_id: 0 for source_id in expected_by_source}
+    for review in review_list:
+        source_id = str(review.get("source_id") or "")
+        expected = expected_by_source.get(source_id)
+        actual_campaign = review.get("review_campaign_id")
+        actual_campaign = str(actual_campaign) if actual_campaign is not None else None
+        if expected is None or not review.get("review_id") or review.get("decision") != "approved":
+            raise ReleaseGateError(
+                "Release review evidence is incomplete",
+                {
+                    "document_review_gate": {
+                        "status": "blocked",
+                        "reason": "review_evidence_incomplete",
+                        "source_id": source_id,
+                    }
+                },
+            )
+        if expected["review_evidence_status"] == "campaign_pinned":
+            matches = (
+                actual_campaign == expected["review_campaign_id"]
+                and str(review.get("rubric_version") or "") == expected["rubric_version"]
+                and int(review.get("sample_generation") or 0)
+                == expected["sample_generation"]
+            )
+        else:
+            matches = (
+                actual_campaign is None
+                and int(review.get("sample_generation") or 0)
+                == expected["sample_generation"]
+            )
+        if not matches:
+            raise ReleaseGateError(
+                "Release review evidence belongs to another campaign",
+                {
+                    "document_review_gate": {
+                        "status": "blocked",
+                        "reason": "review_campaign_mismatch",
+                        "source_id": source_id,
+                        "document_id": str(review.get("document_id") or ""),
+                    }
+                },
+            )
+        covered_by_source[source_id] += 1
+
+    if any(
+        count != int(expected_by_source[source_id]["sample_count"])
+        for source_id, count in covered_by_source.items()
+    ):
+        raise ReleaseGateError(
+            "Release review campaign has no active evidence",
+            {
+                "document_review_gate": {
+                    "status": "blocked",
+                    "reason": "review_campaign_evidence_incomplete",
+                }
+            },
+        )
+
+    return {
+        "status": "passed",
+        "contract_snapshot_sha256": snapshot_sha256,
+        "implementation_bundle_sha256": implementation_sha256,
+        "source_count": len(source_list),
+        "review_document_count": len(review_list),
+    }
+
+
+def _is_sha256(value: str) -> bool:
+    return len(value) == 64 and all(character in "0123456789abcdef" for character in value)
 
 
 @dataclass
@@ -214,10 +459,11 @@ def build_release_manifest(
     sources: list[dict[str, object]],
     gate_results: dict[str, object],
     frozen_at: str,
+    contract_snapshot: dict[str, object],
 ) -> bytes:
     sorted_sources = sorted(sources, key=lambda source: str(source["source_id"]))
     manifest = {
-        "schema_version": "derlem.release-manifest.v1",
+        "schema_version": "derlem.release-manifest.v2",
         "release": {
             "id": str(release["id"]),
             "name": str(release["name"]),
@@ -225,6 +471,7 @@ def build_release_manifest(
             "content_purpose": str(release["content_purpose"]),
             "frozen_at": frozen_at,
         },
+        "contract_snapshot": contract_snapshot,
         "gate_results": gate_results,
         "sources": sorted_sources,
     }
@@ -315,6 +562,11 @@ def _build_quality_mixture(reviews: list[dict[str, object]]) -> dict[str, object
             "object_sha256": str(review.get("object_sha256") or ""),
             "review_id": str(review.get("review_id") or "") or None,
             "decision": str(review.get("decision") or "") or None,
+            "review_campaign_id": (
+                str(review.get("review_campaign_id"))
+                if review.get("review_campaign_id") is not None
+                else None
+            ),
             "rubric_version": rubric_version or None,
         }
 
@@ -397,7 +649,7 @@ def _build_quality_mixture(reviews: list[dict[str, object]]) -> dict[str, object
         "basis": QUALITY_BASIS,
         "rubric_version": QUALITY_RUBRIC,
         "coverage_status": coverage_status,
-        "review_snapshot_method": "ordered-sample-review-json-sha256-v2",
+        "review_snapshot_method": "ordered-sample-review-json-sha256-v3",
         "review_snapshot_sha256": snapshot.hexdigest(),
         "sample_document_count": sample_document_count,
         "scored_document_count": scored_document_count,

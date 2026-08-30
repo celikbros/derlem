@@ -8,6 +8,7 @@ import {
   FileArchive,
   FileJson,
   FileText,
+  Fingerprint,
   Files,
   LockKeyhole,
   LoaderCircle,
@@ -19,6 +20,7 @@ import {
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { messageFrom, requestJSON } from "@/lib/client-api";
+import { EvidenceHash } from "@/components/evidence-hash";
 import type { Release, Source, User } from "@/lib/types";
 
 const purposes = ["pretrain", "instruction", "preference", "eval", "holdout", "post_training"];
@@ -223,6 +225,37 @@ export function ReleasePanel({
             {selected.frozen_at && <Fact label="Freeze zamanı" value={formatDate(selected.frozen_at)} />}
           </div>
 
+          <section className="release-section profile-evidence-section" data-testid="release-profile-evidence">
+            <div className="section-heading">
+              <h3><Fingerprint size={16} /> Profil ve kanıt</h3>
+              <span className="evidence-status-chip">Salt okunur</span>
+            </div>
+            <p className="profile-evidence-lead">Bu release için dondurulan sözleşme ve çalışan profil uygulaması.</p>
+            <div className="profile-evidence-grid">
+              <div className="evidence-field">
+                <span>Sözleşme snapshot durumu</span>
+                <strong>{contractSnapshotLabel(selected.contract_snapshot_status)}</strong>
+                <code className="evidence-enum">{selected.contract_snapshot_status}</code>
+              </div>
+              <div className="evidence-field">
+                <span>Snapshot artifact türü</span>
+                <strong>{selected.contract_snapshot_artifact_kind ?? "Henüz yok"}</strong>
+              </div>
+              <div className="evidence-field wide">
+                <span>Sözleşme SHA256</span>
+                {selected.contract_snapshot_sha256
+                  ? <EvidenceHash label="Sözleşme SHA256" value={selected.contract_snapshot_sha256} />
+                  : <strong>Henüz yok</strong>}
+              </div>
+              <div className="evidence-field wide">
+                <span>Uygulama paketi SHA256</span>
+                {selected.implementation_bundle_sha256
+                  ? <EvidenceHash label="Uygulama paketi SHA256" value={selected.implementation_bundle_sha256} />
+                  : <strong>Henüz yok</strong>}
+              </div>
+            </div>
+          </section>
+
           {selected.status === "draft" && canFreeze && (
             <button className="primary-button release-freeze-button" type="button" disabled={freezing === selected.id} onClick={() => void freezeRelease(selected)}>
               <LockKeyhole size={17} />{freezing === selected.id ? "Donduruluyor" : "Release'i dondur"}
@@ -377,6 +410,10 @@ function ReleaseStatus({ value }: { value: Release["status"] }) {
 
 function releaseStatusLabel(value: Release["status"]) {
   return value === "frozen" ? "Frozen" : value === "draft" ? "Draft" : "Superseded";
+}
+
+function contractSnapshotLabel(value: Release["contract_snapshot_status"]) {
+  return value === "present" ? "Hazır" : value === "absent_pre_registry" ? "Profil kayıt sistemi öncesi" : "Bekliyor";
 }
 
 function Fact({ label, value }: { label: string; value: string }) {

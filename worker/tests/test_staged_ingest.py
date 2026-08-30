@@ -31,6 +31,172 @@ def make_worker(tmp_path: Path) -> Worker:
     return Worker(config, worker_id="test")
 
 
+class _FetchOneResult:
+    def __init__(self, row) -> None:
+        self.row = row
+
+    def fetchone(self):
+        return self.row
+
+
+class _ProvenanceConnection:
+    def __init__(self, row) -> None:
+        self.row = row
+        self.calls: list[tuple[str, tuple]] = []
+
+    def execute(self, sql: str, params=()):
+        self.calls.append((sql, tuple(params)))
+        return _FetchOneResult(self.row)
+
+
+def test_ordinary_ingest_rejects_forged_production_handoff_fields(tmp_path: Path) -> None:
+    worker = make_worker(tmp_path)
+    job = Job(
+        uuid4(),
+        "ingest_staged_file",
+        {
+            "source_id": str(uuid4()),
+            "production_run_id": str(uuid4()),
+            "distillation_job_id": str(uuid4()),
+        },
+        1,
+        3,
+        "worker",
+    )
+    connection = _ProvenanceConnection((uuid4(),))
+
+    with pytest.raises(RuntimeError, match="unexpected"):
+        worker._validate_ingest_provenance(
+            connection,
+            job,
+            source_id=str(job.payload["source_id"]),
+            data_origin="unknown",
+            production_run_id=None,
+            ingested_sha256="a" * 64,
+            ingested_byte_size=1,
+        )
+    assert connection.calls == []
+
+
+def test_run_bound_ingest_accepts_only_exact_distillation_child(tmp_path: Path) -> None:
+    worker = make_worker(tmp_path)
+    source_id = str(uuid4())
+    run_id = str(uuid4())
+    parent_id = str(uuid4())
+    output_sha256 = "a" * 64
+    output_byte_size = 123
+    job = Job(
+        uuid4(),
+        "ingest_staged_file",
+        {
+            "source_id": source_id,
+            "production_run_id": run_id,
+            "distillation_job_id": parent_id,
+            "distillation_output_sha256": output_sha256,
+            "distillation_output_byte_size": output_byte_size,
+        },
+        2,
+        3,
+        "worker-a",
+    )
+    connection = _ProvenanceConnection((parent_id,))
+
+    worker._validate_ingest_provenance(
+        connection,
+        job,
+        source_id=source_id,
+        data_origin="model",
+        production_run_id=run_id,
+        ingested_sha256=output_sha256,
+        ingested_byte_size=output_byte_size,
+    )
+
+    assert len(connection.calls) == 1
+    sql, params = connection.calls[0]
+    assert "parent.result->>'ingest_job_id' = child.id::text" in sql
+    assert "parent.status = 'succeeded'" in sql
+    assert "child.locked_by IS NOT DISTINCT FROM %s" in sql
+    assert "parent.result->>'output_sha256'" in sql
+    assert params[:3] == (job.id, "worker-a", 2)
+
+
+@pytest.mark.parametrize(
+    ("payload_change", "evidence_row"),
+    [
+        ({"production_run_id": None}, (uuid4(),)),
+        ({"distillation_job_id": None}, (uuid4(),)),
+        ({"production_run_id": "wrong-run"}, (uuid4(),)),
+        ({"distillation_output_sha256": None}, (uuid4(),)),
+        ({"distillation_output_byte_size": None}, (uuid4(),)),
+        ({}, None),
+    ],
+)
+def test_run_bound_ingest_rejects_forged_or_stale_child(
+    tmp_path: Path, payload_change: dict[str, object], evidence_row
+) -> None:
+    worker = make_worker(tmp_path)
+    source_id = str(uuid4())
+    run_id = str(uuid4())
+    payload: dict[str, object] = {
+        "source_id": source_id,
+        "production_run_id": run_id,
+        "distillation_job_id": str(uuid4()),
+        "distillation_output_sha256": "a" * 64,
+        "distillation_output_byte_size": 123,
+    }
+    for key, value in payload_change.items():
+        if value is None:
+            payload.pop(key, None)
+        else:
+            payload[key] = value
+    job = Job(uuid4(), "ingest_staged_file", payload, 1, 3, "worker")
+
+    with pytest.raises(RuntimeError, match="provenance"):
+        worker._validate_ingest_provenance(
+            _ProvenanceConnection(evidence_row),
+            job,
+            source_id=source_id,
+            data_origin="model",
+            production_run_id=run_id,
+            ingested_sha256="a" * 64,
+            ingested_byte_size=123,
+        )
+
+
+def test_run_bound_ingest_rejects_staged_output_mutation(tmp_path: Path) -> None:
+    worker = make_worker(tmp_path)
+    source_id = str(uuid4())
+    run_id = str(uuid4())
+    parent_id = str(uuid4())
+    expected_sha256 = "a" * 64
+    expected_byte_size = 123
+    job = Job(
+        uuid4(),
+        "ingest_staged_file",
+        {
+            "source_id": source_id,
+            "production_run_id": run_id,
+            "distillation_job_id": parent_id,
+            "distillation_output_sha256": expected_sha256,
+            "distillation_output_byte_size": expected_byte_size,
+        },
+        1,
+        3,
+        "worker",
+    )
+
+    with pytest.raises(RuntimeError, match="output artifact mismatch"):
+        worker._validate_ingest_provenance(
+            _ProvenanceConnection((parent_id,)),
+            job,
+            source_id=source_id,
+            data_origin="model",
+            production_run_id=run_id,
+            ingested_sha256="b" * 64,
+            ingested_byte_size=expected_byte_size + 1,
+        )
+
+
 def test_staged_ingest_path_must_stay_under_staging_root(tmp_path: Path) -> None:
     worker = make_worker(tmp_path)
     outside = tmp_path / "outside.txt"

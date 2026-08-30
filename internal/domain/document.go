@@ -49,6 +49,10 @@ type ReviewDocumentInput struct {
 	ClaimToken      string  `json:"claim_token"`
 }
 
+type ReverseDocumentReviewInput struct {
+	Reason string `json:"reason"`
+}
+
 type BulkReviewDocumentItem struct {
 	DocumentID      string `json:"document_id"`
 	DocumentVersion int64  `json:"document_version"`
@@ -67,9 +71,11 @@ type ClaimDocumentsInput struct {
 }
 
 type DocumentReviewClaim struct {
-	ClaimToken string     `json:"claim_token"`
-	ExpiresAt  time.Time  `json:"expires_at"`
-	Documents  []Document `json:"documents"`
+	ClaimToken       string     `json:"claim_token"`
+	ReviewCampaignID string     `json:"review_campaign_id"`
+	ExpiresAt        time.Time  `json:"expires_at"`
+	Documents        []Document `json:"documents"`
+	Resumed          bool       `json:"resumed"`
 }
 
 type DocumentReviewClaimRenewal struct {
@@ -95,21 +101,47 @@ type DocumentSampleGeneration struct {
 }
 
 type DocumentReview struct {
-	ID                      string          `json:"id"`
-	DocumentID              string          `json:"document_id"`
-	ReviewerID              string          `json:"reviewer_id"`
-	Decision                string          `json:"decision"`
-	Reason                  *string         `json:"reason,omitempty"`
-	RubricVersion           string          `json:"rubric_version"`
-	QualityScore            int16           `json:"quality_score"`
-	LanguageQualityScore    *int16          `json:"language_quality_score,omitempty"`
-	CoherenceScore          *int16          `json:"coherence_score,omitempty"`
-	InformationDensityScore *int16          `json:"information_density_score,omitempty"`
-	CleanlinessScore        *int16          `json:"cleanliness_score,omitempty"`
-	DocumentVersion         int64           `json:"document_version"`
-	ObjectSHA256            string          `json:"object_sha256"`
-	Context                 json.RawMessage `json:"context"`
-	CreatedAt               time.Time       `json:"created_at"`
+	ID                      string                  `json:"id"`
+	DocumentID              string                  `json:"document_id"`
+	ReviewerID              string                  `json:"reviewer_id"`
+	ReviewCampaignID        *string                 `json:"review_campaign_id,omitempty"`
+	Decision                string                  `json:"decision"`
+	Reason                  *string                 `json:"reason,omitempty"`
+	RubricVersion           string                  `json:"rubric_version"`
+	QualityScore            int16                   `json:"quality_score"`
+	LanguageQualityScore    *int16                  `json:"language_quality_score,omitempty"`
+	CoherenceScore          *int16                  `json:"coherence_score,omitempty"`
+	InformationDensityScore *int16                  `json:"information_density_score,omitempty"`
+	CleanlinessScore        *int16                  `json:"cleanliness_score,omitempty"`
+	DocumentVersion         int64                   `json:"document_version"`
+	ObjectSHA256            string                  `json:"object_sha256"`
+	Context                 json.RawMessage         `json:"context"`
+	CreatedAt               time.Time               `json:"created_at"`
+	Reversal                *DocumentReviewReversal `json:"reversal,omitempty"`
+}
+
+// DocumentReviewHistoryItem groups a document with the current reviewer's
+// append-only decision history for that document.
+type DocumentReviewHistoryItem struct {
+	Document Document         `json:"document"`
+	Reviews  []DocumentReview `json:"reviews"`
+}
+
+type DocumentReviewReversal struct {
+	ID                     string    `json:"id"`
+	ReviewID               string    `json:"review_id"`
+	ReversedBy             string    `json:"reversed_by"`
+	Reason                 string    `json:"reason"`
+	RestoredDocumentStatus string    `json:"restored_document_status"`
+	CreatedAt              time.Time `json:"created_at"`
+}
+
+type ReverseDocumentReviewResult struct {
+	Source          Source                 `json:"source"`
+	Document        Document               `json:"document"`
+	Review          DocumentReview         `json:"review"`
+	Reversal        DocumentReviewReversal `json:"reversal"`
+	AlreadyReversed bool                   `json:"already_reversed"`
 }
 
 type DocumentQualitySummary struct {

@@ -26,6 +26,15 @@ export type Source = {
   source_url?: string;
   license_evidence_ref?: string;
   lineage_ref: string;
+  derived_from_source_id?: string;
+  data_profile_key: string;
+  data_profile_version: string;
+  profile_config_artifact_kind: string;
+  profile_config_sha256: string;
+  profile_assignment_reason: string;
+  profile_assigned_at: string;
+  data_origin: "unknown" | "human" | "model" | "hybrid";
+  production_run_id?: string;
   declared_sha256?: string;
   declared_byte_size?: number;
   declared_line_count?: number;
@@ -80,6 +89,7 @@ export type DocumentReview = {
   id: string;
   document_id: string;
   reviewer_id: string;
+  review_campaign_id?: string;
   decision: "approved" | "rejected" | "sensitive_review";
   reason?: string;
   rubric_version: "overall-v1" | "multidimensional-v1";
@@ -92,12 +102,37 @@ export type DocumentReview = {
   object_sha256: string;
   context: Record<string, unknown>;
   created_at: string;
+  reversal?: DocumentReviewReversal;
+};
+
+export type DocumentReviewHistoryItem = {
+  document: Document;
+  reviews: DocumentReview[];
+};
+
+export type DocumentReviewReversal = {
+  id: string;
+  review_id: string;
+  reversed_by: string;
+  reason: string;
+  restored_document_status: "sampled" | "edited";
+  created_at: string;
+};
+
+export type ReverseDocumentReviewResult = {
+  source: Source;
+  document: Document;
+  review: DocumentReview;
+  reversal: DocumentReviewReversal;
+  already_reversed: boolean;
 };
 
 export type DocumentReviewClaim = {
   claim_token: string;
+  review_campaign_id: string;
   expires_at: string;
   documents: Document[];
+  resumed: boolean;
 };
 
 export type Contribution = {
@@ -257,6 +292,10 @@ export type Release = {
   status: "draft" | "frozen" | "superseded";
   manifest_object_sha256?: string;
   manifest_sha256?: string;
+  contract_snapshot_status: "pending" | "absent_pre_registry" | "present";
+  contract_snapshot_artifact_kind?: string;
+  contract_snapshot_sha256?: string;
+  implementation_bundle_sha256?: string;
   gate_results: Record<string, unknown>;
   created_by: string;
   frozen_by?: string;

@@ -6,20 +6,24 @@ import (
 )
 
 type Release struct {
-	ID                   string          `json:"id"`
-	Name                 string          `json:"name"`
-	Version              string          `json:"version"`
-	ContentPurpose       string          `json:"content_purpose"`
-	Status               string          `json:"status"`
-	ManifestObjectSHA256 *string         `json:"manifest_object_sha256,omitempty"`
-	ManifestSHA256       *string         `json:"manifest_sha256,omitempty"`
-	GateResults          json.RawMessage `json:"gate_results"`
-	CreatedBy            string          `json:"created_by"`
-	FrozenBy             *string         `json:"frozen_by,omitempty"`
-	CreatedAt            time.Time       `json:"created_at"`
-	FrozenAt             *time.Time      `json:"frozen_at,omitempty"`
-	Sources              []ReleaseSource `json:"sources"`
-	Exports              []ReleaseExport `json:"exports"`
+	ID                           string          `json:"id"`
+	Name                         string          `json:"name"`
+	Version                      string          `json:"version"`
+	ContentPurpose               string          `json:"content_purpose"`
+	Status                       string          `json:"status"`
+	ManifestObjectSHA256         *string         `json:"manifest_object_sha256,omitempty"`
+	ManifestSHA256               *string         `json:"manifest_sha256,omitempty"`
+	ContractSnapshotStatus       string          `json:"contract_snapshot_status"`
+	ContractSnapshotArtifactKind *string         `json:"contract_snapshot_artifact_kind,omitempty"`
+	ContractSnapshotSHA256       *string         `json:"contract_snapshot_sha256,omitempty"`
+	ImplementationBundleSHA256   *string         `json:"implementation_bundle_sha256,omitempty"`
+	GateResults                  json.RawMessage `json:"gate_results"`
+	CreatedBy                    string          `json:"created_by"`
+	FrozenBy                     *string         `json:"frozen_by,omitempty"`
+	CreatedAt                    time.Time       `json:"created_at"`
+	FrozenAt                     *time.Time      `json:"frozen_at,omitempty"`
+	Sources                      []ReleaseSource `json:"sources"`
+	Exports                      []ReleaseExport `json:"exports"`
 }
 
 type ReleaseSource struct {

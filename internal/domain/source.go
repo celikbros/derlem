@@ -30,6 +30,15 @@ type Source struct {
 	SourceURL                      *string   `json:"source_url,omitempty"`
 	LicenseEvidenceRef             *string   `json:"license_evidence_ref,omitempty"`
 	LineageRef                     string    `json:"lineage_ref"`
+	DerivedFromSourceID            *string   `json:"derived_from_source_id,omitempty"`
+	DataProfileKey                 string    `json:"data_profile_key"`
+	DataProfileVersion             string    `json:"data_profile_version"`
+	ProfileConfigArtifactKind      string    `json:"profile_config_artifact_kind"`
+	ProfileConfigSHA256            string    `json:"profile_config_sha256"`
+	ProfileAssignmentReason        string    `json:"profile_assignment_reason"`
+	ProfileAssignedAt              time.Time `json:"profile_assigned_at"`
+	DataOrigin                     string    `json:"data_origin"`
+	ProductionRunID                *string   `json:"production_run_id,omitempty"`
 	DeclaredSHA256                 *string   `json:"declared_sha256,omitempty"`
 	DeclaredByteSize               *int64    `json:"declared_byte_size,omitempty"`
 	DeclaredLineCount              *int64    `json:"declared_line_count,omitempty"`
@@ -61,14 +70,15 @@ type Source struct {
 }
 
 type CreateSourceInput struct {
-	Name               string  `json:"name"`
-	SourceType         string  `json:"source_type"`
-	ContentPurpose     string  `json:"content_purpose"`
-	License            string  `json:"license"`
-	RightsStatus       string  `json:"rights_status"`
-	Language           string  `json:"language"`
-	Domain             string  `json:"domain"`
-	SourceURL          *string `json:"source_url"`
-	LicenseEvidenceRef *string `json:"license_evidence_ref"`
-	LineageRef         string  `json:"lineage_ref"`
+	Name                string  `json:"name"`
+	SourceType          string  `json:"source_type"`
+	ContentPurpose      string  `json:"content_purpose"`
+	License             string  `json:"license"`
+	RightsStatus        string  `json:"rights_status"`
+	Language            string  `json:"language"`
+	Domain              string  `json:"domain"`
+	SourceURL           *string `json:"source_url"`
+	LicenseEvidenceRef  *string `json:"license_evidence_ref"`
+	LineageRef          string  `json:"lineage_ref"`
+	DerivedFromSourceID *string `json:"derived_from_source_id"`
 }

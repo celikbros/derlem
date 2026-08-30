@@ -1,5 +1,11 @@
 # Gardas Temiz Adayı — 200 Örnek Ön-İnceleme Raporu (Claude)
 
+> **Karar güncellemesi (2026-08-19):** Kullanıcı titiz yol olan **B seçeneğini**
+> seçti. V1 topluca onaylanmayacak; insan ret/spot-check kararları ve
+> `clean_candidate v2` akışı için
+> [gardas_clean_candidate_v2_runbook.md](gardas_clean_candidate_v2_runbook.md)
+> izlenecek.
+
 **Tarih:** 2026-07-12
 **Kaynak:** `gardash_faz2_tr_dedup_20260621_clean_candidate_20260625` (f63352dd)
 **Nitelik:** Bu bir ÖN-inceleme raporudur; makine analizi + Claude okuması.

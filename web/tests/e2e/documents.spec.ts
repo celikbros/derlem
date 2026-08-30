@@ -21,11 +21,12 @@ test("inspect sampled document content and quality review", async ({ page }, tes
 
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByRole("heading", { name: "Belge örneği" })).toBeVisible();
-  await expect(dialog.getByLabel("İçerik")).not.toHaveValue("");
+  await expect(dialog.getByLabel("Okuma görünümü")).toBeVisible();
+  await expect(dialog.getByLabel("Ham içerik")).not.toHaveValue("");
   await expect(dialog.getByRole("button", { name: "Yeni sürümü kaydet" })).toBeVisible();
   await expect(dialog.getByRole("heading", { name: "Belge moderasyonu" })).toBeVisible();
   for (const label of ["Genel", "Dil", "Tutarlılık", "Bilgi", "Temizlik"]) {
-    await expect(dialog.getByLabel(`${label} kalite puanı`)).toHaveValue("3");
+    await expect(dialog.getByLabel(`${label} kalite puanı`)).toHaveValue("");
   }
   await expect(dialog.getByText("approved", { exact: true })).toBeVisible();
   await expect(dialog.getByText("Genel 5/5", { exact: true })).toBeVisible();

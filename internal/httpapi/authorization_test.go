@@ -43,6 +43,7 @@ func TestReadRouteAuthorizationMatrix(t *testing.T) {
 		"GET /api/v1/sources/{id}/reviews":                       workspace,
 		"GET /api/v1/sources/{id}/pii-scans":                     workspace,
 		"GET /api/v1/sources/{id}/documents":                     workspace,
+		"GET /api/v1/sources/{id}/document-review-history":       reviewers,
 		"GET /api/v1/sources/{id}/document-quality-summary":      workspace,
 		"GET /api/v1/sources/{id}/document-sample-generations":   workspace,
 		"GET /api/v1/documents/{id}":                             workspace,
@@ -79,6 +80,33 @@ func TestReadRouteAuthorizationMatrix(t *testing.T) {
 	}
 	if len(tested) != len(expected) {
 		t.Fatalf("tested %d GET routes, matrix contains %d", len(tested), len(expected))
+	}
+}
+
+func TestDocumentReviewRouteAuthorizationMatrix(t *testing.T) {
+	expected := map[string]bool{
+		"POST /api/v1/sources/{id}/documents/claims":        true,
+		"POST /api/v1/sources/{id}/documents/bulk-reviews":  true,
+		"POST /api/v1/document-review-claims/{token}/renew": true,
+		"DELETE /api/v1/document-review-claims/{token}":     true,
+		"POST /api/v1/documents/{id}/reviews":               true,
+		"POST /api/v1/document-reviews/{id}/reversal":       true,
+	}
+	found := map[string]bool{}
+	for _, route := range protectedRoutes(&Server{}) {
+		if !expected[route.pattern] {
+			continue
+		}
+		found[route.pattern] = true
+		for _, role := range applicationRoles {
+			t.Run(route.pattern+"/"+role, func(t *testing.T) {
+				wantAllowed := slices.Contains(reviewerRoles, role)
+				assertRoleAccess(t, route.roles, role, wantAllowed)
+			})
+		}
+	}
+	if len(found) != len(expected) {
+		t.Fatalf("tested %d document review routes, matrix contains %d", len(found), len(expected))
 	}
 }
 

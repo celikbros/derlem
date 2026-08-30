@@ -1,11 +1,13 @@
 "use client";
 
 import {
+  ArrowLeft,
   Check,
   CheckCircle2,
   ClipboardCheck,
   Edit3,
   FileText,
+  Fingerprint,
   History,
   LoaderCircle,
   RefreshCw,
@@ -21,8 +23,10 @@ import {
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import { JobStatus } from "@/components/jobs-panel";
+import { EvidenceHash } from "@/components/evidence-hash";
 import { messageFrom, requestJSON } from "@/lib/client-api";
-import type { BackgroundJob, Document, DocumentQualitySummary, DocumentReview, DocumentReviewClaim, DocumentSampleGeneration, PIIScan, Review, Source, User } from "@/lib/types";
+import { readableParagraphs } from "@/lib/readable-document";
+import type { BackgroundJob, Document, DocumentQualitySummary, DocumentReview, DocumentReviewClaim, DocumentReviewHistoryItem, DocumentSampleGeneration, PIIScan, Review, ReverseDocumentReviewResult, Source, User } from "@/lib/types";
 
 const purposeLabels: Record<string, string> = {
   pretrain: "Pretrain",
@@ -72,10 +76,66 @@ const qualityScoreFields = [
 
 type QualityScoreName = typeof qualityScoreFields[number]["name"];
 type QualityScores = Record<QualityScoreName, number>;
+type ReviewHistoryDecision = DocumentReview["decision"] | "reversed";
+type ReviewHistoryFilter = "all" | ReviewHistoryDecision;
+
+type ReviewPreset = {
+  id: string;
+  label: string;
+  description: string;
+  reason: string;
+  scores: QualityScores;
+};
+
+const reviewPresets: ReviewPreset[] = [
+  {
+    id: "spam",
+    label: "Reklam / ilan / SEO",
+    description: "Reklam, ilan veya arama motoru anahtar kelime yığını.",
+    reason: "Reklam, ilan veya SEO amaçlı anahtar kelime yığını içeriyor. Doğal ve temiz eğitim verisi olarak kullanılamaz.",
+    scores: { quality_score: 1, language_quality_score: 2, coherence_score: 1, information_density_score: 1, cleanliness_score: 1 },
+  },
+  {
+    id: "repetition",
+    label: "Aşırı tekrar / hashtag",
+    description: "Hashtag, sözcük veya bölüm tekrarları içeriği bastırıyor.",
+    reason: "Aşırı hashtag, sözcük veya bölüm tekrarı içeriyor; anlamlı içerik gürültü içinde kalıyor. Temiz eğitim verisi olarak kullanılamaz.",
+    scores: { quality_score: 1, language_quality_score: 2, coherence_score: 1, information_density_score: 1, cleanliness_score: 1 },
+  },
+  {
+    id: "merged",
+    label: "İlgisiz içerikler birleşmiş",
+    description: "Bağımsız metinler tek belgeye karışmış; konu akışı yok.",
+    reason: "Birden fazla bağımsız içerik tek belgede birleşmiş; konu ve belge sınırları bozuk. Temiz eğitim verisi olarak doğrudan kullanılamaz.",
+    scores: { quality_score: 2, language_quality_score: 3, coherence_score: 1, information_density_score: 2, cleanliness_score: 1 },
+  },
+  {
+    id: "ocr",
+    label: "OCR / kodlama bozuk",
+    description: "Bozuk karakterler ve yazım hataları okunabilirliği bozuyor.",
+    reason: "OCR veya kodlama hataları ile bozuk/görünmez karakterler okunabilirliği bozuyor. Temiz eğitim verisi olarak doğrudan kullanılamaz.",
+    scores: { quality_score: 2, language_quality_score: 1, coherence_score: 2, information_density_score: 2, cleanliness_score: 1 },
+  },
+  {
+    id: "navigation",
+    label: "Menü / navigasyon artığı",
+    description: "Sayfa menüsü, bağlantılar veya kaynakça artıkları baskın.",
+    reason: "Sayfa menüsü, navigasyon, bağlantı veya benzeri web artıkları içeriğe karışmış ve metin bütünlüğünü bozuyor.",
+    scores: { quality_score: 2, language_quality_score: 3, coherence_score: 2, information_density_score: 2, cleanliness_score: 1 },
+  },
+  {
+    id: "meaningless",
+    label: "Anlamsız / yetersiz içerik",
+    description: "Anlamlı eğitim içeriği yok veya içerik yetersiz.",
+    reason: "Anlamlı ve yeterli eğitim içeriği bulunmuyor; belge bağlamsız, parçalı veya kullanılamayacak kadar yetersiz.",
+    scores: { quality_score: 1, language_quality_score: 2, coherence_score: 1, information_density_score: 1, cleanliness_score: 2 },
+  },
+];
 
 export function SourceInspector({
   source,
   user,
+  reviewMode = false,
   onClose,
   onChanged,
   onRefresh,
@@ -83,6 +143,7 @@ export function SourceInspector({
 }: {
   source: Source;
   user: User;
+  reviewMode?: boolean;
   onClose: () => void;
   onChanged: (source: Source) => void;
   onRefresh: () => Promise<void>;
@@ -93,6 +154,8 @@ export function SourceInspector({
   const [jobs, setJobs] = useState<BackgroundJob[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [documentStatusFilter, setDocumentStatusFilter] = useState<"pending" | "risk" | "approved" | "flagged" | "all">("pending");
+  const [documentReviewHistory, setDocumentReviewHistory] = useState<DocumentReviewHistoryItem[]>([]);
+  const [reviewHistoryFilter, setReviewHistoryFilter] = useState<ReviewHistoryFilter>("all");
   const [activeDocument, setActiveDocument] = useState<Document | null>(null);
   const [documentReviews, setDocumentReviews] = useState<DocumentReview[]>([]);
   const [qualitySummary, setQualitySummary] = useState<DocumentQualitySummary | null>(null);
@@ -103,6 +166,9 @@ export function SourceInspector({
   const [reviewClaim, setReviewClaim] = useState<DocumentReviewClaim | null>(null);
   const [claimBatchSize, setClaimBatchSize] = useState(20);
   const [claiming, setClaiming] = useState(false);
+  const [documentReviewing, setDocumentReviewing] = useState(false);
+  const [reversingReviewID, setReversingReviewID] = useState<string | null>(null);
+  const [selectedReviewPresetID, setSelectedReviewPresetID] = useState<string | null>(null);
   const [resampling, setResampling] = useState(false);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -129,16 +195,6 @@ export function SourceInspector({
     setSelectedDocumentIDs(new Set());
   }, [source.id]);
 
-  useEffect(() => () => {
-    const token = reviewClaimRef.current?.claim_token;
-    if (token) {
-      void fetch(`/api/document-review-claims/${encodeURIComponent(token)}`, {
-        method: "DELETE",
-        keepalive: true,
-      });
-    }
-  }, []);
-
   useEffect(() => {
     const token = reviewClaim?.claim_token;
     if (!token) return;
@@ -159,12 +215,32 @@ export function SourceInspector({
     return () => window.clearInterval(timer);
   }, [onNotice, reviewClaim?.claim_token]);
 
+  const canReadJobs = user.roles.some((role) => ["admin", "data_manager"].includes(role));
+
+  const loadDocumentReviewHistory = useCallback(async () => {
+    if (!reviewMode) {
+      setDocumentReviewHistory([]);
+      return;
+    }
+    try {
+      const payload = await requestJSON<{ items: DocumentReviewHistoryItem[] }>(
+        `/api/sources/${source.id}/document-review-history`,
+      );
+      setDocumentReviewHistory(payload.items);
+    } catch (error) {
+      onNotice(messageFrom(error));
+    }
+  }, [onNotice, reviewMode, source.id]);
+
   const loadActivity = useCallback(async () => {
     try {
+      const jobRequest = canReadJobs
+        ? requestJSON<{ items: BackgroundJob[] }>(`/api/jobs?source_id=${source.id}&limit=20`)
+        : Promise.resolve({ items: [] as BackgroundJob[] });
       const [reviewPayload, scanPayload, jobPayload, documentPayload, generationPayload, qualityPayload] = await Promise.all([
         requestJSON<{ items: Review[] }>(`/api/sources/${source.id}/reviews`),
         requestJSON<{ items: PIIScan[] }>(`/api/sources/${source.id}/pii-scans`),
-        requestJSON<{ items: BackgroundJob[] }>(`/api/jobs?source_id=${source.id}&limit=20`),
+        jobRequest,
         requestJSON<{ items: Document[] }>(`/api/sources/${source.id}/documents?limit=200`),
         requestJSON<{ items: DocumentSampleGeneration[] }>(`/api/sources/${source.id}/document-sample-generations`),
         requestJSON<DocumentQualitySummary>(`/api/sources/${source.id}/document-quality-summary`),
@@ -203,12 +279,17 @@ export function SourceInspector({
     } finally {
       setLoading(false);
     }
-  }, [onNotice, onRefresh, source.document_sampling_status, source.duplicate_status, source.id, source.normalized_dedup_status, source.object_sha256, source.pii_status]);
+  }, [canReadJobs, onNotice, onRefresh, source.document_sampling_status, source.duplicate_status, source.id, source.normalized_dedup_status, source.object_sha256, source.pii_status]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void loadActivity(); }, 0);
     return () => window.clearTimeout(timer);
   }, [loadActivity, source.version]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void loadDocumentReviewHistory(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadDocumentReviewHistory, source.version]);
 
   // Kaynak değişince seçim/özet render sırasında sıfırlanır ve yükleme
   // göstergesi açılır (effect içinde senkron setState yerine React'in
@@ -217,6 +298,8 @@ export function SourceInspector({
   if (prevSourceID !== source.id) {
     setPrevSourceID(source.id);
     setSelectedDocumentIDs(new Set());
+    setDocumentReviewHistory([]);
+    setReviewHistoryFilter("all");
     setQualitySummary(null);
     setLoading(true);
   }
@@ -269,9 +352,30 @@ export function SourceInspector({
       : documentStatusFilter === "flagged"
         ? flaggedDocuments
         : documents;
+  const displayedDocuments = reviewMode ? claimedPendingDocuments : filteredDocuments;
   const selectableDocuments = (documentStatusFilter === "risk" ? riskyDocuments : pendingDocuments)
     .filter((document) => claimedDocumentIDs.has(document.id));
   const riskSampleCount = documents.filter((document) => document.risk_score > 0).length;
+  const reviewHistoryEntries = documentReviewHistory
+    .map((item) => ({
+      ...item,
+      decision: currentReviewHistoryDecision(item),
+      latestAt: latestReviewDate(item.reviews),
+    }))
+    .sort((left, right) =>
+      right.latestAt.localeCompare(left.latestAt)
+      || left.document.source_ordinal - right.document.source_ordinal
+    );
+  const reviewHistoryCounts: Record<ReviewHistoryFilter, number> = {
+    all: reviewHistoryEntries.length,
+    approved: reviewHistoryEntries.filter((item) => item.decision === "approved").length,
+    rejected: reviewHistoryEntries.filter((item) => item.decision === "rejected").length,
+    sensitive_review: reviewHistoryEntries.filter((item) => item.decision === "sensitive_review").length,
+    reversed: reviewHistoryEntries.filter((item) => item.decision === "reversed").length,
+  };
+  const displayedReviewHistory = reviewHistoryFilter === "all"
+    ? reviewHistoryEntries
+    : reviewHistoryEntries.filter((item) => item.decision === reviewHistoryFilter);
   const reviewedCount = source.reviewed_document_count;
   const sampleCount = source.sampled_document_count;
   const reviewPercent = sampleCount > 0 ? Math.round((reviewedCount / sampleCount) * 100) : 0;
@@ -381,7 +485,8 @@ export function SourceInspector({
       setActiveDocument(payload.document);
       setDocumentContent(payload.content);
       setDocumentReviews(reviewPayload.items);
-      documentDialog.current?.showModal();
+      setSelectedReviewPresetID(null);
+      if (!documentDialog.current?.open) documentDialog.current?.showModal();
     } catch (error) {
       onNotice(messageFrom(error));
     } finally {
@@ -409,7 +514,13 @@ export function SourceInspector({
         return [...merged.values()];
       });
       setDocumentStatusFilter("pending");
-      onNotice(`${claim.documents.length.toLocaleString("tr-TR")} belgeli güvenli iş paketi alındı.`);
+      onNotice(claim.resumed
+        ? `Mevcut ${claim.documents.length.toLocaleString("tr-TR")} belgeli iş paketiniz sürdürüldü.`
+        : `${claim.documents.length.toLocaleString("tr-TR")} belgeli güvenli iş paketi alındı.`
+      );
+      if (reviewMode && claim.documents.length > 0) {
+        await openDocument(claim.documents[0]);
+      }
     } catch (error) {
       onNotice(messageFrom(error));
     } finally {
@@ -497,6 +608,19 @@ export function SourceInspector({
       onNotice("Ret veya hassas inceleme kararında gerekçe zorunludur.");
       return;
     }
+    if (decision === 'approved' && selectedReviewPresetID) {
+      onNotice('Bir ret nedeni seçiliyken belge onaylanamaz. Onaylamak için önce ret şablonunu temizleyin.');
+      return;
+    }
+    const decisionLabels: Record<string, string> = {
+      approved: "Onayla",
+      sensitive_review: "Hassas olarak işaretle",
+      rejected: "Reddet",
+    };
+    if (!window.confirm(`${decisionLabels[decision] ?? decision} kararı kaydedilsin mi? Bu karar denetim geçmişine yazılır.`)) {
+      return;
+    }
+    setDocumentReviewing(true);
     try {
       const payload = await requestJSON<{ source: Source; document: Document; review: DocumentReview }>(
         `/api/documents/${activeDocument.id}/reviews`,
@@ -524,11 +648,16 @@ export function SourceInspector({
       const remainingClaimDocuments = reviewClaim.documents.filter((document) => document.id !== payload.document.id);
       setReviewClaim(remainingClaimDocuments.length > 0 ? { ...reviewClaim, documents: remainingClaimDocuments } : null);
       onChanged(payload.source);
+      await loadDocumentReviewHistory();
       form.reset();
-      const nextPending = updatedDocuments.find((document) =>
-        remainingClaimDocuments.some((claimed) => claimed.id === document.id)
-        && (document.status === "sampled" || document.status === "edited")
-      );
+      setSelectedReviewPresetID(null);
+      const nextClaimed = remainingClaimDocuments[0];
+      const nextPending = nextClaimed
+        ? updatedDocuments.find((document) =>
+          document.id === nextClaimed.id
+          && (document.status === "sampled" || document.status === "edited")
+        )
+        : undefined;
       if (nextPending) {
         onNotice("Belge inceleme kararı kaydedildi. Sıradaki örnek açılıyor.");
         await openDocument(nextPending);
@@ -537,9 +666,56 @@ export function SourceInspector({
         onNotice("Belge inceleme kararı kaydedildi. Bekleyen örnek kalmadı.");
       }
     } catch (error) {
-      setReviewClaim(null);
-      setSelectedDocumentIDs(new Set());
       onNotice(messageFrom(error));
+    } finally {
+      setDocumentReviewing(false);
+    }
+  }
+
+  async function reverseDocumentReview(review: DocumentReview) {
+    const enteredReason = window.prompt(
+      "Geri alma gerekçesi:",
+      "Yanlış karar verildi; belge yeniden incelenecek.",
+    );
+    const reason = enteredReason?.trim();
+    if (!reason) return;
+    if (!window.confirm(
+      `${reviewDecisionLabel(review.decision)} kararı geri alınsın mı? Eski kayıt silinmez; geri alma denetim geçmişine eklenir.`,
+    )) return;
+
+    setReversingReviewID(review.id);
+    try {
+      const payload = await requestJSON<ReverseDocumentReviewResult>(
+        `/api/document-reviews/${review.id}/reversal`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason }),
+        },
+      );
+      setActiveDocument(payload.document);
+      setDocuments((current) => current.map((document) =>
+        document.id === payload.document.id ? payload.document : document
+      ));
+      setDocumentReviews((current) => current.map((item) =>
+        item.id === payload.review.id ? payload.review : item
+      ));
+      setSelectedDocumentIDs((current) => {
+        const next = new Set(current);
+        next.delete(payload.document.id);
+        return next;
+      });
+      onChanged(payload.source);
+      onNotice(payload.already_reversed
+        ? "Bu karar daha önce geri alınmıştı."
+        : "Karar geri alındı; belge yeniden Bekleyen durumuna döndü."
+      );
+      await loadActivity();
+      await loadDocumentReviewHistory();
+    } catch (error) {
+      onNotice(messageFrom(error));
+    } finally {
+      setReversingReviewID(null);
     }
   }
 
@@ -578,6 +754,7 @@ export function SourceInspector({
       onNotice("Seçimlerden biri artık beklemede değil. Listeyi yenileyin.");
       return;
     }
+    if (!confirmReviewDecision(decision, selectedDocuments.length)) return;
 
     setBulkReviewing(true);
     try {
@@ -644,6 +821,7 @@ export function SourceInspector({
       onNotice("Ret veya hassas inceleme kararında gerekçe zorunludur.");
       return;
     }
+    if (!window.confirm(`Kaynak için ${reviewDecisionLabel(decision)} kararı kaydedilsin mi? Bu işlem denetim geçmişine yazılır.`)) return;
     try {
       const payload = await requestJSON<{ source: Source; review: Review }>(`/api/sources/${source.id}/reviews`, {
         method: "POST",
@@ -659,15 +837,69 @@ export function SourceInspector({
     }
   }
 
+  const profileEvidenceFields = (
+    <div className="profile-evidence-grid">
+      {!reviewMode && (
+        <div className="evidence-field">
+          <span>Veri profili</span>
+          <strong>{source.data_profile_key} · sürüm {source.data_profile_version}</strong>
+        </div>
+      )}
+      <div className="evidence-field">
+        <span>Profil ataması</span>
+        <strong>{profileAssignmentLabel(source.profile_assignment_reason)}</strong>
+      </div>
+      <div className="evidence-field">
+        <span>Veri kökeni</span>
+        <strong>{dataOriginLabel(source.data_origin)}</strong>
+      </div>
+      <div className="evidence-field">
+        <span>Üretim çalışması</span>
+        <strong className={source.production_run_id ? "mono" : undefined}>{source.production_run_id ? shortenIdentifier(source.production_run_id) : "Bağlı çalışma yok"}</strong>
+      </div>
+      <div className="evidence-field wide">
+        <span>Profil yapılandırması</span>
+        <strong>{source.profile_config_artifact_kind}</strong>
+        <EvidenceHash label="Profil yapılandırma SHA256" value={source.profile_config_sha256} />
+      </div>
+    </div>
+  );
+  const profileEvidenceTechnical = (
+    <dl>
+      <Detail label="Profil atama zamanı" value={formatDate(source.profile_assigned_at)} />
+      <Detail label="Profil atama kodu" value={source.profile_assignment_reason} mono />
+      <Detail label="Köken kodu" value={source.data_origin} mono />
+      {source.production_run_id && <Detail label="Üretim çalışması kimliği" value={source.production_run_id} mono />}
+      {reviewMode && reviewClaim?.review_campaign_id && <Detail label="İnceleme kampanyası kimliği" value={reviewClaim.review_campaign_id} mono />}
+    </dl>
+  );
+
   return (
-    <aside className="inspector" aria-label="Kaynak ayrıntısı">
+    <aside className={`inspector${reviewMode ? " review-workspace-panel" : ""}`} aria-label={reviewMode ? "Belge inceleme çalışma alanı" : "Kaynak ayrıntısı"}>
       <div className="inspector-header">
-        <div><span>Kaynak ayrıntısı</span><h2>{source.name}</h2></div>
+        <div>
+          <span>{reviewMode ? "Odaklı belge inceleme" : "Kaynak ayrıntısı"}</span>
+          <h2>{source.name}</h2>
+          {reviewMode && <p className="review-workspace-subtitle">{pendingDocuments.length.toLocaleString("tr-TR")} bekleyen örnek · {riskyDocuments.length.toLocaleString("tr-TR")} riskli · {reviewedCount.toLocaleString("tr-TR")} tamamlandı</p>}
+        </div>
         <div className="header-actions">
           {canManageSource && <button className="icon-button" type="button" title="Metadata düzenle" onClick={() => editDialog.current?.showModal()}><Edit3 size={17} /></button>}
-          <button className="icon-button" type="button" title="Ayrıntıyı kapat" onClick={onClose}><X size={18} /></button>
+          <button className="icon-button review-back-button" type="button" title={reviewMode ? "İnceleme kuyruğuna dön" : "Ayrıntıyı kapat"} onClick={onClose}>
+            {reviewMode ? <ArrowLeft size={18} /> : <X size={18} />}
+          </button>
         </div>
       </div>
+
+      {reviewMode && (
+        <section className="review-workspace-guide" aria-label="İnceleme adımları">
+          <strong>Burada yalnız üç şey yapacaksınız</strong>
+          <ol>
+            <li><b>Paketi al:</b> en riskli 10-20 bekleyen belge yalnız size ayrılsın.</li>
+            <li><b>Belgeyi oku:</b> tam metin ayrı pencerede açılır.</li>
+            <li><b>Karar ver:</b> beş puanı girip Onayla, Hassas veya Reddet seçin.</li>
+          </ol>
+        </section>
+      )}
 
       <dl>
         <Detail label="Amaç" value={purposeLabels[source.content_purpose]} />
@@ -676,6 +908,9 @@ export function SourceInspector({
         <Detail label="Hak durumu" value={source.rights_status} />
         <Detail label="Dil / alan" value={`${source.language} / ${source.domain}`} />
         <Detail label="Köken" value={source.lineage_ref} mono />
+        {source.derived_from_source_id && (
+          <Detail label="Türetildiği kaynak" value={source.derived_from_source_id} mono />
+        )}
         <Detail label="Durum" value={source.approval_status} />
         <Detail label="PII / risk" value={`${source.pii_status} / ${source.risk_level}`} />
         <Detail label="Exact tekrar" value={source.duplicate_status} />
@@ -692,6 +927,37 @@ export function SourceInspector({
         {source.byte_size !== undefined && <Detail label="Boyut" value={formatBytes(source.byte_size)} />}
         {source.line_count !== undefined && <Detail label="Satır" value={source.line_count.toLocaleString("tr-TR")} />}
       </dl>
+
+      {reviewMode ? (
+        <details className="review-profile-evidence" data-testid="source-profile-evidence">
+          <summary>
+            <span className="review-profile-evidence-title" role="heading" aria-level={3}><Fingerprint size={15} aria-hidden="true" /> Profil ve kanıt</span>
+            <strong>{source.data_profile_key} · sürüm {source.data_profile_version}</strong>
+            <span className="evidence-status-chip">Salt okunur</span>
+          </summary>
+          <div className="review-profile-evidence-body">
+            <p className="profile-evidence-lead">Bu kaynağın hangi sürümlü kurallarla işlendiğini ve kanıt zincirini gösterir.</p>
+            {profileEvidenceFields}
+            <div className="review-profile-evidence-technical">
+              <strong>Teknik ayrıntılar</strong>
+              {profileEvidenceTechnical}
+            </div>
+          </div>
+        </details>
+      ) : (
+        <section className="inspector-section profile-evidence-section" data-testid="source-profile-evidence">
+          <div className="section-heading">
+            <h3><Fingerprint size={16} /> Profil ve kanıt</h3>
+            <span className="evidence-status-chip">Salt okunur</span>
+          </div>
+          <p className="profile-evidence-lead">Bu kaynağın hangi sürümlü kurallarla işlendiğini ve kanıt zincirini gösterir.</p>
+          {profileEvidenceFields}
+          <details className="evidence-technical">
+            <summary>Teknik ayrıntılar</summary>
+            {profileEvidenceTechnical}
+          </details>
+        </section>
+      )}
 
       <section className="inspector-section">
         <h3><FileText size={16} /> Corpus özeti</h3>
@@ -793,9 +1059,9 @@ export function SourceInspector({
         )}
       </section>
 
-      <section className="inspector-section">
+      <section className="inspector-section review-documents-section">
         <div className="section-heading">
-          <h3><FileText size={16} /> Belge örnekleri</h3>
+          <h3><FileText size={16} /> {reviewMode ? "Yeni inceleme paketi" : "Belge örnekleri"}</h3>
           <div className="header-actions">
             {canResample && (
               <button className="icon-button compact" type="button" disabled={resampling} title="Risk bazlı yeniden örnekle" onClick={() => void queueDocumentResample()}>
@@ -856,38 +1122,51 @@ export function SourceInspector({
                 <span>
                   <strong>{reviewClaim.documents.length.toLocaleString("tr-TR")}</strong> belge size ayrıldı · süre {formatDate(reviewClaim.expires_at)}
                 </span>
-                <button className="text-button" type="button" disabled={claiming} onClick={() => void releaseReviewClaim()}>
-                  Paketi bırak
-                </button>
+                <div className="review-claim-actions">
+                  {reviewMode && <button className="primary-button" type="button" onClick={() => void openNextPendingDocument()}><ClipboardCheck size={16} />Sıradaki belgeyi aç</button>}
+                  <button className="text-button" type="button" disabled={claiming} onClick={() => void releaseReviewClaim()}>
+                    Paketi bırak
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="bulk-selection-row">
                 <label>
-                  Paket boyutu
+                  Paketteki belge
                   <select value={claimBatchSize} onChange={(event) => setClaimBatchSize(Number(event.target.value))}>
                     <option value={10}>10</option>
                     <option value={20}>20</option>
-                    <option value={50}>50</option>
-                    <option value={100}>100</option>
-                    <option value={200}>200</option>
+                    {!reviewMode && <option value={50}>50</option>}
+                    {!reviewMode && <option value={100}>100</option>}
+                    {!reviewMode && <option value={200}>200</option>}
                   </select>
                 </label>
                 <button className="primary-button" type="button" disabled={claiming || source.document_sampling_status !== "sampled" || reviewedCount >= sampleCount} onClick={() => void acquireReviewClaim()}>
-                  {claiming ? <LoaderCircle className="spin" size={16} /> : <ClipboardCheck size={16} />} Güvenli paket al
+                  {claiming ? <LoaderCircle className="spin" size={16} /> : <ClipboardCheck size={16} />}
+                  {reviewMode ? "Paketi al ve incelemeye başla" : "Güvenli paket al"}
                 </button>
               </div>
             )}
             <small>Belgeler 15 dakika boyunca yalnız size atanır; açık oturum paketi otomatik yeniler.</small>
           </div>
         )}
-        <div className="document-filter-tabs" role="tablist" aria-label="Belge örneği filtresi">
+        {reviewMode && (
+          <p className="review-package-order" role="note">
+            <strong>Nereden başlar?</strong> Sistem yalnız <b>Bekleyen</b> ve başka bir inceleyiciye
+            ayrılmamış belgeleri seçer. Risk puanı yüksek olan önce gelir; eşit puanda satır
+            numarası küçük olan öne alınır. Tamamlanan belgeler yeni pakete girmez. Geri alınan
+            bir kararın belgesi Bekleyen kuyruğuna döner ve sonraki paketlerden birine yeniden
+            atanabilir.
+          </p>
+        )}
+        {!reviewMode && <div className="document-filter-tabs" role="tablist" aria-label="Belge örneği filtresi">
           <button type="button" aria-pressed={documentStatusFilter === "pending"} onClick={() => setDocumentStatusFilter("pending")}>Bekleyen {pendingDocuments.length}</button>
           <button type="button" aria-pressed={documentStatusFilter === "risk"} onClick={() => setDocumentStatusFilter("risk")}>Riskli {riskyDocuments.length}</button>
           <button type="button" aria-pressed={documentStatusFilter === "approved"} onClick={() => setDocumentStatusFilter("approved")}>Onaylı {approvedDocuments.length}</button>
           <button type="button" aria-pressed={documentStatusFilter === "flagged"} onClick={() => setDocumentStatusFilter("flagged")}>İşaretli {flaggedDocuments.length}</button>
           <button type="button" aria-pressed={documentStatusFilter === "all"} onClick={() => setDocumentStatusFilter("all")}>Tümü {documents.length}</button>
-        </div>
-        {canReview && selectableDocuments.length > 0 && !["approved", "flagged"].includes(documentStatusFilter) && (
+        </div>}
+        {canReview && !reviewMode && selectableDocuments.length > 0 && !["approved", "flagged"].includes(documentStatusFilter) && (
           <form className="bulk-review-form" onSubmit={submitBulkDocumentReview}>
             <div className="bulk-selection-row">
               <label>
@@ -912,8 +1191,8 @@ export function SourceInspector({
           </form>
         )}
         <div className="document-list">
-          {filteredDocuments.map((document) => {
-            const canSelect = canReview && claimedDocumentIDs.has(document.id) && (document.status === "sampled" || document.status === "edited");
+          {displayedDocuments.map((document) => {
+            const canSelect = !reviewMode && canReview && claimedDocumentIDs.has(document.id) && (document.status === "sampled" || document.status === "edited");
             return (
               <div key={document.id} className={`document-list-row${canSelect ? " selectable" : ""}`}>
                 {canSelect && (
@@ -933,13 +1212,71 @@ export function SourceInspector({
               </div>
             );
           })}
-          {!loading && filteredDocuments.length === 0 && (
+          {!loading && displayedDocuments.length === 0 && (
             <p className="muted-copy">
-              {source.document_sampling_status === "failed" ? "Belge örnekleme işi başarısız." : documents.length === 0 ? "Henüz belge örneği oluşturulmadı." : "Bu filtrede örnek yok."}
+              {reviewMode && !reviewClaim
+                ? "Başlamak için yukarıdaki “Paketi al ve incelemeye başla” düğmesine basın."
+                : source.document_sampling_status === "failed" ? "Belge örnekleme işi başarısız." : documents.length === 0 ? "Henüz belge örneği oluşturulmadı." : "Bu filtrede örnek yok."}
             </p>
           )}
         </div>
       </section>
+
+      {reviewMode && (
+        <section
+          className="inspector-section reviewed-documents-section"
+          data-testid="document-review-history"
+        >
+          <div className="section-heading">
+            <h3><History size={16} /> İncelediklerim</h3>
+            <span className="review-history-total">{reviewHistoryCounts.all.toLocaleString("tr-TR")} belge</span>
+          </div>
+          <p className="reviewed-documents-intro">
+            Burada yalnız sizin bu kaynak için verdiğiniz kararlar ve geri alma kayıtlarınız
+            görünür. Yeni paketteki bekleyen belgelerden bağımsızdır.
+          </p>
+          <p className="review-history-help">
+            Bir kararı değiştirmek için belgeyi açın; <b>Geçmiş</b> bölümündeki
+            <b> Kararı geri al</b> düğmesini kullanın. Eski kayıt silinmez. Belge Bekleyen
+            kuyruğuna döner ve yeniden incelemek için daha sonraki bir pakette size veya başka
+            bir inceleyiciye atanır.
+          </p>
+          <div className="reviewed-document-filter-tabs" role="tablist" aria-label="İncelediklerim filtresi">
+            <button type="button" aria-pressed={reviewHistoryFilter === "all"} onClick={() => setReviewHistoryFilter("all")}>Tümü {reviewHistoryCounts.all}</button>
+            <button type="button" aria-pressed={reviewHistoryFilter === "approved"} onClick={() => setReviewHistoryFilter("approved")}>Onaylı {reviewHistoryCounts.approved}</button>
+            <button type="button" aria-pressed={reviewHistoryFilter === "rejected"} onClick={() => setReviewHistoryFilter("rejected")}>Reddedildi {reviewHistoryCounts.rejected}</button>
+            <button type="button" aria-pressed={reviewHistoryFilter === "sensitive_review"} onClick={() => setReviewHistoryFilter("sensitive_review")}>Hassas {reviewHistoryCounts.sensitive_review}</button>
+            <button type="button" aria-pressed={reviewHistoryFilter === "reversed"} onClick={() => setReviewHistoryFilter("reversed")}>Geri alındı {reviewHistoryCounts.reversed}</button>
+          </div>
+          <div className="document-list reviewed-document-list">
+            {displayedReviewHistory.map((item) => (
+              <div key={item.document.id} className="document-list-row">
+                <button
+                  className={`document-card review-history-${item.decision}`}
+                  type="button"
+                  onClick={() => void openDocument(item.document)}
+                >
+                  <span>#{item.document.source_ordinal}</span>
+                  <strong>{item.document.text_preview}</strong>
+                  <small>
+                    <b>{reviewHistoryDecisionLabel(item.decision)}</b>
+                    {" · "}{formatDate(item.latestAt)}
+                    {" · "}{item.reviews.length.toLocaleString("tr-TR")} karar kaydı
+                  </small>
+                  {item.decision === "reversed" && (
+                    <small className="review-history-queue-note">
+                      Bekleyen kuyruğuna döndü; yeni bir pakete atanabilir.
+                    </small>
+                  )}
+                </button>
+              </div>
+            ))}
+            {!loading && displayedReviewHistory.length === 0 && (
+              <p className="muted-copy">Bu filtrede size ait karar kaydı yok.</p>
+            )}
+          </div>
+        </section>
+      )}
 
       {canReview && (
         <section className="inspector-section">
@@ -986,55 +1323,163 @@ export function SourceInspector({
         </form>
       </dialog>
 
-      <dialog ref={documentDialog} className="source-dialog document-dialog">
+      <dialog ref={documentDialog} className="source-dialog document-dialog" aria-labelledby="document-dialog-title">
         {activeDocument && (
           <div className="document-dialog-body">
             <div className="dialog-header">
-              <div><span>Satır {activeDocument.source_ordinal} · sürüm {activeDocument.current_version}</span><h2>Belge örneği</h2></div>
-              <button className="icon-button" type="button" title="Pencereyi kapat" onClick={() => documentDialog.current?.close()}><X size={19} /></button>
+              <div><span>Satır {activeDocument.source_ordinal} · sürüm {activeDocument.current_version}</span><h2 id="document-dialog-title">Belge örneği</h2></div>
+              <button className="icon-button" type="button" title="Pencereyi kapat" aria-label="Pencereyi kapat" onClick={() => documentDialog.current?.close()}><X size={19} /></button>
             </div>
-            <label className="document-content-label">
-              İçerik
-              <textarea
-                value={documentContent}
-                onChange={(event) => setDocumentContent(event.target.value)}
-                rows={16}
-                readOnly={!canEditDocument}
-              />
-            </label>
-            {canEditDocument && (
-              <form className="document-edit-form" onSubmit={updateDocument}>
-                <label>Düzenleme gerekçesi<input name="reason" placeholder="Kısa değişiklik notu" /></label>
-                <div className="dialog-actions"><button className="primary-button" type="submit"><Save size={16} />Yeni sürümü kaydet</button></div>
-              </form>
-            )}
-            {canReview && claimedDocumentIDs.has(activeDocument.id) && (
-              <form className="document-review-form" onSubmit={submitDocumentReview}>
-                <h3><CheckCircle2 size={16} /> Belge moderasyonu</h3>
-                <div className="document-review-fields">
-                  <QualityRubricFields />
-                  <label>Karar gerekçesi<textarea name="reason" rows={2} placeholder="Ret ve hassas incelemede zorunlu" /></label>
-                </div>
-                <div className="review-actions">
-                  <button className="approve-button" type="submit" name="decision" value="approved"><Check size={16} />Onayla</button>
-                  <button className="warning-button" type="submit" name="decision" value="sensitive_review"><ShieldAlert size={16} />Hassas</button>
-                  <button className="danger-button" type="submit" name="decision" value="rejected"><XCircle size={16} />Reddet</button>
-                </div>
-              </form>
-            )}
-            <div className="document-review-history">
-              {documentReviews.map((review) => (
-                <div key={review.id}>
-                  <span className={`review-decision ${review.decision}`}>{review.decision}</span>
-                  <div className="review-quality-values">
-                    <strong>Genel {review.quality_score}/5</strong>
-                    {review.rubric_version === "multidimensional-v1" ? (
-                      <span>Dil {review.language_quality_score}/5 · Tutarlılık {review.coherence_score}/5 · Bilgi {review.information_density_score}/5 · Temizlik {review.cleanliness_score}/5</span>
-                    ) : <span>Eski tek puanlı rubric</span>}
+            <div className="document-review-layout">
+              <section className="document-reading-pane" aria-labelledby="document-reading-title">
+                <div className="document-reading-heading">
+                  <div>
+                    <h3 id="document-reading-title">Okuma görünümü</h3>
+                    <p>Yalnız ekranda paragraflara ayrıldı; kaydedilen ham metin değişmedi.</p>
                   </div>
-                  <small>v{review.document_version} · {formatDate(review.created_at)}</small>
+                  <span>{activeDocument.char_count.toLocaleString("tr-TR")} karakter</span>
                 </div>
-              ))}
+
+                {activeDocument.risk_reasons.length > 0 && (
+                  <div className="document-risk-banner" role="note">
+                    <strong>Otomatik uyarılar</strong>
+                    <span>{activeDocument.risk_reasons.map((reason) => riskReasonLabels[reason] ?? reason).join(" · ")}</span>
+                    <small>Uyarılar yardımcı sinyaldir; tek başına karar değildir.</small>
+                  </div>
+                )}
+
+                <div className="readable-document" role="document" aria-label="Okuma görünümü" tabIndex={0}>
+                  {readableParagraphs(documentContent).map((paragraph, paragraphIndex) => (
+                    <p key={`${activeDocument.id}-paragraph-${paragraphIndex}`}>{paragraph}</p>
+                  ))}
+                </div>
+
+                <details className="raw-document-details" open={canEditDocument}>
+                  <summary>Ham metni göster</summary>
+                  <label className="document-content-label">
+                    Ham içerik
+                    <textarea
+                      value={documentContent}
+                      onChange={(event) => setDocumentContent(event.target.value)}
+                      rows={12}
+                      readOnly={!canEditDocument}
+                    />
+                  </label>
+                </details>
+
+                {canEditDocument && (
+                  <form className="document-edit-form" onSubmit={updateDocument}>
+                    <label>Düzenleme gerekçesi<input name="reason" placeholder="Kısa değişiklik notu" /></label>
+                    <div className="dialog-actions"><button className="primary-button" type="submit"><Save size={16} />Yeni sürümü kaydet</button></div>
+                  </form>
+                )}
+              </section>
+
+              <section className="document-decision-pane" aria-label="Belge kararı">
+                <div className="review-decision-guide">
+                  <strong>Tek karar sorusu</strong>
+                  <p>Bu metin, düzeltme yapmadan eğitim verisine girebilir mi?</p>
+                  <ul>
+                    <li><b>Evet:</b> puanları kontrol edip Onayla.</li>
+                    <li><b>Hayır:</b> uygun şablonu seçip Reddet.</li>
+                    <li><b>Kişisel/mahrem veri şüphesi:</b> Hassas seçerek karantinaya al.</li>
+                  </ul>
+                  <small>Ret için baş, orta ve sondan en az iki bölgeyi doğrulayın. Onay için metni daha geniş okuyun.</small>
+                </div>
+
+                {canReview && claimedDocumentIDs.has(activeDocument.id) && (
+                  <form
+                    key={`${activeDocument.id}-${activeDocument.current_version}`}
+                    className="document-review-form"
+                    onSubmit={submitDocumentReview}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && !(event.target instanceof HTMLTextAreaElement)) event.preventDefault();
+                    }}
+                  >
+                    <h3><CheckCircle2 size={16} /> Belge moderasyonu</h3>
+                    <div className="review-preset-section">
+                      <span>Bu belge neden uygun değil?</span>
+                      <small>Bir neden seçin; puanlar ve gerekçe doldurulur. Gerekirse düzenleyin, kararı siz gönderin.</small>
+                      <div className="review-preset-grid">
+                        {reviewPresets.map((preset) => (
+                          <button
+                            key={preset.id}
+                            type="button"
+                            aria-pressed={selectedReviewPresetID === preset.id}
+                            onClick={(event) => {
+                              applyReviewPreset(event.currentTarget.form, preset);
+                              setSelectedReviewPresetID(preset.id);
+                            }}
+                          >
+                            <strong>{preset.label}</strong>
+                            <span>{preset.description}</span>
+                          </button>
+                        ))}
+                      </div>
+                      {selectedReviewPresetID && (
+                        <div className="review-preset-selected" role="status">
+                          <span>Ret şablonu seçili; Onayla kapatıldı.</span>
+                          <button type="button" onClick={(event) => {
+                            event.currentTarget.form?.reset();
+                            setSelectedReviewPresetID(null);
+                          }}>Şablonu temizle</button>
+                        </div>
+                      )}
+                    </div>
+                    <div className="document-review-fields">
+                      <QualityRubricFields />
+                      <label>
+                        Karar gerekçesi
+                        <textarea name="reason" rows={4} placeholder="Ret ve hassas incelemede zorunlu" />
+                        <small className="reason-privacy-hint">Telefon, e-posta, IBAN veya başka kişisel değeri buraya kopyalamayın; yalnız sorun türünü yazın.</small>
+                      </label>
+                    </div>
+                    <div className="review-actions">
+                      <button className="approve-button" type="submit" name="decision" value="approved" disabled={documentReviewing || selectedReviewPresetID !== null}><Check size={16} />Onayla</button>
+                      <button className="warning-button" type="submit" name="decision" value="sensitive_review" disabled={documentReviewing}><ShieldAlert size={16} />Hassas işaretle</button>
+                      <button className="danger-button" type="submit" name="decision" value="rejected" disabled={documentReviewing}><XCircle size={16} />Reddet</button>
+                    </div>
+                  </form>
+                )}
+
+                <div className="document-review-history">
+                  {documentReviews.map((review) => (
+                    <div key={review.id} className={review.reversal ? "is-reversed" : undefined}>
+                      <div className="review-history-heading">
+                        <span className={`review-decision ${review.decision}`}>{review.decision}</span>
+                        {review.reversal && <span className="review-reversal-badge">Geri alındı</span>}
+                      </div>
+                      <div className="review-quality-values">
+                        <strong>Genel {review.quality_score}/5</strong>
+                        {review.rubric_version === "multidimensional-v1" ? (
+                          <span>Dil {review.language_quality_score}/5 · Tutarlılık {review.coherence_score}/5 · Bilgi {review.information_density_score}/5 · Temizlik {review.cleanliness_score}/5</span>
+                        ) : <span>Eski tek puanlı rubric</span>}
+                        {review.reason && <span className="review-history-reason">{review.reason}</span>}
+                        {review.reversal && (
+                          <span className="review-reversal-reason">
+                            Geri alma gerekçesi: {review.reversal.reason}
+                          </span>
+                        )}
+                      </div>
+                      <small>v{review.document_version} · {formatDate(review.created_at)}</small>
+                      {!review.reversal
+                        && review.document_version === activeDocument.current_version
+                        && activeDocument.status === decisionDocumentStatus(review.decision)
+                        && (review.reviewer_id === user.id || user.roles.includes("admin"))
+                        && (
+                          <button
+                            className="review-reversal-button"
+                            type="button"
+                            disabled={reversingReviewID === review.id}
+                            onClick={() => reverseDocumentReview(review)}
+                          >
+                            {reversingReviewID === review.id ? "Geri alınıyor…" : "Kararı geri al"}
+                          </button>
+                        )}
+                    </div>
+                  ))}
+                </div>
+              </section>
             </div>
             <div className="dialog-actions"><button className="text-button" type="button" onClick={() => documentDialog.current?.close()}>Kapat</button></div>
           </div>
@@ -1048,6 +1493,18 @@ function Detail({ label, value, mono = false }: { label: string; value: string; 
   return <div><dt>{label}</dt><dd className={mono ? "mono" : undefined}>{value}</dd></div>;
 }
 
+function profileAssignmentLabel(value: Source["profile_assignment_reason"]) {
+  return value === "declared_at_ingest" ? "Alım sırasında atandı" : value === "backfilled" ? "Geçmiş kayda uygulandı" : value;
+}
+
+function dataOriginLabel(value: Source["data_origin"]) {
+  return value === "human" ? "İnsan üretimi" : value === "model" ? "Model üretimi" : value === "hybrid" ? "Karma üretim" : "Bilinmiyor";
+}
+
+function shortenIdentifier(value: string) {
+  return value.length > 18 ? `${value.slice(0, 8)}…${value.slice(-6)}` : value;
+}
+
 function CorpusMetric({ label, value, tone = "neutral" }: { label: string; value: string; tone?: "neutral" | "good" | "watch" | "risk" }) {
   return <div className={`corpus-metric ${tone}`}><span>{label}</span><strong>{value}</strong></div>;
 }
@@ -1056,6 +1513,7 @@ function QualityRubricFields() {
   return (
     <fieldset className="quality-rubric-fields">
       <legend>Kalite puanları</legend>
+      <p className="quality-rubric-scale">1 çok kötü · 2 sorunlu · 3 sınırda · 4 iyi · 5 çok iyi</p>
       <div>
         {qualityScoreFields.map((field) => (
           <label key={field.name} title={field.title}>
@@ -1066,7 +1524,8 @@ function QualityRubricFields() {
               min="1"
               max="5"
               step="1"
-              defaultValue="3"
+              defaultValue=""
+              placeholder="–"
               aria-label={`${field.label} kalite puanı`}
               required
             />
@@ -1089,6 +1548,61 @@ function readQualityScores(data: FormData): QualityScores | null {
     scores[field.name] = value;
   }
   return scores;
+}
+
+function reviewDecisionLabel(decision: string) {
+  const labels: Record<string, string> = {
+    approved: "Onayla",
+    sensitive_review: "Hassas olarak işaretle",
+    rejected: "Reddet",
+  };
+  return labels[decision] ?? decision;
+}
+
+function decisionDocumentStatus(decision: DocumentReview["decision"]): Document["status"] {
+  return {
+    approved: "approved",
+    sensitive_review: "sensitive_review",
+    rejected: "rejected",
+  }[decision] as Document["status"];
+}
+
+function currentReviewHistoryDecision(item: DocumentReviewHistoryItem): ReviewHistoryDecision {
+  const currentReview = [...item.reviews]
+    .sort((left, right) => right.created_at.localeCompare(left.created_at))
+    .find((review) => !review.reversal);
+  return currentReview?.decision ?? "reversed";
+}
+
+function latestReviewDate(reviews: DocumentReview[]) {
+  return reviews.reduce((latest, review) => {
+    const eventDate = review.reversal?.created_at ?? review.created_at;
+    return eventDate > latest ? eventDate : latest;
+  }, new Date(0).toISOString());
+}
+
+function reviewHistoryDecisionLabel(decision: ReviewHistoryDecision) {
+  return decision === "reversed" ? "Geri alındı" : documentStatusLabel(decision);
+}
+
+function confirmReviewDecision(decision: string, documentCount: number) {
+  const subject = documentCount === 1 ? "Bu belge" : `${documentCount.toLocaleString("tr-TR")} belge`;
+  return window.confirm(`${subject} için ${reviewDecisionLabel(decision)} kararı kaydedilsin mi? Karar denetim geçmişine yazılır.`);
+}
+
+function applyReviewPreset(form: HTMLFormElement | null, preset: ReviewPreset) {
+  if (!form) return;
+  for (const field of qualityScoreFields) {
+    const input = form.elements.namedItem(field.name);
+    if (input instanceof HTMLInputElement) {
+      input.value = String(preset.scores[field.name]);
+    }
+  }
+  const reason = form.elements.namedItem("reason");
+  if (reason instanceof HTMLTextAreaElement) {
+    reason.value = preset.reason;
+    reason.focus();
+  }
 }
 
 function findingSummary(scan: PIIScan) {

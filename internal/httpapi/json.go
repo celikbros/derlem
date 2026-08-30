@@ -23,6 +23,9 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 }
 
 func writeError(w http.ResponseWriter, status int, code, message string) {
+	if marker, ok := w.(interface{ markAuditFailure(string) }); ok {
+		marker.markAuditFailure(code)
+	}
 	writeJSON(w, status, apiError{Error: errorBody{Code: code, Message: message}})
 }
 

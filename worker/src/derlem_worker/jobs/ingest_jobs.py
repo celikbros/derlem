@@ -15,7 +15,7 @@ from derlem_worker.extraction import (
     needs_extraction,
 )
 from derlem_worker.storage import ContentAddressedStore, IngestOutcome, StoredObject
-from derlem_worker.jobs.queue import Job
+from derlem_worker.jobs.queue import Job, JobLeaseLost
 
 
 def _resolve_regular_file_under_root(path_value: str, root: Path, field_name: str) -> Path:
@@ -97,6 +97,142 @@ def _same_file_content(left: os.stat_result, right: os.stat_result) -> bool:
 
 
 class IngestJobsMixin:
+    def _validate_ingest_provenance(
+        self,
+        connection: psycopg.Connection,
+        job: Job,
+        *,
+        source_id: str,
+        data_origin: str,
+        production_run_id: str | None,
+        ingested_sha256: str,
+        ingested_byte_size: int,
+    ) -> None:
+        """Fail closed when a source is bound to production provenance.
+
+        Ordinary uploads must never inherit a production run. The sole current
+        run-bound ingest path is the exact child job atomically published by a
+        successful model-distillation parent. Parent result -> child id makes a
+        copied or replayed payload insufficient evidence.
+        """
+        payload_run_id = str(job.payload.get("production_run_id") or "").strip()
+        parent_job_id = str(job.payload.get("distillation_job_id") or "").strip()
+        output_sha256 = str(
+            job.payload.get("distillation_output_sha256") or ""
+        ).strip()
+        raw_output_byte_size = job.payload.get("distillation_output_byte_size")
+        has_handoff_fields = bool(
+            payload_run_id
+            or parent_job_id
+            or output_sha256
+            or raw_output_byte_size is not None
+        )
+        run_bound_source = production_run_id is not None or data_origin in {
+            "model",
+            "hybrid",
+        }
+
+        if not run_bound_source:
+            if has_handoff_fields:
+                raise RuntimeError("Ingest production provenance is unexpected")
+            return
+
+        try:
+            output_byte_size = int(raw_output_byte_size)
+        except (TypeError, ValueError):
+            output_byte_size = -1
+
+        if (
+            data_origin != "model"
+            or production_run_id is None
+            or job.job_type != "ingest_staged_file"
+            or not payload_run_id
+            or not parent_job_id
+            or payload_run_id != production_run_id
+            or len(output_sha256) != 64
+            or any(
+                character not in "0123456789abcdef"
+                for character in output_sha256
+            )
+            or output_byte_size < 0
+        ):
+            raise RuntimeError("Ingest production provenance mismatch")
+
+        evidence = connection.execute(
+            """
+            SELECT parent.id
+            FROM background_jobs AS child
+            JOIN background_jobs AS parent
+              ON parent.id::text = child.payload->>'distillation_job_id'
+            JOIN production_runs AS run
+              ON run.id::text = child.payload->>'production_run_id'
+            JOIN production_run_completions AS completion
+              ON completion.production_run_id = run.id
+             AND completion.job_id = parent.id
+            JOIN storage_objects AS manifest
+              ON btrim(manifest.sha256::text) = parent.result->>'manifest_sha256'
+            WHERE child.id = %s
+              AND child.job_type = 'ingest_staged_file'
+              AND child.status = 'running'
+              AND child.locked_by IS NOT DISTINCT FROM %s
+              AND child.attempts = %s
+              AND child.payload->>'source_id' = %s
+              AND child.payload->>'production_run_id' = %s
+              AND child.payload->>'distillation_job_id' = %s
+              AND parent.id::text = %s
+              AND parent.job_type = 'distill_source'
+              AND parent.status = 'succeeded'
+              AND parent.created_by IS NOT DISTINCT FROM child.created_by
+              AND parent.payload->>'source_id' = %s
+              AND parent.payload->>'production_run_id' = %s
+              AND parent.result->>'production_run_id' = %s
+              AND parent.result->>'ingest_job_id' = child.id::text
+              AND parent.result->>'manifest_sha256' ~ '^[0-9a-f]{64}$'
+              AND child.payload->>'distillation_output_sha256' = %s
+              AND child.payload->>'distillation_output_byte_size' = %s
+              AND parent.result->>'output_sha256' = %s
+              AND parent.result->>'output_sha256' =
+                    child.payload->>'distillation_output_sha256'
+              AND parent.result->>'output_byte_size' = %s
+              AND parent.result->>'output_byte_size' =
+                    child.payload->>'distillation_output_byte_size'
+              AND btrim(completion.output_manifest_sha256::text) =
+                    parent.result->>'manifest_sha256'
+              AND btrim(completion.output_sha256::text) =
+                    parent.result->>'output_sha256'
+              AND completion.output_byte_size::text =
+                    parent.result->>'output_byte_size'
+              AND completion.output_record_count::text =
+                    parent.result->>'document_count'
+              AND completion.completed_at = parent.completed_at
+              AND run.run_kind = 'model_generation'
+              AND run.origin_kind = 'model'
+            """,
+            (
+                job.id,
+                job.lease_owner,
+                job.attempts,
+                source_id,
+                production_run_id,
+                parent_job_id,
+                parent_job_id,
+                source_id,
+                production_run_id,
+                production_run_id,
+                output_sha256,
+                str(output_byte_size),
+                output_sha256,
+                str(output_byte_size),
+            ),
+        ).fetchone()
+        if evidence is None:
+            raise RuntimeError("Ingest production provenance handoff is invalid or stale")
+        if (ingested_sha256, ingested_byte_size) != (
+            output_sha256,
+            output_byte_size,
+        ):
+            raise RuntimeError("Distillation output artifact mismatch")
+
     def _snapshot_ingest_source(self, job: Job, source_path: Path) -> Path:
         """Pin or copy one source into private attempt-local staging.
 
@@ -320,7 +456,8 @@ class IngestJobsMixin:
         with connection.transaction():
             declared = connection.execute(
                 """
-                SELECT declared_sha256, declared_byte_size, declared_line_count
+                SELECT declared_sha256, declared_byte_size, declared_line_count,
+                    data_origin, production_run_id::text
                 FROM sources
                 WHERE id = %s
                 FOR UPDATE
@@ -329,7 +466,24 @@ class IngestJobsMixin:
             ).fetchone()
             if declared is None:
                 raise RuntimeError("Source was not found")
-            declared_sha256, declared_byte_size, declared_line_count = declared
+            (
+                declared_sha256,
+                declared_byte_size,
+                declared_line_count,
+                data_origin,
+                production_run_id,
+            ) = declared
+            self._validate_ingest_provenance(
+                connection,
+                job,
+                source_id=source_id,
+                data_origin=str(data_origin),
+                production_run_id=(
+                    str(production_run_id) if production_run_id is not None else None
+                ),
+                ingested_sha256=stored.sha256,
+                ingested_byte_size=stored.byte_size,
+            )
             mismatches = []
             if declared_sha256 is not None and str(declared_sha256) != stored.sha256:
                 mismatches.append("sha256")
@@ -437,11 +591,13 @@ class IngestJobsMixin:
                 """,
                 (source_id, stored.sha256, source_id),
             )
-            connection.execute(
+            completed_job = connection.execute(
                 """
                 UPDATE background_jobs
                 SET status = 'succeeded', result = %s::jsonb, completed_at = now(), updated_at = now()
                 WHERE id = %s AND status = 'running'
+                  AND locked_by IS NOT DISTINCT FROM %s
+                  AND attempts = %s
                 """,
                 (
                     json.dumps(
@@ -458,5 +614,9 @@ class IngestJobsMixin:
                         }
                     ),
                     job.id,
+                    job.lease_owner,
+                    job.attempts,
                 ),
             )
+            if completed_job.rowcount != 1:
+                raise JobLeaseLost(f"Job lease is no longer owned: {job.id}")

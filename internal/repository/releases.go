@@ -103,6 +103,221 @@ func (r *Releases) Create(ctx context.Context, input domain.CreateReleaseInput, 
 		).Scan(&source.AddedAt); err != nil {
 			return domain.Release{}, fmt.Errorf("insert release source: %w", err)
 		}
+
+		var reviewEvidenceStatus string
+		err := tx.QueryRow(ctx, `
+			WITH selected_source AS (
+				SELECT source.*, profile.payload_schema_sha256,
+					profile.field_extraction_sha256, profile.rubric_key,
+					profile.rubric_version, profile.export_contract_key,
+					profile.export_contract_version, profile.is_terminal_legacy,
+					rubric.spec_sha256 AS rubric_sha256,
+					export.spec_sha256 AS export_contract_sha256
+				FROM sources AS source
+				JOIN data_profile_versions AS profile
+				  ON profile.data_profile_key = source.data_profile_key
+				 AND profile.data_profile_version = source.data_profile_version
+				JOIN review_rubric_versions AS rubric
+				  ON rubric.rubric_key = profile.rubric_key
+				 AND rubric.rubric_version = profile.rubric_version
+				JOIN export_contract_versions AS export
+				  ON export.export_contract_key = profile.export_contract_key
+				 AND export.export_contract_version = profile.export_contract_version
+				WHERE source.id = $2
+			),
+			selected_campaign AS (
+				SELECT campaign.*
+				FROM review_campaigns AS campaign
+				JOIN selected_source AS source
+				  ON source.id = campaign.source_id
+				 AND source.document_sample_generation = campaign.sample_generation
+				 AND source.data_profile_key = campaign.data_profile_key
+				 AND source.data_profile_version = campaign.data_profile_version
+				 AND source.content_purpose = campaign.content_purpose
+				 AND source.profile_config_sha256 = campaign.profile_config_sha256
+				WHERE EXISTS (
+					SELECT 1 FROM documents AS document
+					WHERE document.source_id = source.id AND document.is_active
+				)
+				AND NOT EXISTS (
+					SELECT 1
+					FROM documents AS document
+					WHERE document.source_id = source.id
+					  AND document.is_active
+					  AND NOT EXISTS (
+						SELECT 1
+						FROM document_reviews AS review
+						WHERE review.document_id = document.id
+						  AND review.document_version = document.current_version
+						  AND review.object_sha256 = document.current_object_sha256
+						  AND review.review_campaign_id = campaign.id
+						  AND review.decision = 'approved'
+						  AND NOT EXISTS (
+							SELECT 1
+							FROM document_review_reversals AS reversal
+							WHERE reversal.review_id = review.id
+						  )
+					  )
+				)
+				ORDER BY campaign.created_at DESC, campaign.id DESC
+				LIMIT 1
+			),
+			legacy_evidence AS (
+				SELECT source.id AS source_id,
+					EXISTS (
+						SELECT 1 FROM documents AS document
+						WHERE document.source_id = source.id AND document.is_active
+					) AND NOT EXISTS (
+						SELECT 1
+						FROM documents AS document
+						WHERE document.source_id = source.id
+						  AND document.is_active
+						  AND NOT EXISTS (
+							SELECT 1
+							FROM document_reviews AS review
+							WHERE review.document_id = document.id
+							  AND review.document_version = document.current_version
+							  AND review.object_sha256 = document.current_object_sha256
+							  AND review.review_campaign_id IS NULL
+							  AND review.decision = 'approved'
+							  AND NOT EXISTS (
+								SELECT 1
+								FROM document_review_reversals AS reversal
+								WHERE reversal.review_id = review.id
+							  )
+						  )
+					) AND NOT EXISTS (
+						SELECT 1
+						FROM documents AS document
+						JOIN document_reviews AS review
+						  ON review.document_id = document.id
+						 AND review.document_version = document.current_version
+						LEFT JOIN document_review_reversals AS reversal
+						  ON reversal.review_id = review.id
+						WHERE document.source_id = source.id
+						  AND document.is_active
+						  AND review.object_sha256 = document.current_object_sha256
+						  AND review.review_campaign_id IS NOT NULL
+						  AND reversal.review_id IS NULL
+					) AS complete
+				FROM selected_source AS source
+			),
+			selected_contract AS (
+				SELECT contract.*
+				FROM selected_source AS source
+				LEFT JOIN selected_campaign AS campaign ON true
+				JOIN LATERAL (
+					SELECT candidate.*
+					FROM profile_purpose_contract_versions AS candidate
+					WHERE candidate.data_profile_key = source.data_profile_key
+					  AND candidate.data_profile_version = source.data_profile_version
+					  AND candidate.content_purpose = source.content_purpose
+					  AND (
+						(
+							campaign.id IS NOT NULL
+							AND candidate.purpose_contract_version =
+								campaign.purpose_contract_version
+						)
+						OR (
+							campaign.id IS NULL
+							AND source.is_terminal_legacy
+							AND candidate.purpose_contract_version = '1'
+						)
+					  )
+					LIMIT 1
+				) AS contract ON true
+			),
+			evidence AS (
+				SELECT CASE
+					WHEN campaign.id IS NOT NULL THEN 'campaign_pinned'
+					WHEN source.is_terminal_legacy AND legacy.complete
+						THEN 'absent_pre_registry'
+				END AS status,
+				campaign.id AS review_campaign_id
+				FROM selected_source AS source
+				CROSS JOIN legacy_evidence AS legacy
+				LEFT JOIN selected_campaign AS campaign ON true
+			)
+			INSERT INTO release_source_contract_snapshots(
+				release_id, source_id, data_profile_key, data_profile_version,
+				content_purpose, data_origin, production_run_id,
+				derived_from_source_id,
+				profile_config_artifact_kind,
+				profile_config_sha256, payload_schema_sha256,
+				field_extraction_sha256, rubric_key, rubric_version,
+				rubric_sha256, protocol_key, protocol_version,
+				protocol_sha256, pii_policy_key, pii_policy_version,
+				pii_policy_sha256, dedup_policy_key, dedup_policy_version,
+				dedup_policy_sha256, leakage_policy_key,
+				leakage_policy_version, leakage_policy_sha256,
+				purpose_contract_version, purpose_contract_sha256,
+				export_contract_key, export_contract_version,
+				export_contract_sha256, review_evidence_status,
+				review_campaign_id, implementation_bundle_sha256
+			)
+			SELECT $1, source.id, source.data_profile_key,
+				source.data_profile_version, source.content_purpose,
+				source.data_origin, source.production_run_id,
+				source.derived_from_source_id,
+				source.profile_config_artifact_kind, source.profile_config_sha256,
+				source.payload_schema_sha256, source.field_extraction_sha256,
+				source.rubric_key, source.rubric_version, source.rubric_sha256,
+				contract.protocol_key, contract.protocol_version,
+				protocol.spec_sha256, contract.pii_policy_key,
+				contract.pii_policy_version, pii.spec_sha256,
+				contract.dedup_policy_key, contract.dedup_policy_version,
+				dedup.spec_sha256, contract.leakage_policy_key,
+				contract.leakage_policy_version, leakage.spec_sha256,
+				contract.purpose_contract_version, contract.spec_sha256,
+				source.export_contract_key, source.export_contract_version,
+				source.export_contract_sha256, evidence.status,
+				evidence.review_campaign_id, contract.implementation_bundle_sha256
+			FROM selected_source AS source
+			CROSS JOIN selected_contract AS contract
+			CROSS JOIN evidence
+			JOIN review_protocol_versions AS protocol
+			  ON protocol.protocol_key = contract.protocol_key
+			 AND protocol.protocol_version = contract.protocol_version
+			JOIN data_policy_versions AS pii
+			  ON pii.policy_kind = 'pii'
+			 AND pii.policy_key = contract.pii_policy_key
+			 AND pii.policy_version = contract.pii_policy_version
+			JOIN data_policy_versions AS dedup
+			  ON dedup.policy_kind = 'dedup'
+			 AND dedup.policy_key = contract.dedup_policy_key
+			 AND dedup.policy_version = contract.dedup_policy_version
+			JOIN data_policy_versions AS leakage
+			  ON leakage.policy_kind = 'leakage'
+			 AND leakage.policy_key = contract.leakage_policy_key
+			 AND leakage.policy_version = contract.leakage_policy_version
+			WHERE evidence.status IS NOT NULL
+			RETURNING review_evidence_status
+		`, release.ID, source.SourceID).Scan(&reviewEvidenceStatus)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.Release{}, &GateError{Reasons: []string{
+				"release_review_contract_evidence_incomplete",
+			}}
+		}
+		if err != nil {
+			return domain.Release{}, fmt.Errorf("snapshot release source contract: %w", err)
+		}
+	}
+
+	if err := scanReleaseContractBundle(
+		tx.QueryRow(ctx, `
+			UPDATE releases
+			SET contract_snapshot_status = 'present'
+			WHERE id = $1
+			  AND status = 'draft'
+			  AND contract_snapshot_status = 'pending'
+			RETURNING contract_snapshot_status,
+				contract_snapshot_artifact_kind,
+				contract_snapshot_sha256,
+				implementation_bundle_sha256
+		`, release.ID),
+		&release,
+	); err != nil {
+		return domain.Release{}, fmt.Errorf("finalize release contract snapshot: %w", err)
 	}
 
 	if _, err := tx.Exec(ctx, `
@@ -111,10 +326,15 @@ func (r *Releases) Create(ctx context.Context, input domain.CreateReleaseInput, 
 			$1, 'release.created', 'release', $2,
 			jsonb_build_object(
 				'name', $3::text, 'version', $4::text,
-				'content_purpose', $5::text, 'source_ids', to_jsonb($6::text[])
+				'content_purpose', $5::text, 'source_ids', to_jsonb($6::text[]),
+				'contract_snapshot_status', $7::text,
+				'contract_snapshot_sha256', $8::text,
+				'implementation_bundle_sha256', $9::text
 			)
 		)
-	`, actorID, release.ID, release.Name, release.Version, release.ContentPurpose, input.SourceIDs); err != nil {
+	`, actorID, release.ID, release.Name, release.Version, release.ContentPurpose,
+		input.SourceIDs, release.ContractSnapshotStatus,
+		release.ContractSnapshotSHA256, release.ImplementationBundleSHA256); err != nil {
 		return domain.Release{}, fmt.Errorf("audit release creation: %w", err)
 	}
 
@@ -124,6 +344,15 @@ func (r *Releases) Create(ctx context.Context, input domain.CreateReleaseInput, 
 	release.Sources = sources
 	release.Exports = []domain.ReleaseExport{}
 	return release, nil
+}
+
+func scanReleaseContractBundle(row scanner, release *domain.Release) error {
+	return row.Scan(
+		&release.ContractSnapshotStatus,
+		&release.ContractSnapshotArtifactKind,
+		&release.ContractSnapshotSHA256,
+		&release.ImplementationBundleSHA256,
+	)
 }
 
 func (r *Releases) List(ctx context.Context, limit int, status string) ([]domain.Release, error) {
@@ -270,14 +499,28 @@ func (r *Releases) QueueFreeze(ctx context.Context, id, actorID string) (string,
 	}
 	defer tx.Rollback(ctx)
 
-	var status string
-	if err := tx.QueryRow(ctx, "SELECT status FROM releases WHERE id = $1 FOR UPDATE", id).Scan(&status); errors.Is(err, pgx.ErrNoRows) {
+	var status, contractSnapshotStatus string
+	var contractSnapshotSHA256, implementationBundleSHA256 *string
+	if err := tx.QueryRow(ctx, `
+		SELECT status, contract_snapshot_status, contract_snapshot_sha256,
+			implementation_bundle_sha256
+		FROM releases
+		WHERE id = $1
+		FOR UPDATE
+	`, id).Scan(
+		&status, &contractSnapshotStatus, &contractSnapshotSHA256,
+		&implementationBundleSHA256,
+	); errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrNotFound
 	} else if err != nil {
 		return "", err
 	}
 	if status != "draft" {
 		return "", ErrConflict
+	}
+	if contractSnapshotStatus != "present" || contractSnapshotSHA256 == nil ||
+		implementationBundleSHA256 == nil {
+		return "", &GateError{Reasons: []string{"release_contract_snapshot_missing"}}
 	}
 
 	var sourceCount, invalidCount int
@@ -312,12 +555,17 @@ func (r *Releases) QueueFreeze(ctx context.Context, id, actorID string) (string,
 		INSERT INTO background_jobs(job_type, priority, payload, created_by)
 		VALUES (
 			'freeze_release', 50,
-			jsonb_build_object('release_id', $1::text, 'requested_by', $2::text),
+			jsonb_build_object(
+				'release_id', $1::text, 'requested_by', $2::text,
+				'contract_snapshot_sha256', $3::text,
+				'implementation_bundle_sha256', $4::text
+			),
 			$2::uuid
 		)
 		ON CONFLICT DO NOTHING
 		RETURNING id::text
-	`, id, actorID).Scan(&jobID)
+	`, id, actorID, *contractSnapshotSHA256,
+		*implementationBundleSHA256).Scan(&jobID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrConflict
 	}
@@ -397,7 +645,9 @@ func (r *Releases) ExportArtifact(ctx context.Context, releaseID, exportFormat s
 
 const releaseColumns = `
 	id::text, name, version, content_purpose, status,
-	manifest_object_sha256, manifest_sha256, gate_results,
+	manifest_object_sha256, manifest_sha256, contract_snapshot_status,
+	contract_snapshot_artifact_kind, contract_snapshot_sha256,
+	implementation_bundle_sha256, gate_results,
 	created_by::text, frozen_by::text, created_at, frozen_at`
 
 func scanRelease(row scanner) (domain.Release, error) {
@@ -405,6 +655,8 @@ func scanRelease(row scanner) (domain.Release, error) {
 	err := row.Scan(
 		&release.ID, &release.Name, &release.Version, &release.ContentPurpose,
 		&release.Status, &release.ManifestObjectSHA256, &release.ManifestSHA256,
+		&release.ContractSnapshotStatus, &release.ContractSnapshotArtifactKind,
+		&release.ContractSnapshotSHA256, &release.ImplementationBundleSHA256,
 		&release.GateResults, &release.CreatedBy, &release.FrozenBy,
 		&release.CreatedAt, &release.FrozenAt,
 	)

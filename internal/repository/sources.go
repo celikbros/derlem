@@ -2,10 +2,13 @@ package repository
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/celikbros/derlem/internal/domain"
@@ -99,16 +102,33 @@ func (r *Sources) Create(ctx context.Context, input domain.CreateSourceInput, ac
 		return domain.Source{}, err
 	}
 	defer tx.Rollback(ctx)
+	if input.DerivedFromSourceID != nil {
+		var parentID string
+		err := tx.QueryRow(ctx, `
+			SELECT id::text
+			FROM sources
+			WHERE id = $1
+			FOR KEY SHARE
+		`, *input.DerivedFromSourceID).Scan(&parentID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.Source{}, ErrNotFound
+		}
+		if err != nil {
+			return domain.Source{}, fmt.Errorf("validate derived source parent: %w", err)
+		}
+	}
 
 	row := tx.QueryRow(ctx, `
 		INSERT INTO sources(
 			name, source_type, content_purpose, license, rights_status,
-			language, domain, source_url, license_evidence_ref, lineage_ref, created_by
+			language, domain, source_url, license_evidence_ref, lineage_ref,
+			derived_from_source_id, created_by
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		RETURNING `+sourceColumns,
 		input.Name, input.SourceType, input.ContentPurpose, input.License, input.RightsStatus,
-		input.Language, input.Domain, input.SourceURL, input.LicenseEvidenceRef, input.LineageRef, actorID,
+		input.Language, input.Domain, input.SourceURL, input.LicenseEvidenceRef, input.LineageRef,
+		input.DerivedFromSourceID, actorID,
 	)
 	source, err := scanSource(row)
 	if err != nil {
@@ -116,9 +136,18 @@ func (r *Sources) Create(ctx context.Context, input domain.CreateSourceInput, ac
 	}
 
 	details, _ := json.Marshal(map[string]any{
-		"name":            source.Name,
-		"content_purpose": source.ContentPurpose,
-		"rights_status":   source.RightsStatus,
+		"name":                         source.Name,
+		"content_purpose":              source.ContentPurpose,
+		"rights_status":                source.RightsStatus,
+		"derived_from_source_id":       source.DerivedFromSourceID,
+		"data_profile_key":             source.DataProfileKey,
+		"data_profile_version":         source.DataProfileVersion,
+		"profile_config_artifact_kind": source.ProfileConfigArtifactKind,
+		"profile_config_sha256":        source.ProfileConfigSHA256,
+		"profile_assignment_reason":    source.ProfileAssignmentReason,
+		"profile_assigned_at":          source.ProfileAssignedAt,
+		"data_origin":                  source.DataOrigin,
+		"production_run_id":            source.ProductionRunID,
 	})
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO audit_events(actor_id, action, entity_type, entity_id, details)
@@ -207,13 +236,29 @@ func (r *Sources) queueIngest(
 	}
 	defer tx.Rollback(ctx)
 
-	var objectSHA256 *string
-	if err := tx.QueryRow(ctx, "SELECT object_sha256 FROM sources WHERE id = $1 FOR UPDATE", sourceID).Scan(&objectSHA256); errors.Is(err, pgx.ErrNoRows) {
+	var objectSHA256, productionRunID *string
+	var dataOrigin string
+	if err := tx.QueryRow(ctx, `
+		SELECT object_sha256, data_origin, production_run_id::text
+		FROM sources
+		WHERE id = $1
+		FOR UPDATE
+	`, sourceID).Scan(
+		&objectSHA256, &dataOrigin, &productionRunID,
+	); errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrNotFound
 	} else if err != nil {
 		return "", err
 	}
 	if objectSHA256 != nil {
+		return "", ErrConflict
+	}
+	// A production run is immutable provenance, not a label that a later
+	// browser/server upload may inherit. Model/hybrid sources are populated only
+	// by the worker's run-bound distillation handoff. This also leaves a source
+	// whose distillation failed terminally fail-closed instead of allowing an
+	// unrelated file to masquerade as that run's output.
+	if productionRunID != nil || dataOrigin == "model" || dataOrigin == "hybrid" {
 		return "", ErrConflict
 	}
 	var active bool
@@ -258,6 +303,11 @@ func (r *Sources) queueIngest(
 const sourceColumns = `
 	id::text, name, source_type, content_purpose, license, rights_status,
 	language, domain, source_url, license_evidence_ref, lineage_ref,
+	derived_from_source_id::text,
+	data_profile_key, data_profile_version,
+	profile_config_artifact_kind, profile_config_sha256,
+	profile_assignment_reason, profile_assigned_at, data_origin,
+	production_run_id::text,
 	declared_sha256, declared_byte_size, declared_line_count, source_metadata,
 	object_sha256, byte_size, line_count, document_count,
 	document_sampling_status, document_sample_generation, document_sampling_method,
@@ -278,6 +328,11 @@ func scanSource(row scanner) (domain.Source, error) {
 		&source.ID, &source.Name, &source.SourceType, &source.ContentPurpose,
 		&source.License, &source.RightsStatus, &source.Language, &source.Domain,
 		&source.SourceURL, &source.LicenseEvidenceRef, &source.LineageRef,
+		&source.DerivedFromSourceID,
+		&source.DataProfileKey, &source.DataProfileVersion,
+		&source.ProfileConfigArtifactKind, &source.ProfileConfigSHA256,
+		&source.ProfileAssignmentReason, &source.ProfileAssignedAt, &source.DataOrigin,
+		&source.ProductionRunID,
 		&source.DeclaredSHA256, &source.DeclaredByteSize, &source.DeclaredLineCount, &source.SourceMetadata,
 		&source.ObjectSHA256, &source.ByteSize, &source.LineCount, &source.DocumentCount,
 		&source.DocumentSamplingStatus, &source.DocumentSampleGeneration,
@@ -313,23 +368,177 @@ type DistillationInput struct {
 // QueueDistillation queues a distill_source job for a registered source that
 // has no object yet, mirroring the ingest-queue guards.
 func (r *Sources) QueueDistillation(ctx context.Context, sourceID string, input DistillationInput, actorID string) (string, error) {
-	payload := distillationJobPayload(sourceID, input)
-	return r.queueIngest(ctx, sourceID, "distill_source", payload, actorID, map[string]any{
-		"mode": "distillation", "provider": input.Provider, "model": input.Model,
-	})
+	if input.MaxTokens <= 0 {
+		input.MaxTokens = 2000
+	}
+	if input.Temperature <= 0 {
+		input.Temperature = 1
+	}
+	if input.Topics == nil {
+		input.Topics = []string{}
+	}
+	configSHA256, err := distillationConfigSHA256(input)
+	if err != nil {
+		return "", fmt.Errorf("hash distillation configuration: %w", err)
+	}
+	implementationDigest := distillationImplementationDigest()
+
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback(ctx)
+
+	var objectSHA256, productionRunID *string
+	var dataOrigin string
+	if err := tx.QueryRow(ctx, `
+		SELECT object_sha256, data_origin, production_run_id::text
+		FROM sources
+		WHERE id = $1
+		FOR UPDATE
+	`, sourceID).Scan(
+		&objectSHA256, &dataOrigin, &productionRunID,
+	); errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	} else if err != nil {
+		return "", err
+	}
+	if objectSHA256 != nil || dataOrigin != "unknown" || productionRunID != nil {
+		return "", ErrConflict
+	}
+
+	var active bool
+	if err := tx.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM background_jobs
+			WHERE payload->>'source_id' = $1
+			  AND job_type IN ('ingest_local_file', 'ingest_staged_file', 'distill_source')
+			  AND status IN ('queued', 'running')
+		)
+	`, sourceID).Scan(&active); err != nil {
+		return "", err
+	}
+	if active {
+		return "", ErrConflict
+	}
+
+	var runID string
+	if err := tx.QueryRow(ctx, `
+		INSERT INTO production_runs(
+			run_kind, origin_kind, implementation_key,
+			implementation_digest, config_sha256, created_by
+		)
+		VALUES ('model_generation', 'model', $1, $2, $3, $4)
+		RETURNING id::text
+	`, distillationImplementationKey, implementationDigest,
+		configSHA256, actorID).Scan(&runID); err != nil {
+		return "", fmt.Errorf("record distillation production run: %w", err)
+	}
+
+	command, err := tx.Exec(ctx, `
+		UPDATE sources
+		SET data_origin = 'model', production_run_id = $2
+		WHERE id = $1
+		  AND object_sha256 IS NULL
+		  AND data_origin = 'unknown'
+		  AND production_run_id IS NULL
+	`, sourceID, runID)
+	if err != nil {
+		return "", fmt.Errorf("finalize distillation source provenance: %w", err)
+	}
+	if command.RowsAffected() != 1 {
+		return "", ErrConflict
+	}
+
+	payloadJSON, err := json.Marshal(distillationJobPayload(sourceID, runID, input))
+	if err != nil {
+		return "", fmt.Errorf("marshal distillation job: %w", err)
+	}
+	var jobID string
+	if err := tx.QueryRow(ctx, `
+		INSERT INTO background_jobs(job_type, payload, created_by)
+		VALUES ('distill_source', $1::jsonb, $2)
+		RETURNING id::text
+	`, payloadJSON, actorID).Scan(&jobID); err != nil {
+		return "", fmt.Errorf("queue distillation job: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO audit_events(actor_id, action, entity_type, entity_id, details)
+		VALUES (
+			$1, 'source.distillation_queued', 'source', $2,
+			jsonb_build_object(
+				'job_id', $3::text,
+				'production_run_id', $4::text,
+				'config_sha256', $5::text,
+				'implementation_digest', $6::text
+			)
+		)
+	`, actorID, sourceID, jobID, runID, configSHA256,
+		implementationDigest); err != nil {
+		return "", fmt.Errorf("audit distillation job: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return "", err
+	}
+	return jobID, nil
 }
 
-func distillationJobPayload(sourceID string, input DistillationInput) map[string]any {
+const distillationImplementationKey = "derlem.worker.distill_source.v1"
+
+const distillationImplementationContract = "derlem.worker.distill_source.v1\nprovider-registry-http-json\njsonl-output"
+
+type distillationRunConfig struct {
+	SchemaVersion  string   `json:"schema_version"`
+	Provider       string   `json:"provider"`
+	Model          string   `json:"model"`
+	SystemPrompt   string   `json:"system_prompt"`
+	PromptTemplate string   `json:"prompt_template"`
+	Topics         []string `json:"topics"`
+	Count          int      `json:"count"`
+	MaxTokens      int      `json:"max_tokens"`
+	Temperature    string   `json:"temperature"`
+	SourceName     string   `json:"source_name"`
+}
+
+func distillationConfigSHA256(input DistillationInput) (string, error) {
+	config := distillationRunConfig{
+		SchemaVersion: "derlem.distillation-config.v1",
+		Provider:      input.Provider, Model: input.Model,
+		SystemPrompt: input.SystemPrompt, PromptTemplate: input.PromptTemplate,
+		Topics: input.Topics, Count: input.Count, MaxTokens: input.MaxTokens,
+		Temperature: strconv.FormatFloat(input.Temperature, 'g', -1, 64),
+		SourceName:  input.SourceName,
+	}
+	var canonical strings.Builder
+	encoder := json.NewEncoder(&canonical)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(config); err != nil {
+		return "", err
+	}
+	canonicalBytes := []byte(strings.TrimSuffix(canonical.String(), "\n"))
+	digest := sha256.Sum256(canonicalBytes)
+	return fmt.Sprintf("%x", digest), nil
+}
+
+func distillationImplementationDigest() string {
+	digest := sha256.Sum256([]byte(distillationImplementationContract))
+	return fmt.Sprintf("%x", digest)
+}
+
+func distillationJobPayload(sourceID, productionRunID string, input DistillationInput) map[string]any {
 	return map[string]any{
-		"source_id":       sourceID,
-		"provider":        input.Provider,
-		"model":           input.Model,
-		"system_prompt":   input.SystemPrompt,
-		"prompt_template": input.PromptTemplate,
-		"topics":          input.Topics,
-		"count":           input.Count,
-		"max_tokens":      input.MaxTokens,
-		"temperature":     input.Temperature,
-		"source_name":     input.SourceName,
+		"source_id":         sourceID,
+		"production_run_id": productionRunID,
+		"provider":          input.Provider,
+		"model":             input.Model,
+		"system_prompt":     input.SystemPrompt,
+		"prompt_template":   input.PromptTemplate,
+		"topics":            input.Topics,
+		"count":             input.Count,
+		"max_tokens":        input.MaxTokens,
+		"temperature":       input.Temperature,
+		"source_name":       input.SourceName,
 	}
 }

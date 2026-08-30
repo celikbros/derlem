@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io"
 	"net/http"
@@ -38,6 +40,27 @@ func (s *Server) listSourceDocuments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": documents})
+}
+
+func (s *Server) listMySourceDocumentReviewHistory(w http.ResponseWriter, r *http.Request) {
+	sourceID := r.PathValue("id")
+	if _, err := s.sources.Get(r.Context(), sourceID); errors.Is(err, repository.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "source_not_found", "Kaynak bulunamadı.")
+		return
+	} else if err != nil {
+		s.logger.Error("get source before document review history failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "Kaynak doğrulanamadı.")
+		return
+	}
+
+	principal, _ := principalFrom(r.Context())
+	items, err := s.documents.ListReviewHistory(r.Context(), sourceID, principal.Subject)
+	if err != nil {
+		s.logger.Error("list reviewer document history failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "İnceleme geçmişi getirilemedi.")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
 func (s *Server) getDocumentQualitySummary(w http.ResponseWriter, r *http.Request) {
@@ -246,7 +269,11 @@ func (s *Server) claimSourceDocuments(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "Belge iş paketi alınamadı.")
 		return
 	}
-	writeJSON(w, http.StatusCreated, claim)
+	status := http.StatusCreated
+	if claim.Resumed {
+		status = http.StatusOK
+	}
+	writeJSON(w, status, claim)
 }
 
 func (s *Server) renewDocumentReviewClaim(w http.ResponseWriter, r *http.Request) {
@@ -329,6 +356,54 @@ func (s *Server) reviewDocument(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) reverseDocumentReview(w http.ResponseWriter, r *http.Request) {
+	var input domain.ReverseDocumentReviewInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	principal, _ := principalFrom(r.Context())
+	result, err := s.documents.ReverseReview(
+		r.Context(),
+		r.PathValue("id"),
+		input,
+		principal.Subject,
+		slices.Contains(principal.Roles, roleAdmin),
+	)
+	if errors.Is(err, repository.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "document_review_not_found", "Belge incelemesi bulunamadı.")
+		return
+	}
+	if errors.Is(err, repository.ErrForbidden) {
+		writeError(w, http.StatusForbidden, "document_review_reversal_forbidden", "Yalnızca kendi incelemenizi geri alabilirsiniz.")
+		return
+	}
+	if errors.Is(err, repository.ErrConflict) {
+		writeError(w, http.StatusConflict, "document_review_reversal_conflict", "Belge veya inceleme durumu değişti; bu inceleme güvenle geri alınamıyor.")
+		return
+	}
+	var gateError *repository.GateError
+	if errors.As(err, &gateError) {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
+			"error": map[string]any{
+				"code":    "document_review_reversal_validation_failed",
+				"message": "Geri alma gerekçesi zorunludur.",
+				"reasons": gateError.Reasons,
+			},
+		})
+		return
+	}
+	if err != nil {
+		s.logger.Error("reverse document review failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "Belge incelemesi geri alınamadı.")
+		return
+	}
+	status := http.StatusCreated
+	if result.AlreadyReversed {
+		status = http.StatusOK
+	}
+	writeJSON(w, status, result)
+}
+
 func (s *Server) bulkReviewDocuments(w http.ResponseWriter, r *http.Request) {
 	var input domain.BulkReviewDocumentsInput
 	if !decodeJSON(w, r, &input) {
@@ -389,6 +464,10 @@ func (s *Server) readDocumentObject(r *http.Request, digest string) (string, err
 	}
 	if len(content) > maxEditableDocumentBytes || !utf8.Valid(content) {
 		return "", errors.New("document object is too large or invalid UTF-8")
+	}
+	actualDigest := sha256.Sum256(content)
+	if hex.EncodeToString(actualDigest[:]) != strings.ToLower(strings.TrimSpace(digest)) {
+		return "", errors.New("document object digest mismatch")
 	}
 	return string(content), nil
 }

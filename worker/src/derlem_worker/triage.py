@@ -305,7 +305,14 @@ def render_markdown(report: dict[str, Any]) -> str:
         )
         if audit_details:
             lines.append(f"- Latest audit action: `{normalized_audit.get('action')}`")
-            if audit_details.get("lineage_excluded_source_id"):
+            excluded_source_ids = audit_details.get("lineage_excluded_source_ids")
+            if excluded_source_ids:
+                lines.append(
+                    f"- Lineage-excluded sources: `{json.dumps(excluded_source_ids, ensure_ascii=False)}`"
+                )
+            elif audit_details.get("lineage_excluded_source_id"):
+                # Eski audit olaylari okunabilir kalir; yeni worker yalnizca
+                # cogu ancestor'u ifade eden plural alani yazar.
                 lines.append(f"- Lineage-excluded source: `{audit_details.get('lineage_excluded_source_id')}`")
 
     pii_line_triage = report.get("pii_line_triage")

@@ -12,7 +12,8 @@ import (
 )
 
 type LocalStore struct {
-	root string
+	root     string
+	linkFile func(string, string) error
 }
 
 func NewLocal(root string) (*LocalStore, error) {
@@ -26,7 +27,7 @@ func NewLocal(root string) (*LocalStore, error) {
 	if err := os.MkdirAll(filepath.Join(absoluteRoot, "objects", "sha256"), 0o755); err != nil {
 		return nil, fmt.Errorf("create storage object directory: %w", err)
 	}
-	return &LocalStore{root: absoluteRoot}, nil
+	return &LocalStore{root: absoluteRoot, linkFile: os.Link}, nil
 }
 
 func (s *LocalStore) Put(ctx context.Context, reader io.Reader) (Object, error) {
@@ -35,17 +36,40 @@ func (s *LocalStore) Put(ctx context.Context, reader io.Reader) (Object, error) 
 		return Object{}, fmt.Errorf("create temp object: %w", err)
 	}
 	tempPath := temp.Name()
-	defer os.Remove(tempPath)
+	tempClosed := false
+	published := false
+	defer func() {
+		if !tempClosed {
+			_ = temp.Close()
+		}
+		// Before publication the temporary file is not shared, so making it
+		// writable again is safe and lets Windows remove a read-only temp file.
+		// After publication it is a hard link to the immutable object; changing
+		// its mode would also change the published object on POSIX filesystems.
+		if !published {
+			_ = os.Chmod(tempPath, 0o600)
+		}
+		_ = os.Remove(tempPath)
+	}()
 
 	hash := sha256.New()
 	written, copyErr := copyWithContext(ctx, io.MultiWriter(temp, hash), reader)
-	closeErr := temp.Close()
 	if copyErr != nil {
 		return Object{}, fmt.Errorf("write temp object: %w", copyErr)
 	}
-	if closeErr != nil {
-		return Object{}, fmt.Errorf("close temp object: %w", closeErr)
+	if err := temp.Sync(); err != nil {
+		return Object{}, fmt.Errorf("sync temp object: %w", err)
 	}
+	if err := temp.Chmod(0o444); err != nil {
+		return Object{}, fmt.Errorf("mark temp object read-only: %w", err)
+	}
+	if err := temp.Sync(); err != nil {
+		return Object{}, fmt.Errorf("sync read-only temp object: %w", err)
+	}
+	if err := temp.Close(); err != nil {
+		return Object{}, fmt.Errorf("close temp object: %w", err)
+	}
+	tempClosed = true
 
 	digest := hex.EncodeToString(hash.Sum(nil))
 	key := filepath.ToSlash(filepath.Join("objects", "sha256", digest[:2], digest[2:4], digest))
@@ -54,31 +78,87 @@ func (s *LocalStore) Put(ctx context.Context, reader io.Reader) (Object, error) 
 		return Object{}, fmt.Errorf("create object prefix: %w", err)
 	}
 
-	targetFile, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o444)
+	linkFile := s.linkFile
+	if linkFile == nil {
+		linkFile = os.Link
+	}
+	err = linkFile(tempPath, target)
 	if errors.Is(err, os.ErrExist) {
+		if err := validateExistingObject(ctx, target, digest, written); err != nil {
+			return Object{}, fmt.Errorf("validate existing immutable object: %w", err)
+		}
 		return Object{SHA256: digest, StorageKey: key, ByteSize: written}, nil
 	}
 	if err != nil {
-		return Object{}, fmt.Errorf("create immutable object: %w", err)
+		return Object{}, fmt.Errorf("publish immutable object: %w", err)
 	}
-
-	sourceFile, err := os.Open(tempPath)
-	if err != nil {
-		targetFile.Close()
-		os.Remove(target)
-		return Object{}, fmt.Errorf("reopen temp object: %w", err)
-	}
-	_, copyErr = copyWithContext(ctx, targetFile, sourceFile)
-	sourceCloseErr := sourceFile.Close()
-	targetCloseErr := targetFile.Close()
-	if copyErr != nil || sourceCloseErr != nil || targetCloseErr != nil {
-		os.Remove(target)
-		return Object{}, fmt.Errorf("finalize immutable object: copy=%v source_close=%v target_close=%v", copyErr, sourceCloseErr, targetCloseErr)
-	}
+	published = true
+	// Remove the staging name before applying the final-name mode. On Windows,
+	// deleting one hard-link name can refresh the remaining name's attributes.
+	// The deferred cleanup retries if this best-effort removal is interrupted.
+	_ = os.Remove(tempPath)
+	// Windows stores the read-only attribute per directory entry, so a newly
+	// created hard link may not reflect the source entry's attribute. Applying
+	// the mode to the published name is redundant on POSIX and required on
+	// Windows.
 	if err := os.Chmod(target, 0o444); err != nil {
-		return Object{}, fmt.Errorf("mark object read-only: %w", err)
+		_ = os.Remove(target)
+		return Object{}, fmt.Errorf("mark published object read-only: %w", err)
 	}
 	return Object{SHA256: digest, StorageKey: key, ByteSize: written}, nil
+}
+
+func validateExistingObject(ctx context.Context, target, expectedDigest string, expectedSize int64) error {
+	before, err := os.Lstat(target)
+	if err != nil {
+		return fmt.Errorf("inspect object: %w", err)
+	}
+	if !before.Mode().IsRegular() {
+		return fmt.Errorf("object path is not a regular file (mode %s)", before.Mode())
+	}
+	if before.Size() != expectedSize {
+		return fmt.Errorf("object size mismatch: got %d, want %d", before.Size(), expectedSize)
+	}
+
+	file, err := os.Open(target)
+	if err != nil {
+		return fmt.Errorf("open object: %w", err)
+	}
+	opened, err := file.Stat()
+	if err != nil {
+		_ = file.Close()
+		return fmt.Errorf("inspect opened object: %w", err)
+	}
+	if !opened.Mode().IsRegular() || !os.SameFile(before, opened) {
+		_ = file.Close()
+		return errors.New("object path changed while opening")
+	}
+
+	hash := sha256.New()
+	read, readErr := copyWithContext(ctx, hash, file)
+	closeErr := file.Close()
+	if readErr != nil {
+		return fmt.Errorf("hash object: %w", readErr)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("close object: %w", closeErr)
+	}
+	if read != expectedSize {
+		return fmt.Errorf("object size changed while hashing: got %d, want %d", read, expectedSize)
+	}
+	actualDigest := hex.EncodeToString(hash.Sum(nil))
+	if actualDigest != expectedDigest {
+		return fmt.Errorf("object digest mismatch: got %s, want %s", actualDigest, expectedDigest)
+	}
+
+	after, err := os.Lstat(target)
+	if err != nil {
+		return fmt.Errorf("reinspect object: %w", err)
+	}
+	if !after.Mode().IsRegular() || !os.SameFile(before, after) {
+		return errors.New("object path changed while validating")
+	}
+	return nil
 }
 
 func (s *LocalStore) Open(_ context.Context, digest string) (io.ReadCloser, error) {

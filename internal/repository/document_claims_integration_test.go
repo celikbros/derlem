@@ -49,7 +49,10 @@ func TestDocumentReviewClaimsDistributeWithoutCollisions(t *testing.T) {
 		t.Fatalf("parse test database URL: %v", err)
 	}
 	config.ConnConfig.RuntimeParams["search_path"] = schemaName
-	config.MaxConns = 64
+	// Exercise 1,000 concurrent callers through a production-like bounded pool.
+	// Keeping this below PostgreSQL's global connection limit also makes the
+	// stress test composable with the other isolated-schema integration tests.
+	config.MaxConns = 16
 	config.MinConns = 0
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
@@ -91,6 +94,14 @@ func TestDocumentReviewClaimsDistributeWithoutCollisions(t *testing.T) {
 		t.Fatalf("insert source: %v", err)
 	}
 	if _, err := pool.Exec(ctx, `
+		INSERT INTO document_sample_generations(
+			source_id, generation, source_sha256, sampling_method, status, sample_count
+		)
+		VALUES ($1, 1, repeat('a', 64), 'risk-stratified-v1', 'active', 200)
+	`, sourceID); err != nil {
+		t.Fatalf("insert sample generation: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
 		INSERT INTO documents(
 			source_id, source_ordinal, current_object_sha256, text_preview,
 			byte_size, char_count, risk_score, sample_generation
@@ -101,6 +112,7 @@ func TestDocumentReviewClaimsDistributeWithoutCollisions(t *testing.T) {
 	`, sourceID); err != nil {
 		t.Fatalf("insert documents: %v", err)
 	}
+	insertActiveDocumentSampleMemberships(t, ctx, pool, sourceID)
 
 	rows, err := pool.Query(ctx, `
 		INSERT INTO users(email, password_hash, display_name)

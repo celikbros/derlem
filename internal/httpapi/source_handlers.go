@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"net/http"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -12,6 +13,8 @@ import (
 	"github.com/celikbros/derlem/internal/domain"
 	"github.com/celikbros/derlem/internal/repository"
 )
+
+var canonicalUUIDPattern = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 type sourceListResponse struct {
 	Items      []domain.Source `json:"items"`
@@ -71,6 +74,10 @@ func (s *Server) createSource(w http.ResponseWriter, r *http.Request) {
 	}
 	principal, _ := principalFrom(r.Context())
 	source, err := s.sources.Create(r.Context(), input, principal.Subject)
+	if errors.Is(err, repository.ErrNotFound) {
+		writeError(w, http.StatusUnprocessableEntity, "derived_source_not_found", "Turetilen kaynagin parent kaydi bulunamadi.")
+		return
+	}
 	if err != nil {
 		s.logger.Error("create source failed", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal_error", "Kaynak oluşturulamadı.")
@@ -204,6 +211,14 @@ func normalizeAndValidateSource(input *domain.CreateSourceInput) string {
 	input.LineageRef = strings.TrimSpace(input.LineageRef)
 	input.SourceURL = trimOptional(input.SourceURL)
 	input.LicenseEvidenceRef = trimOptional(input.LicenseEvidenceRef)
+	input.DerivedFromSourceID = trimOptional(input.DerivedFromSourceID)
+	if input.DerivedFromSourceID != nil {
+		parentID := strings.ToLower(*input.DerivedFromSourceID)
+		input.DerivedFromSourceID = &parentID
+		if !canonicalUUIDPattern.MatchString(parentID) {
+			return "Turetilen kaynak parent kimligi canonical UUID biciminde olmalidir."
+		}
+	}
 
 	if input.Name == "" || input.SourceType == "" || input.License == "" || input.Language == "" || input.Domain == "" || input.LineageRef == "" {
 		return "Ad, kaynak tipi, lisans, dil, alan ve köken bilgisi zorunludur."

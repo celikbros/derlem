@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 from pathlib import Path
 from types import SimpleNamespace
@@ -76,6 +77,28 @@ def isolated_database_url():
                 )
                 """
             )
+            connection.execute(
+                """
+                CREATE TABLE production_runs (
+                    id uuid PRIMARY KEY,
+                    run_kind text NOT NULL,
+                    origin_kind text NOT NULL
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE production_run_completions (
+                    production_run_id uuid PRIMARY KEY,
+                    job_id uuid NOT NULL UNIQUE,
+                    output_manifest_sha256 text NOT NULL,
+                    output_sha256 text NOT NULL,
+                    output_byte_size bigint NOT NULL,
+                    output_record_count bigint NOT NULL,
+                    completed_at timestamptz NOT NULL
+                )
+                """
+            )
         yield test_url
     finally:
         with psycopg.connect(base_url, autocommit=True) as admin:
@@ -86,7 +109,8 @@ def isolated_database_url():
 def clean_worker_tables(isolated_database_url):
     with psycopg.connect(isolated_database_url, autocommit=True) as connection:
         connection.execute(
-            "TRUNCATE background_jobs, storage_objects, audit_events"
+            "TRUNCATE production_run_completions, production_runs, "
+            "background_jobs, storage_objects, audit_events"
         )
 
 
@@ -356,11 +380,15 @@ def test_checkpoint_sweep_preserves_both_sides_of_queued_retry_handoff(
 
 
 def test_distillation_handoff_rolls_back_as_one_database_transaction(
-    isolated_database_url: str, tmp_path: Path
+    isolated_database_url: str, tmp_path: Path, monkeypatch
 ) -> None:
     worker = make_database_worker(isolated_database_url, tmp_path, "distiller")
     source_id = uuid4()
+    production_run_id = uuid4()
     creator_id = uuid4()
+    monkeypatch.setattr(
+        worker, "_validate_distillation_provenance", lambda *_args, **_kwargs: None
+    )
     with psycopg.connect(isolated_database_url, autocommit=True) as connection:
         job_id = connection.execute(
             """
@@ -372,6 +400,7 @@ def test_distillation_handoff_rolls_back_as_one_database_transaction(
                 'distill_source',
                 jsonb_build_object(
                     'source_id', %s::text,
+                    'production_run_id', %s::text,
                     'provider', 'echo',
                     'prompt_template', 'fizik hakkında yaz',
                     'count', 1
@@ -380,7 +409,7 @@ def test_distillation_handoff_rolls_back_as_one_database_transaction(
             )
             RETURNING id
             """,
-            (str(source_id), creator_id),
+            (str(source_id), str(production_run_id), creator_id),
         ).fetchone()[0]
         connection.execute(
             """
@@ -408,6 +437,7 @@ def test_distillation_handoff_rolls_back_as_one_database_transaction(
         "distill_source",
         {
             "source_id": str(source_id),
+            "production_run_id": str(production_run_id),
             "provider": "echo",
             "prompt_template": "fizik hakkında yaz",
             "count": 1,
@@ -437,3 +467,185 @@ def test_distillation_handoff_rolls_back_as_one_database_transaction(
     assert parent_status == "queued"
     assert (child_count, audit_count, storage_count) == (0, 0, 0)
     assert list(worker.config.staging_root.glob(f"job-{job.id}-attempt-1-*")) == []
+
+
+def test_distillation_ingest_accepts_only_the_parent_bound_child_job(
+    isolated_database_url: str, tmp_path: Path
+) -> None:
+    worker = make_database_worker(isolated_database_url, tmp_path, "bound-child")
+    source_id = uuid4()
+    production_run_id = uuid4()
+    parent_job_id = uuid4()
+    child_job_id = uuid4()
+    stale_child_job_id = uuid4()
+    creator_id = uuid4()
+    manifest_sha256 = "a" * 64
+    output_sha256 = "b" * 64
+    output_byte_size = 321
+    child_payload = {
+        "source_id": str(source_id),
+        "production_run_id": str(production_run_id),
+        "distillation_job_id": str(parent_job_id),
+        "distillation_output_sha256": output_sha256,
+        "distillation_output_byte_size": output_byte_size,
+    }
+
+    with psycopg.connect(isolated_database_url, autocommit=True) as connection:
+        connection.execute(
+            """
+            INSERT INTO production_runs(id, run_kind, origin_kind)
+            VALUES (%s, 'model_generation', 'model')
+            """,
+            (production_run_id,),
+        )
+        connection.execute(
+            """
+            INSERT INTO storage_objects(sha256, storage_key, byte_size, media_type)
+            VALUES (%s, 'distill-manifest.json', 2, 'application/json')
+            """,
+            (manifest_sha256,),
+        )
+        connection.execute(
+            """
+            INSERT INTO background_jobs(
+                id, job_type, payload, status, attempts, created_by, result,
+                completed_at
+            ) VALUES (
+                %s, 'distill_source', %s::jsonb, 'succeeded', 1, %s,
+                '{}'::jsonb, now()
+            )
+            """,
+            (
+                parent_job_id,
+                json.dumps(
+                    {
+                        "source_id": str(source_id),
+                        "production_run_id": str(production_run_id),
+                    }
+                ),
+                creator_id,
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO background_jobs(
+                id, job_type, payload, status, attempts, locked_at, locked_by,
+                created_by
+            ) VALUES (
+                %s, 'ingest_staged_file', %s::jsonb, 'running', 2, now(),
+                'bound-child', %s
+            )
+            """,
+            (child_job_id, json.dumps(child_payload), creator_id),
+        )
+        connection.execute(
+            """
+            UPDATE background_jobs
+            SET result = jsonb_build_object(
+                'production_run_id', %s::text,
+                'manifest_sha256', %s::text,
+                'ingest_job_id', %s::text,
+                'output_sha256', %s::text,
+                'output_byte_size', %s::bigint,
+                'document_count', 1
+            )
+            WHERE id = %s
+            """,
+            (
+                str(production_run_id),
+                manifest_sha256,
+                str(child_job_id),
+                output_sha256,
+                output_byte_size,
+                parent_job_id,
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO production_run_completions(
+                production_run_id, job_id, output_manifest_sha256,
+                output_sha256, output_byte_size, output_record_count,
+                completed_at
+            )
+            SELECT %s, %s, %s, %s, %s, 1, completed_at
+            FROM background_jobs WHERE id = %s
+            """,
+            (
+                production_run_id,
+                parent_job_id,
+                manifest_sha256,
+                output_sha256,
+                output_byte_size,
+                parent_job_id,
+            ),
+        )
+
+    legitimate = Job(
+        child_job_id,
+        "ingest_staged_file",
+        child_payload,
+        2,
+        3,
+        "bound-child",
+    )
+    with psycopg.connect(isolated_database_url) as connection:
+        worker._validate_ingest_provenance(
+            connection,
+            legitimate,
+            source_id=str(source_id),
+            data_origin="model",
+            production_run_id=str(production_run_id),
+            ingested_sha256=output_sha256,
+            ingested_byte_size=output_byte_size,
+        )
+
+    with psycopg.connect(isolated_database_url, autocommit=True) as connection:
+        connection.execute(
+            """
+            INSERT INTO background_jobs(
+                id, job_type, payload, status, attempts, locked_at, locked_by,
+                created_by
+            ) VALUES (
+                %s, 'ingest_staged_file', %s::jsonb, 'running', 2, now(),
+                'bound-child', %s
+            )
+            """,
+            (stale_child_job_id, json.dumps(child_payload), creator_id),
+        )
+
+    stale = Job(
+        stale_child_job_id,
+        "ingest_staged_file",
+        child_payload,
+        2,
+        3,
+        "bound-child",
+    )
+    with psycopg.connect(isolated_database_url) as connection:
+        with pytest.raises(RuntimeError, match="invalid or stale"):
+            worker._validate_ingest_provenance(
+                connection,
+                stale,
+                source_id=str(source_id),
+                data_origin="model",
+                production_run_id=str(production_run_id),
+                ingested_sha256=output_sha256,
+                ingested_byte_size=output_byte_size,
+            )
+
+    with psycopg.connect(isolated_database_url, autocommit=True) as connection:
+        connection.execute(
+            "DELETE FROM production_run_completions WHERE production_run_id = %s",
+            (production_run_id,),
+        )
+    with psycopg.connect(isolated_database_url) as connection:
+        with pytest.raises(RuntimeError, match="invalid or stale"):
+            worker._validate_ingest_provenance(
+                connection,
+                legitimate,
+                source_id=str(source_id),
+                data_origin="model",
+                production_run_id=str(production_run_id),
+                ingested_sha256=output_sha256,
+                ingested_byte_size=output_byte_size,
+            )

@@ -8,6 +8,14 @@
 > ölçüldü. Aşağıda hangisinin doğrulandığını, hangisinin çürüdüğünü ve her birinin bizde
 > ne iş doğurduğunu yazıyoruz. **Bir maddede sizi geri çeviriyoruz** (§2); gerekçesi
 > ölçümdür, tercih değil. Yanlış bir şey görürseniz bize söyleyin, düzeltiriz.
+>
+> **2026-08-31 güncellemesi — teslimat planı değişti, okumadan geçmeyin.**
+> Bu mektup yazıldıktan sonra fark ettik ki kurucumuz **19 Ağustos'ta** ön-inceleme
+> raporundaki iki seçenekten **B'yi (titiz yol)** seçmiş; sizin §2'de referans
+> verdiğiniz "Seçenek A — pragmatik onay" **uygulanmayacak.** Bu, §2'deki kalite
+> endişenizin lehinize çözülmesi demek, ama takvimi uzatıyor. Ayrıntı: bölüm 2'nin
+> sonundaki "Teslimat planı" başlığı. **Corpus boyutu da küçülecek** — epoch
+> matematiğinizi etkiler.
 
 ---
 
@@ -179,7 +187,57 @@ amaçla alınan kaynak sonradan düzeltilemez, yeniden alınması gerekir.
 - **Parçalı koşu bugün mümkün değil.** Delta export de yok; sonraki her teslimat tam
   12,85 GB'ı yeniden üretir.
 
-Planımız: 200 belgelik inceleme bitince freeze'i **gece** başlatmak.
+### ⚠️ Teslimat planı — "tek imza" değil, v2 türetmesi (2026-08-31 güncellemesi)
+
+Mektubunuz §2'de ön-inceleme raporumuzun önerisine (**Seçenek A — pragmatik onay**,
+~20 dk toplu imza) dayanıyordu ve "takası siz tartın" demiştiniz. Tarttık:
+**kurucumuz 19 Ağustos'ta Seçenek B'yi — titiz yolu — seçti.**
+
+Bu, sizin §2'de saydığınız gürültünün (9 SEO spam, 2 yetişkin içerik, 1 örneklem-içi
+yakın-tekrar, 3 navigasyon dökümü) **kabul edilmek yerine filtrelenmesi** demek.
+Yani endişeniz lehinize karşılandı; bedeli takvim.
+
+**Yeni akış:**
+
+1. **İnsan belge incelemesi.** Moderatör 16 sorunlu ordinali tam metin üzerinden
+   okuyup reddediyor, ayrıca 18 ek adayı spot-check ediyor (hard-filter'ın yanlış
+   pozitif üretmediğini doğrulamak için). Bu, kaynak onayını **bloklar** — kural
+   gereği tüm örnekler onaylı olmalı.
+2. **`clean_candidate v2` türetmesi.** Kalite politikası `tr-web-v1`, on ret neden
+   kodu: `extreme_repetition`, `hashtag_stuffing`, `mixed_script_artifact`,
+   `repeated_segments`, `navigation_boilerplate`, `commercial_keyword_stuffing`,
+   `dating_spam_cluster`, `optics_spam_cluster`, `adult_service_spam_cluster`,
+   `sexual_pharma_spam_cluster`. Tek URL, belge uzunluğu, yetişkin **konu**, Kiril
+   karakter veya tek anahtar kelime ret nedeni **değildir**.
+3. **Yeni kaynak.** V2, V1'den türetilmiş olarak kaydediliyor (lineage_ref = v2
+   manifesti); tüm kapılar **baştan** koşuyor: PII, exact dedup, normalized dedup,
+   örnekleme.
+4. **Yeni 200 örnek, sıfırdan insan incelemesi.** V1 kararları V2'ye **taşınmıyor**.
+5. Ancak 200/200 onay + sıfır flag + temiz kapılar sonrası kaynak onayı, sonra
+   freeze + export (yukarıdaki ~5-6 saat).
+
+**Ölçülmüş kanıt (ilk 100.000 satır, uçtan uca smoke):** 100.000 okundu, 99.999
+yazıldı, 1 kalite reddi (`navigation_boilerplate`), 0 PII/duplicate/oversized/boş
+satır kaybı. Bilinen 16 sorunlu örneğin **16'sı da** yakalandı.
+
+> **Bu oranı corpus geneline yaymayın.** İlk-N ölçümü istatistik değildir; gerçek
+> kayıp oranı ancak final üretimde belli olacak.
+
+### ⚠️ Bunun epoch matematiğinize etkisi
+
+**V2, V1'in alt kümesidir** — yani teslim edeceğimiz belge sayısı **5.922.891'den
+az olacak.** Kesin sayı final üretimden önce bilinemiyor; smoke oranını
+ekstrapole etmek yanlış olur.
+
+§3'te "2,4 milyar benzersiz token" üzerinden kurduğunuz epoch planı ve
+"hiçbir alt küme 4 epoch'u aşmaz" kuralı bu yüzden **final manifest gelmeden
+sabitlenmemeli.** Kesin satır/bayt sayısını export manifestiyle birlikte
+vereceğiz; bileşen→satır aralığı tablosu (§3 #4) da o sayılara göre üretilecek.
+
+Bir de not: v2'nin ret audit dosyası (`*.rejections.jsonl`) **ham metin taşımaz**,
+yalnız parent ordinal ve neden kodlarını tutar. İsterseniz onu da teslimata
+ekleyebiliriz — hangi belgenin hangi gerekçeyle düştüğünü görmek istersiniz diye
+düşünüyoruz.
 
 **Teslim kanalı — HTTP bugün çalışmaz.** API'nin yazma zaman aşımı 30 saniye ve indirme
 yolunda bu kaldırılmıyor (yükleme yolunda kaldırılıyor; indirmede o satır yok). Range /
@@ -301,16 +359,24 @@ teşekkürler; `:8090` çözümünüz doğru refleksti.
 4. **Bileşen tablosu:** 7 bloğun satır aralıklarını siz mi vereceksiniz, yoksa biz
    `source_metadata`'dan mı türetelim?
 5. **SimHash imza dökümü** ve **kalibrasyon raporu** teslimata eklensin mi?
+6. **V2 ret audit dosyası** (hangi belge hangi gerekçeyle düştü; ham metin taşımaz)
+   teslimata eklensin mi?
+7. **Epoch planınızı final manifeste kadar bekletebiliyor musunuz?** V2 alt küme
+   olduğu için belge sayısı düşecek; erken sabitlenmiş bir epoch tablosu yanlış olur.
 
 ---
 
 ## 7. Tek cümle
 
-**Teslimatın önünde bir insan imzası (200 örnek) ve ondan sonra ~5-6 saatlik, kesintisiz,
-checkpoint'siz bir freeze var; dekontaminasyon mührünü dürüstleştiren düzeltme o freeze'den
-önce girecek.**
+**Teslimat artık tek bir imzaya değil, iki insan inceleme turuna bağlı: önce V1'deki
+sorunlu belgelerin reddi, sonra spam/boilerplate filtreli `clean_candidate v2`
+türetmesi ve onun 200 örneğinin sıfırdan incelenmesi; ancak ondan sonra ~5-6 saatlik
+freeze/export geliyor — ve dekontaminasyon mührünü dürüstleştiren düzeltme o freeze'den
+önce girmiş olacak.**
 
-Acele ettirmediğiniz için teşekkürler — biz de doğru olmasını hızlı olmasına tercih ediyoruz.
+Sizin §2'de işaret ettiğiniz gürültü kabul edilmedi, filtrelendi. Bunun bedeli zaman;
+kazancı, Afacan'ın SEO spam'i ve navigasyon dökümü öğrenmemesi. Acele ettirmediğiniz
+için teşekkürler — biz de doğru olmasını hızlı olmasına tercih ediyoruz.
 
 Selam ve kolay gelsin —
 **Derlem ekibi**

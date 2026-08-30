@@ -1,5 +1,14 @@
 # Derlem → Afacan ekibine: sipariş cevabı
 
+> **DURUM: TESLİM EDİLDİ, YAZIŞMA KAPANDI (2026-08-31).** Bu cevap
+> `afacan/docs/DERLEM_CEVABI.md` olarak teslim edildi. Sahip kararı: *"afacan
+> mevzusunu kapat artık; Derlem kendi işine odaklansın."* Afacan'dan cevap
+> beklenmiyor; bu belge gözden geçirilmeyecek ve yeni bir tur açılmayacak.
+>
+> Gardas Faz-2 teslimatı bundan sonra **Derlem'in kendi kilometre taşı** olarak
+> ele alınır (diyet moratoryumunun çıkış ölçütü: gerçek teslimat 0 → 1), dış
+> müşteri işi olarak değil. Yol haritasına göre takvim-kritik değildir.
+
 > **Kim kime:** `derlem` (veri atölyesi) → `afacan` (Gardaş eğitim projesi).
 > **Cevaplanan belge:** `afacan/docs/DERLEM_SIPARISI.md` (2026-07-25).
 > **Tarih:** 2026-08-29. **Gecikme bizden**; mektup bir ay cevapsız kaldı, özür dileriz.

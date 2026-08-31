@@ -28,14 +28,41 @@ ipconfig | Select-String "IPv4"
 
 Örnek çıktı: `192.168.1.42`. Ekibin kullanacağı adres: `http://192.168.1.42:18400`
 
-**b. Güvenlik duvarında 3000 portunu açın** (yönetici PowerShell, bir kere):
+**b. Önce ağ profilini kontrol edin, sonra güvenlik duvarını açın** (yönetici
+PowerShell, bir kere):
 
 ```powershell
-New-NetFirewallRule -DisplayName "Derlem Web (LAN)" -Direction Inbound -Protocol TCP -LocalPort 3000 -Action Allow -Profile Private
+Get-NetConnectionProfile | Select-Object InterfaceAlias, NetworkCategory
+```
+
+> ⚠️ **Bu adım atlanırsa kural sessizce işe yaramaz.** Aşağıdaki kural
+> `-Profile Private` ile oluşturulur; ağınız **Public** görünüyorsa kural
+> yaratılır, hata vermez, ama **hiçbir zaman uygulanmaz** — ekip yine giremez ve
+> sebebi görünmez. (Ölçüldü: 2026-08-31'de bu makinenin Wi-Fi profili `Public`
+> idi ve tanımlı hiçbir Derlem kuralı yoktu.)
+
+`NetworkCategory` `Public` ise, ofis ağını güvenilir olarak işaretleyin:
+
+```powershell
+Set-NetConnectionProfile -InterfaceAlias "Wi-Fi" -NetworkCategory Private
+```
+
+Ardından kuralı açın — **port 18400** (Derlem'in web portu, bkz.
+[local_development.md](local_development.md) "Port sözleşmesi"):
+
+```powershell
+New-NetFirewallRule -DisplayName "Derlem Web (LAN)" -Direction Inbound -Protocol TCP -LocalPort 18400 -Action Allow -Profile Private
 ```
 
 `-Profile Private` bilinçlidir: kural yalnız "özel" olarak işaretlenmiş ağda
-geçerlidir; kafe/misafir ağında port kapalı kalır.
+geçerlidir; kafe/misafir ağında port kapalı kalır. **Bu yüzden profili Public
+bırakıp kuralı Public'e açmayın** — o, portu her bağlandığınız ağda açar.
+
+Kontrol:
+
+```powershell
+Get-NetFirewallRule -DisplayName "Derlem Web (LAN)" | Select-Object Enabled, Profile
+```
 
 **c. Web'i production build ile ve çerez kaçışıyla başlatın:**
 

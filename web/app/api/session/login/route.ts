@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
-const API_URL = process.env.DERLEM_API_URL ?? "http://localhost:8080";
+const API_URL = process.env.DERLEM_API_URL ?? "http://127.0.0.1:18401";
 
 export async function POST(request: NextRequest) {
   const headers = new Headers({ "Content-Type": "application/json" });

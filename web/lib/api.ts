@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
-const API_URL = process.env.DERLEM_API_URL ?? "http://localhost:8080";
+const API_URL = process.env.DERLEM_API_URL ?? "http://127.0.0.1:18401";
 
 export async function apiRequest(path: string, init: RequestInit = {}) {
   const cookieStore = await cookies();

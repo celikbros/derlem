@@ -11,7 +11,7 @@ export async function openAuthenticatedApp(page: Page) {
     await page.context().addCookies([{
       name: "derlem_token",
       value: token,
-      url: "http://localhost:3000",
+      url: "http://localhost:18400",
       httpOnly: true,
       sameSite: "Lax",
     }]);

@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | DRAFT — **BLOCKED** (see Hard dependencies) and **owner decisions required** (see Decisions) |
+| Status | DRAFT — **owner decisions required** (see Decisions). Dependency 1 (uncommitted work) **CLEARED 2026-08-30**; dependency 2 (TASK-001) still open. |
 | Kind | feature |
 | Moratorium | **not allowed by default.** `docs/diyet_yol_haritasi.md` permits only bug fixes / pruning / documentation / Phase 0 (delivery) support; `docs/katki_platformu_tasarimi.md` §6 places translation and preference tasks in **Phase C**. Starting this pulls Phase C forward — the owner's call, not the implementer's. |
 | Estimate | **8–12 working days** (was 3–5 before verification; the worker-side canonical intake and the provenance contract were not visible from the surface). Excludes the owner decisions below. |
@@ -35,14 +35,11 @@ stamps "checked" on things it never looked at — the failure class fixed in com
 
 ## Hard dependencies (why this is BLOCKED)
 
-1. **The uncommitted change set must land on `main` first.** On `main` the migration
-   chain ends at `000020` (`git ls-files internal/database/migrations | tail -1`).
-   Migrations `000021`–`000026` — where `data_origin`, the provenance triggers and
-   `production_runs` live — are **untracked files** on disk, applied to the local DB
-   (`schema_migrations` = 26) but not in git. `000027_…` cannot exist relative to files
-   that are not in git, and `internal/database/migrate_integration_test.go:145-149`
-   fails on a non-contiguous chain. Do not start until `git status` is clean for
-   `internal/database/migrations/`.
+1. ~~The uncommitted change set must land on `main` first.~~ **CLEARED 2026-08-30**
+   (commits `5aebb3c` + `f1c2685`): migrations `000021`–`000026` are tracked, the chain
+   is contiguous through `000026`, and the working tree is clean. Your new migration is
+   therefore **`000027_…`** — re-verify with
+   `git ls-files internal/database/migrations | tail -1` before creating it.
 2. **TASK-001 must land first.** It edits the same `.terms-check` label/CSS this card
    changes (attestation text per origin); parallel work guarantees a conflict on
    `contributions-panel.tsx`.
@@ -351,7 +348,13 @@ Plus the UI walk-through on the running stack (`http://localhost:18400`).
 
 ## Risks / traps
 
-- **Moratorium (D1)** and the two hard dependencies above.
+- **Moratorium (D1)** and the remaining dependency (TASK-001 first).
+- **CI has been dead since 2026-07-16** — real failures on 07-25/07-29, then from 08-29
+  the jobs stop starting entirely (billing block; three jobs, zero steps, no logs).
+  A green local run is the ONLY verification you will get. Also note 12 of the 46
+  `internal/repository` tests are skipped locally when `DERLEM_TEST_DATABASE_URL` is
+  unset — including the release-contract test that guards this area. Set that variable
+  against a scratch database before trusting `go test ./...`.
 - **Provenance trigger (D2)**: writing `sources.data_origin <> 'unknown'` without a
   `production_runs` row fails at INSERT (`000024`, `validate_source_production_provenance`).
 - **Export-time gate**: a malformed canonical line surfaces at the first export, not

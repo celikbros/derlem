@@ -139,15 +139,13 @@ the contributor test account, open **Katkılar**, run the console checks above.
 
 ## Risks / traps
 
-- **Staging.** The working tree holds ~84 uncommitted files from another session, and
-  two of this card's target files are among them: `web/app/globals.css` (+843/−1,
-  foreign hunks around lines 1571–1694 and 4279–4313) and `web/components/derlem-app.tsx`
-  (22 lines). **Do not `git add` those two files whole** — that would sweep ~860 lines
-  of someone else's work into this commit. Stage hunk-by-hunk:
-  `git add -p web/app/globals.css web/components/derlem-app.tsx`, accept only your
-  `.terms-check` hunk and your `<p>` hunk; then `git add web/components/guide-panel.tsx
-  README.md web/lib/roles.ts` (clean files). Confirm with `git diff --cached --stat`
-  before committing. (Alternative: wait for that session to commit first.)
+- ~~Staging conflict with another session's uncommitted work~~ — **cleared 2026-08-30**
+  (`5aebb3c` + `f1c2685`). The tree is clean; stage whole files. Still confirm with
+  `git diff --cached --stat` that the commit touches only the WelcomeTip paragraph,
+  the guide sentence, the README lines and the `.terms-check` block.
+- **CI has been dead since 2026-07-16** (billing block since 08-29; jobs do not start).
+  A green local `npm run typecheck && npm run lint && npm run build` is the only
+  verification you will get — say so explicitly in your Report.
 - `web/next-env.d.ts` may flip between `.next/dev/…` and `.next/types/…` after a
   build; never stage it.
 - Do not "improve" the rest of the welcome card; it is shared by all roles.

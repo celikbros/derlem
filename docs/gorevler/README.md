@@ -55,7 +55,7 @@ yorumluyor); sahiple yazışma ve commit mesajları Türkçe kalır.
 
 | # | Başlık | Tür | Durum |
 |---|---|---|---|
-| [TASK-001](TASK-001-contribution-screen-fixes.md) | Contribution screen fixes (copy contradiction + checkbox layout) | fix | READY |
+| [TASK-001](TASK-001-contribution-screen-fixes.md) | Contribution screen fixes (copy contradiction + checkbox layout) | fix | **DONE** — 2026-08-31, `d0160ab` |
 | [TASK-002](TASK-002-contribution-task-type-registry.md) | Contribution task-type registry (translation, preference, reasoning) | feature | DRAFT — sahip kararı bekliyor (D1–D4). Commit blokeri **kalktı** (2026-08-30); TASK-001 önce gitmeli. |
 
 ## Doğrulama notu

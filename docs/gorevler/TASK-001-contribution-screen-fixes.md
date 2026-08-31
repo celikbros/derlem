@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | READY |
+| Status | **DONE** — 2026-08-31, commit `d0160ab` |
 | Kind | fix |
 | Moratorium | allowed (correction, no new behaviour) |
 | Estimate | 1–2 h (edits ~20 min; hunk-level staging and the visual check take the rest) |
@@ -159,4 +159,41 @@ the commit SHA.
 
 ## Report
 
-_(filled by the implementer)_
+**Done 2026-08-31 — commit `d0160ab`.**
+
+Both defects fixed as specified. Notes on what differed from the card:
+
+- The contradictory claim lived in **three** places with different wording
+  (`derlem-app.tsx` WelcomeTip, `guide-panel.tsx` intro, `README.md`
+  "Nasıl Çalışır?"). Each was rewritten in its own voice, not pasted. The
+  README also said *"İnsanlar veri üretmez"*, which is likewise false now that
+  contributors exist — corrected. New framing: data enters through **two**
+  doors (file ingest + contribution), both passing the same gates.
+- The WelcomeTip's three `<em>` phrases and the closing sentence
+  *"Bu zincirdeki her karar size güvenilir."* were preserved as required.
+- CSS: both cascade layers fixed. `.terms-check` gained `display: flex` and
+  lost the no-op `!important`; `.terms-check input` was pinned to 16×16 with
+  `flex: 0 0 auto` and `padding: 0`, following the `.bulk-selection-row input`
+  pattern, so the global `input, select { height: 38px }` rule no longer sizes
+  the checkbox.
+- `web/lib/roles.ts:19` stale comment corrected.
+
+**Verification run:**
+
+- `grep -rn "elle metin yazmaz\|İnsanlar veri üretmez" README.md web/components/` → 0 hits
+- `npm run typecheck` → clean; `npm run lint` → clean; `npm run build` → success
+- Built CSS chunk asserted to contain, verbatim:
+  `.terms-check{color:#52605a;flex-direction:row;align-items:flex-start;gap:8px;font-size:12.5px;line-height:1.5;display:flex}`
+  and `.terms-check input{width:16px;height:16px;accent-color:var(--green);flex:none;margin-top:2px;padding:0}`
+
+**Not verified (honest gap):** the two browser-console acceptance checks
+(`getComputedStyle(...).display === 'flex'` and the ≤ 20 px box height) were
+**not** executed — no browser automation was available in this session. The
+built-CSS assertion above plus the specificity analysis
+(`.terms-check` 0-1-0 beats `label` 0-0-1; `.terms-check input` 0-1-1 beats
+`input, select` 0-0-1) are the substitute evidence. A human should confirm
+visually on `http://localhost:18400` as contributor, after clearing
+`derlem-welcome-dismissed-*` from localStorage.
+
+**CI:** green at the time of this commit's parent (`f548aa8`); this change is
+web-only (copy + CSS) with no behavioural change.

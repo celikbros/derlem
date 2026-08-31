@@ -16,9 +16,10 @@ export function GuidePanel({ user }: { user: User }) {
           hakları belirsiz, tekrarlı ve kirlidir. Derlem bu sorunu çözer: LLM ve tokenizer
           eğitiminde kullanılacak metin verisini <strong>hakları belli</strong>,{" "}
           <strong>kalitesi insan onaylı</strong> ve <strong>tekrarı ayıklanmış</strong> hale
-          getiren bir veri atölyesidir. Kimse buraya elle metin yazmaz: var olan corpus
-          dosyaları sisteme alınır, otomatik kalite kapılarından geçirilir, insan incelemesiyle
-          onaylanır ve eğitim ekiplerine değişmez (frozen) paketler olarak sunulur.
+          getiren bir veri atölyesidir. Metin ister var olan corpus dosyalarından alınsın
+          ister katkı olarak yazılsın, otomatik kalite kapılarından geçirilir, insan
+          incelemesiyle onaylanır ve eğitim ekiplerine değişmez (frozen) paketler olarak
+          sunulur.
         </p>
         <p>
           Çıktılar modelden ve tokenizer’dan bağımsızdır; aynı paketi herhangi bir model ekibi

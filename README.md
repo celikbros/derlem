@@ -89,10 +89,12 @@ Güncel Gardas/Faz 2 seed import kaydı için bkz. [Gardas Seed Import](docs/gar
 
 ## Nasıl Çalışır?
 
-Derlem'e kimse elle metin yazmaz. Girdi, var olan büyük corpus dosyalarıdır
-(web derlemesi, kitap, veri seti, Gardas/Faz 2 gibi mevcut corpus'lar); çıktı,
-eğitime hazır ve dondurulmuş veri paketleridir. İnsanlar veri üretmez; kaynağı
-kaydeder, örnekleri inceler ve kararı verir.
+Derlem'e veri iki kapıdan girer. Asıl hacim var olan büyük corpus dosyalarından
+gelir (web derlemesi, kitap, veri seti, Gardas/Faz 2 gibi mevcut corpus'lar);
+bunun yanında katkıcılar **Katkılar** ekranından kendi ürettikleri metni girebilir.
+İkisi de aynı kalite kapılarından geçer; çıktı, eğitime hazır ve dondurulmuş veri
+paketleridir. İnsanlar yalnız veri üretmez: kaynağı kaydeder, örnekleri inceler
+ve kararı verir.
 
 ```mermaid
 flowchart TD

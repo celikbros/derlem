@@ -162,9 +162,10 @@ function WelcomeTip({ user, onNavigate }: { user: User; onNavigate: (view: Activ
         <strong>Derlem’e hoş geldiniz.</strong>
         <p>
           Derlem, LLM eğitiminde kullanılacak metnin <em>hakları belli</em>, <em>kalitesi insan
-          onaylı</em> ve <em>tekrarı ayıklanmış</em> biçimde toplandığı veri atölyesidir. Kimse
-          buraya elle metin yazmaz: dosyalar alınır, otomatik kapılardan geçer ve insan onayıyla
-          eğitime hazır değişmez paketlere dönüşür. Bu zincirdeki her karar size güvenilir.
+          onaylı</em> ve <em>tekrarı ayıklanmış</em> biçimde toplandığı veri atölyesidir. Metin
+          ister dosyayla alınsın ister katkı olarak yazılsın, aynı kapılardan geçer: otomatik
+          kontroller, insan onayı ve eğitime hazır değişmez paketler. Bu zincirdeki her karar
+          size güvenilir.
         </p>
         {info && (
           <>

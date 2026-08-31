@@ -16,7 +16,8 @@ export type RoleInfo = {
   label: string;
   /** Başlık: "Yönetici (admin)". */
   title: string;
-  /** Tek satırlık özet — giriş kartı ve hoş geldin ipucu bunu kullanır. */
+  /** Tek satırlık özet — yalnız giriş ekranındaki hesap kartı kullanır.
+   *  (Hoş geldin ipucu `title` + `who` alanlarını gösterir, `summary`'yi değil.) */
   summary: string;
   /** "Kimdir?" — tek cümlelik kişi tarifi. */
   who: string;

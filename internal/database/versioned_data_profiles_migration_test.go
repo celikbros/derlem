@@ -96,6 +96,11 @@ func newVersionedProfilesTestPool(t *testing.T, ctx context.Context) (*pgxpool.P
 	t.Cleanup(adminPool.Close)
 	schemaName := fmt.Sprintf(`derlem_profiles_migration_test_%d`, time.Now().UnixNano())
 	schemaIdentifier := pgx.Identifier{schemaName}.Sanitize()
+	// pgcrypto'yu izole semadan ONCE ve public'te olustur (bkz. digerleri).
+	if _, err := adminPool.Exec(ctx, "CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public"); err != nil {
+		t.Fatalf("ensure pgcrypto: %v", err)
+	}
+
 	if _, err := adminPool.Exec(ctx, `CREATE SCHEMA `+schemaIdentifier); err != nil {
 		t.Fatalf(`create test schema: %v`, err)
 	}

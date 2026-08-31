@@ -48,6 +48,14 @@ func TestMigrateAppliesAllMigrationsAndIsIdempotent(t *testing.T) {
 
 	schemaName := fmt.Sprintf("derlem_migration_test_%d", time.Now().UnixNano())
 	schemaIdentifier := pgx.Identifier{schemaName}.Sanitize()
+	// pgcrypto'yu izole semadan ONCE ve public'te olustur. Izole semanin icinde
+	// olusursa (migration 000001 search_path'e kurar) test bitiminde
+	// DROP SCHEMA ... CASCADE eklentiyi de siler; paralel kosan diger paketlerin
+	// migration'lari o anda 000023/000024'un pgcrypto kontrolunde fail-loud duser.
+	if _, err := adminPool.Exec(ctx, "CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public"); err != nil {
+		t.Fatalf("ensure pgcrypto: %v", err)
+	}
+
 	if _, err := adminPool.Exec(ctx, "CREATE SCHEMA "+schemaIdentifier); err != nil {
 		t.Fatalf("create isolated test schema: %v", err)
 	}

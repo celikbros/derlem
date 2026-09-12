@@ -28,19 +28,24 @@
 > 5. **The one owner decision that replaces D2–D4:** which fields are **typed**
 >    (validated, gate-able, queryable — requires touching the closed `TOP_LEVEL_FIELDS`
 >    whitelist that blocks releases on unknown keys) versus **untyped** (ride in
->    `metadata`, cheap, but no gate can ever see them). Recommendation in the karar
->    notu §2: translation language pair and preference verdict must be typed;
->    rationale/notes/label sets may stay in metadata. D1 (moratorium) stands as written.
+>    `metadata`, cheap, but no gate can ever see them). **For Phase A this does not
+>    bite**: `response_edit_pair` is three texts, all canonically native. It bites at
+>    translation (language pair) and preference (verdict/tie) — Phase B cards must open
+>    with that decision. Working default until then, from karar notu §2: language pair
+>    and preference verdict **typed**; rationale/notes/label sets in `metadata`.
 >
-> Sequencing (§6): release #1 → TASK-004/005/006 → this backbone + `response_edit_pair`
-> → `preference_pair` → `translation_pair`.
+> **Owner decisions 2026-09-12:** TASK-004/005/006 go to programmers now; Phase A of
+> this card starts now (moratorium exception granted). Release #1's 35-document human
+> review remains the delivery blocker and is not affected by either.
+>
+> Sequencing: TASK-004/005/006 → this Phase A → `preference_pair` → `translation_pair`.
 
 | Field | Value |
 |---|---|
-| Status | DRAFT — **reframed 2026-09-12** (see Revision block). Waits for release #1 and the single typed/untyped decision. Dependency 1 (uncommitted work) **CLEARED 2026-08-30**; TASK-001 **DONE**. |
+| Status | **READY** — owner approved 2026-09-12 (Phase A only, see Scope). Start after TASK-004/005/006 land, or in parallel on separate branches — but **TASK-004 must merge before this card's bundler changes**, both touch `contributions.go`. |
 | Kind | feature |
-| Moratorium | **not allowed by default.** `docs/diyet_yol_haritasi.md` permits only bug fixes / pruning / documentation / Phase 0 (delivery) support; `docs/katki_platformu_tasarimi.md` §6 places translation and preference tasks in **Phase C**. Starting this pulls Phase C forward — the owner's call, not the implementer's. |
-| Estimate | **8–12 working days** (was 3–5 before verification; the worker-side canonical intake and the provenance contract were not visible from the surface). Excludes the owner decisions below. |
+| Moratorium | **Exception granted by the owner 2026-09-12** for Phase A (backbone + `response_edit_pair`). `docs/diyet_yol_haritasi.md` otherwise still applies; Phase B types (translation, preference, reasoning) are **not** covered by this exception and need their own cards. |
+| Estimate | **8–12 working days** for Phase A. The worker-side canonical intake (§3d) is the bulk of it and is not optional. |
 | Owner | (unassigned) |
 | Verified against code | 2026-08-30, adversarial pass (6 agents, 76 claims checked). Line numbers refer to the working tree on that date, **including the uncommitted change set** — see Hard dependencies. |
 
@@ -79,11 +84,18 @@ stamps "checked" on things it never looked at — the failure class fixed in com
    changes (attestation text per origin); parallel work guarantees a conflict on
    `contributions-panel.tsx`.
 
-## Decisions required from the owner (before coding)
+## Decisions — resolved 2026-09-12
 
-**D1 — Moratorium.** Pull Phase C forward or not.
+| | Decision | Effect on this card |
+|---|---|---|
+| **D1** | **Granted** by the owner for Phase A only. | Start now. Phase B needs its own approval. |
+| **D2** | **(a)** — bundled sources stay `data_origin = 'unknown'`; origin lives on the contribution row and in record `metadata`. | No `production_runs` work. (b) stays a follow-up card. |
+| **D3** | **(a)** — visibility is fixed at collection time. But see karar notu §7.4: **do not show a visibility selector until the bundle emits canonical records** (this card's §3a). Phase A collects no reasoning, so no selector ships in Phase A. | Nothing to build now; a rule for Phase B. |
+| **D4** | **Included** — §3d is in scope. Without it the new type is unreviewable. | Bulk of the estimate. |
 
-**D2 — Provenance strategy for bundled sources.** On disk, migration `000024`
+The original analysis behind D2–D4 is kept below for the implementer.
+
+**D2 — Provenance strategy for bundled sources (analysis).** On disk, migration `000024`
 (`validate_source_production_provenance`, lines ~896–955, enforced BEFORE INSERT on
 `sources`) rejects any `sources.data_origin <> 'unknown'` unless the row carries a
 `production_run_id` whose run matches the origin (run_kind `human_authored` /
@@ -201,18 +213,31 @@ only permitted / public-domain source text).
 
 ## Scope
 
-### 1. Registry
+### 1. Registry — Phase A ships exactly these rows
 
 Extend (do not duplicate) `domain.ContributionTaskTypes` into a table-driven
 registry; every other copy listed above derives from it or is drift-tested against it.
+A registry row declares: the **allowed and required payload keys** with max lengths,
+the **canonical mapping**, the **content_purpose**, and the **submit-time gate**.
 
 | task_type | fields | canonical mapping | content_purpose |
 |---|---|---|---|
 | `qa_pair` (exists) | prompt, body | conversation: user=prompt, assistant=body | instruction |
 | `free_text` (exists) | body | plain `{"id","text"}` line (unchanged) | pretrain |
-| `translation` | source_text, target_text, source_language, target_language, source_rights_attestation | conversation: user=`Çevir (<src>→<tgt>): <source_text>`, assistant=target_text; top-level `language`=target; `metadata.source_language`=src | instruction |
-| `preference` | prompt, chosen, rejected | preference: messages=[user=prompt], preference={chosen:[assistant], rejected:[assistant]} | **preference** |
-| `reasoning` | prompt, reasoning, answer, reasoning_format | conversation: user=prompt, assistant.content=answer, assistant.reasoning_content=reasoning (verbatim), assistant.reasoning_visibility per D3, assistant.metadata={reasoning_format, data_origin, model_id} | instruction |
+| **`response_edit_pair`** (new, Turkish label "Cevap düzeltme (öncesi / sonrası)") | prompt, `payload.original_response`, `payload.edited_response`, optional `payload.edit_note` (≤ 2000) | preference: messages=[user=prompt], preference={chosen:[assistant=edited_response], rejected:[assistant=original_response]}; `metadata.edit_note` if present | **preference** |
+
+Why this type first (karar notu §8.2): three texts, canonically native, no tie/both-bad
+wall (both branches are mandatory by construction), no quorum problem, and its only
+gate — original ≠ edited — runs cheapest at submit while the three values are still
+separate. It proves the whole backbone end to end.
+
+**Phase B — reference only, NOT in this card, each needs its own card and approval:**
+
+| task_type | fields | canonical mapping | content_purpose |
+|---|---|---|---|
+| `translation_pair` | source_text, target_text, source_language, target_language, source_rights_attestation | conversation: user=`Çevir (<src>→<tgt>): <source_text>`, assistant=target_text; top-level `language`=target; `metadata.source_language`=src — **needs the typed-language format decision and TASK-005 first** | instruction |
+| `preference_pair` | prompt, chosen, rejected (+ verdict/tie, needs format decision) | preference record | preference |
+| `reasoning` (as a task) | prompt, reasoning, answer, reasoning_format | conversation with `reasoning_content` — **not before an automatic verifier exists** (karar notu §3) | instruction |
 
 Every canonical line carries `schema_version`, `record_type`, `sample_id` (= the
 contribution uuid), `content_purpose` (= the registry value, which must also equal
@@ -221,38 +246,47 @@ the bundled source's purpose), `task_type`, `language`, `domain`. All types carr
 
 ### 2. Schema (new migration, number = last on `main` + 1 after the dependency lands)
 
-Additive only; must not break existing rows or `bundled` rows.
+Additive only; must not break existing rows or `bundled` rows. This is the
+**backbone**: one change that every later type reuses (karar notu §2, option 3).
 
-- Widen `task_type` CHECK to the five values.
-- `source_language text`, `target_language text` (nullable; CHECK required and
-  distinct for `translation`; lowercase tags `tr`, `en`, `fr`, `ar`, `ku`, …).
+- Widen `task_type` CHECK to `('qa_pair','free_text','response_edit_pair')`.
+- **`payload jsonb NOT NULL DEFAULT '{}'`** with `CHECK (jsonb_typeof(payload) = 'object')`.
+  `prompt`/`body` stay as the legacy two-field case; new types put their type-specific
+  fields in `payload`. **The DB does not validate payload keys** — that is deliberate;
+  the per-type allowed/required-key schema lives in Go (`normalizeAndValidateContribution`)
+  and is enforced on every submit. An unvalidated jsonb is the "junk drawer" the RFC
+  rejects (`versioned_data_profiles_rfc.md:336, 414-417`); the Go schema is what makes
+  it not one.
 - `data_origin text NOT NULL DEFAULT 'human'` with the **same vocabulary as
   `sources_data_origin`** in `000024_versioned_data_profiles.sql:862-863`
   (`unknown|human|model|hybrid`); `model_id text` (CHECK required when
   `data_origin IN ('model','hybrid')`). Applies to **every** task type — a pasted
   model answer in a `qa_pair` has the same provenance problem.
-- Secondary per-type fields (`rejected`, `reasoning`, `reasoning_format`,
-  `source_rights_attestation`): explicit nullable columns if ≤ 3, otherwise
-  `extra jsonb NOT NULL DEFAULT '{}'`; document the choice.
-- Per-type non-empty CHECKs (as `qa_pair` has today). `status` unchanged.
+- Per-type non-empty CHECKs stay for `qa_pair`. For `response_edit_pair` the non-empty
+  and original≠edited rules are Go-side (they read into jsonb); add a DB CHECK only for
+  `prompt` non-empty on that type.
+- `status` unchanged. Language columns are **Phase B** (translation) — do not add them now.
 - **No row-change trigger on `contributions`** (000023 excludes it on purpose). Extend
   the `contribution.submitted` audit details with `data_origin`, `model_id`,
   `source_language`/`target_language`, attestation flag — never the text fields.
 
 ### 3. Bundler
 
-**3a. Emit canonical JSONL** for `qa_pair`, `translation`, `preference`, `reasoning`;
-keep plain text for `free_text`. Commit the Go golden output as
+**3a. Emit canonical JSONL** for `qa_pair` and `response_edit_pair`; keep plain text
+for `free_text`. This replaces the two-key `map[string]string` at
+`contributions.go:196` with a typed struct per record — the single wall the panel
+identified. `contentPurposeForTaskType` must already be an explicit table with an
+error default (**TASK-004**); do not re-implement it here, rebase on it. Commit the Go golden output as
 `data_samples/example_contribution_bundles.jsonl`, have the Go test regenerate-and-
 compare it, and add the path to `worker/tests/test_canonical.py::test_repository_examples_follow_the_runtime_contract`.
 (CI has no cross-language step — `backend` and `worker` are separate jobs — so a
 shared fixture file is the only workable contract test.)
 
 **3b. Partition bundles.** Extend `BundleContributionsInput` and the `FOR UPDATE`
-query so a bundle selects `task_type` + (translation) `source_language`/`target_language`
-+ `data_origin`; derive the source's `language` from the pair (target) instead of the
-`tr` default; reject a selection that would mix origins or pairs. Update
-`pendingByType` and the bundle dialog accordingly.
+query so a bundle selects `task_type` + `data_origin`; reject a selection that would
+mix origins. Language-pair partitioning is Phase B. Update `pendingByType` and the
+bundle dialog accordingly. The per-contribution `domain` conflict rule comes from
+**TASK-004** — keep it.
 
 **3c. Source provenance** per D2 (recommended: leave `sources.data_origin='unknown'`,
 origin lives on the contribution row and in record `metadata`).
@@ -267,17 +301,19 @@ Acceptance: a bundled canonical source gets no `missing_text_field` risk, exact
 dedup catches two identical QA pairs with different `sample_id`s, and the review
 screen shows readable text, not JSON.
 
-### 4. Gates (one per type)
+### 4. Gates — Phase A
 
-- `translation`: both texts non-empty; languages differ; **source-text rights
-  attestation** checkbox ("the source text is public-domain / licensed for derivative
-  use"), stored and copied into lineage; reject at submit without it.
-- `preference`: `chosen` and `rejected` non-empty and not identical after whitespace
-  normalisation.
-- `reasoning`: `reasoning` and `answer` non-empty; reject when
-  `reasoning.strip() == answer.strip()`. Whether the reasoning *supports* the answer
-  is **human review**, not code — do not fake it.
+- `response_edit_pair` at submit: `prompt`, `original_response`, `edited_response`
+  non-empty; reject when `original_response` and `edited_response` are identical after
+  whitespace normalisation (`edit_pair_no_change`). The canonical-level identical-branch
+  check (**TASK-006**) is the fail-closed backstop for the same rule at export; both
+  are needed (submit = user feedback, canonical = cannot be bypassed by file upload).
+- Whether the edit is an *improvement* is **human review**, not code — do not fake it.
+  What a reviewer sees is §3d's job.
 - All types: PII / dedup / sampling gates run at ingest — **only meaningfully after 3d.**
+
+Phase B gates (translation rights attestation, language pair, reasoning ≠ answer)
+are listed in the karar notu §7 table with what each one must never claim.
 
 ### 4a. Reasoning traces are model-specific — do not bake one model's syntax in
 
@@ -307,10 +343,11 @@ final output. Other models emit a flat paragraph, `<think>…</think>` tags, or 
 ### 5. Web form
 
 One `<select>` driven by the registry (both the submit and the bundle selects); the
-field set switches per type. Language selects for translation (curated list + free
-entry). Preference: prompt + two side-by-side answer boxes. Reasoning: prompt /
-reasoning / answer + format tag + origin. "My contributions" shows the new types.
-Request structs first (API rejects unknown JSON fields), then the form.
+field set switches per type. `response_edit_pair`: prompt + two side-by-side boxes
+("Orijinal cevap" / "Düzeltilmiş cevap") + optional "Ne düzeltildi?" note + origin
+selector (`human` default; `model`/`hybrid` reveals `model_id`). "My contributions"
+shows the new type. Request structs first (API rejects unknown JSON fields), then the
+form. Phase B forms (language selects, reasoning/format tag) are not built now.
 
 ### 6. Copy
 
@@ -348,26 +385,26 @@ copy; `docs/katki_platformu_tasarimi.md` §2 (mark implemented rows);
 ## Acceptance criteria
 
 - [ ] `SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid='contributions'::regclass`
-      shows the five task types, the language/origin/model_id CHECKs, and per-type non-empty CHECKs.
-- [ ] A contributor can submit one of each new type from the UI; each appears in
-      "my contributions" with the correct type label.
-- [ ] `translation` with `source_language == target_language`, or without the rights
-      attestation, is rejected (HTTP 4xx, field-level message in the form).
-- [ ] `preference` with identical chosen/rejected is rejected.
-- [ ] `reasoning` with `reasoning == answer` is rejected; `model`/`hybrid` without `model_id` is rejected.
-- [ ] Bundling each type produces a source whose staged JSONL lines all pass
-      `parse_canonical_sample` with the mappings in §1 (worker fixture test); `free_text`
-      still bundles as plain text; a bundle cannot mix language pairs or origins.
+      shows the three task types, the `payload` object CHECK, the origin/model_id CHECKs.
+- [ ] `POST /api/v1/contributions` with `task_type=response_edit_pair` and a payload key
+      not in the registry (e.g. `payload.foo`) returns 400 naming the key — proves the
+      Go-side key schema is enforced, i.e. the jsonb is not a junk drawer.
+- [ ] A contributor can submit a `response_edit_pair` from the UI; it appears in
+      "my contributions" with the label "Cevap düzeltme (öncesi / sonrası)".
+- [ ] `response_edit_pair` with identical original/edited is rejected (HTTP 4xx,
+      field-level message in the form); `model`/`hybrid` without `model_id` is rejected.
+- [ ] Bundling `qa_pair` and `response_edit_pair` produces a source whose staged JSONL
+      lines all pass `parse_canonical_sample` with the mappings in §1 (worker fixture
+      test); `free_text` still bundles as plain text; a bundle cannot mix origins.
 - [ ] After ingest of a bundled canonical source: no `missing_text_field` risk reason;
       two identical QA pairs with different `sample_id`s are flagged as exact duplicates;
-      the review screen shows readable text (§3d).
-- [ ] Bundled `reasoning` records carry `reasoning_visibility: "review_only"` by default;
-      an export of such a source contains **no** `reasoning_content`.
-- [ ] Worker-level test: the bundled `preference` fixture passes `build_release_export`
-      for purpose `preference` in `jsonl` format (proves the **export-time** canonical
-      gate accepts it). The full UI path (bundle → ingest/PII/dedup/sample → sample review
-      by a *different* user → source approval → `preference` release → freeze → export)
-      is a separate half-day walk-through; budget it.
+      the review screen shows readable text **with both sides of an edit pair visible**
+      (§3d — this is the criterion most likely to be skipped; do not skip it).
+- [ ] Worker-level test: the bundled `response_edit_pair` fixture passes
+      `build_release_export` for purpose `preference` in `jsonl` format (proves the
+      **export-time** canonical gate accepts it). The full UI path (bundle → ingest/PII/
+      dedup/sample → sample review by a *different* user → source approval → `preference`
+      release → freeze → export) is a separate half-day walk-through; budget it.
 - [ ] Registry drift test: Go registry, worker constants and web select options asserted equal.
 - [ ] `go test ./...`, `pytest worker/tests`, `npm run typecheck && npm run lint && npm run build` pass.
 
@@ -383,13 +420,16 @@ Plus the UI walk-through on the running stack (`http://localhost:18400`).
 
 ## Risks / traps
 
-- **Moratorium (D1)** and the remaining dependency (TASK-001 first).
-- **CI has been dead since 2026-07-16** — real failures on 07-25/07-29, then from 08-29
-  the jobs stop starting entirely (billing block; three jobs, zero steps, no logs).
-  A green local run is the ONLY verification you will get. Also note 12 of the 46
-  `internal/repository` tests are skipped locally when `DERLEM_TEST_DATABASE_URL` is
-  unset — including the release-contract test that guards this area. Set that variable
-  against a scratch database before trusting `go test ./...`.
+- **Scope creep into Phase B.** The temptation is to "also add translation while in
+  there". Do not. Translation needs a format decision the owner has not made and a PII
+  fix (TASK-005) that may not have landed. One type, end to end, reviewed on screen.
+- **Merge order with TASK-004.** Both edit `contributions.go`. TASK-004 first; rebase.
+- **CI is green again** (since 2026-09-12) and runs backend / worker / web as separate
+  jobs — there is no cross-language step, which is why the shared golden fixture (§3a)
+  is the only contract test between Go emission and Python parsing. Locally, 12 of the
+  `internal/repository` tests **skip silently** when `DERLEM_TEST_DATABASE_URL` is unset
+  — including the release-contract test that guards this area. Point it at the
+  `derlem_ci_test` database before trusting `go test ./...`.
 - **Provenance trigger (D2)**: writing `sources.data_origin <> 'unknown'` without a
   `production_runs` row fails at INSERT (`000024`, `validate_source_production_provenance`).
 - **Export-time gate**: a malformed canonical line surfaces at the first export, not

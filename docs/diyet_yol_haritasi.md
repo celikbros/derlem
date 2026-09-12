@@ -72,7 +72,19 @@ kapılar). Kitlesel katkı mekanizmaları (güven kademeleri, N-onay, altın
 görevler, self-signup) açılmadı; katki_platformu_tasarimi.md ön koşullarına
 bağlı kalır.
 
-**Ölçüt:** Moratoryum süresince `feat:` commit sayısı = 0.
+**REVİZYON (2026-09-12, sahip kararı):** Katkı görev tipleri paneli
+(docs/katki_gorev_tipleri_karar_notu.md) sonrası sahip **TASK-002 Faz A** için
+istisna verdi: katkı omurgası (`payload jsonb` + tip başına anahtar şeması +
+demetten kanonik yayın + kanonik-okur worker) ve **tek** yeni tip
+`response_edit_pair`. Faz B tipleri (çeviri, tercih, düşünce zinciri) istisna
+kapsamında **değildir**; her biri ayrı kart ve ayrı onay ister. Aynı gün üç
+hata düzeltmesi (TASK-004/005/006) programcılara verildi — bunlar zaten
+moratoryum içidir. Release #1'in 35 belgelik insan incelemesi teslimat blokeri
+olarak durur; bu istisna onu ertelemez.
+
+**Ölçüt:** Moratoryum süresince `feat:` commit sayısı = 0 — **2026-09-12
+istisnası hariç** (TASK-002 Faz A commit'leri `feat:` taşır ve kart numarasıyla
+izlenir).
 
 ### Faz 2 — BUDAMA (moratoryumla paralel; bugün başladı)
 

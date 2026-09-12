@@ -186,18 +186,30 @@ $login = Invoke-RestMethod -Method Post -Uri http://localhost:18401/api/v1/auth/
   -ContentType 'application/json' `
   -Body (@{ email = 'consumer@derlem.local'; password = 'DerlemTest123!' } | ConvertTo-Json)
 
+# The field is access_token, NOT token. Assert it, or curl silently sends
+# "Bearer " and the run returns a 74-byte unauthorized body in ~2 s, which
+# looks like a fast success until you check the length.
+if (-not $login.access_token) { throw 'no access_token in login response' }
+
 $release = 'f442baba-43dc-4da8-a201-d57b34ed0012'   # Canonical Export Smoke (frozen)
+# Outside the repo: the download is a throwaway artifact, not a source file.
+$out = Join-Path $env:TEMP 'derlem-task003-export.jsonl'
 
 Measure-Command {
-  curl.exe -sS --limit-rate 40 -H "Authorization: Bearer $($login.token)" `
-    -o export.jsonl "http://localhost:18401/api/v1/releases/$release/exports/jsonl/artifact"
+  curl.exe -fsS --limit-rate 40 -H "Authorization: Bearer $($login.access_token)" `
+    -o $out "http://localhost:18401/api/v1/releases/$release/exports/jsonl/artifact"
 }
-(Get-Item export.jsonl).Length          # expect 1707
-(Get-FileHash export.jsonl -Algorithm SHA256).Hash.ToLower()
+(Get-Item $out).Length          # expect 1707
+(Get-FileHash $out -Algorithm SHA256).Hash.ToLower()
 ```
 
 Expected: elapsed **> 30 s**, length exactly `1707`, hash equal to
 `ebbc199c42151b276411209856b53dcaa7a9b4e9f8b281c5ead187810bf5c699`.
+
+**Check the length, not just the elapsed time.** An error body is small, so it
+finishes quickly even under the rate limit — a 2-second run means the request
+failed, not that the download was fast. `-f` makes curl exit non-zero on an HTTP
+error so this cannot pass silently.
 
 Against the unfixed code the same command dies mid-body with a partial file — which
 is what makes this a real reproduction rather than a smoke test.

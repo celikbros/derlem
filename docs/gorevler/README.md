@@ -74,11 +74,13 @@ kapanmadan başlamaz. Her madde "bitti" = commit + push + kartta Report.
 | 2 | PII tarayıcı dil dürüstlüğü | [TASK-005](TASK-005-pii-scanner-language-honesty.md) | READY |
 | 3 | Özdeş tercih dalları | [TASK-006](TASK-006-preference-branches-identical.md) | READY |
 | 4 | Katkı omurgası + `response_edit_pair` (Faz A) | [TASK-002](TASK-002-contribution-task-type-registry.md) | READY (TASK-004'ten sonra merge) |
-| 5 | Sessizce atlanan 12 repository testini çalıştır (`DERLEM_TEST_DATABASE_URL`, `derlem_ci_test` DB mevcut) | kart yazılacak | — |
-| 6 | Artık test şemalarını temizle (`derlem_claim_test_*`, `derlem_claim_resume_test_*`) ve testin neden artık bıraktığını kapat | kart yazılacak | — |
+| 5 | Sessizce atlanan **37** entegrasyon testini (29 Go + 8 worker) yerelde çalıştır; atlama görünür olsun | [TASK-007](TASK-007-silently-skipped-integration-tests.md) | READY |
+| 6 | **Çalışma veritabanına** sızmış iki test şemasını temizle (21 Ağu 2026); `_test` koruması + sızıntı süpürücüsü | [TASK-008](TASK-008-leaked-test-schemas.md) | READY |
 
 Ölçek altyapısı (bölümleme, presigned upload, PgBouncer, worker havuzu, üretim web
-sunucusu) bu listede **değil**; sahibin ayrı kararı bekleniyor.
+sunucusu) bu listede **değil**. Sahip kararı (2026-09-12): **ekip kullanıp ölçtükten
+sonra**, ölçüm verisiyle boyutlandırılır. Duvarların listesi ve gerekçe:
+[scalability_architecture.md](../scalability_architecture.md).
 
 ## Doğrulama notu
 

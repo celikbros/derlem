@@ -217,10 +217,28 @@ bagimsiz karar ekleyebilir.
 
 ## Testler
 
+Tek komut, her sey — veritabanina bagli entegrasyon testleri dahil:
+
 ```powershell
-go test ./...
-.\.venv\Scripts\python.exe -m pytest worker\tests
+.\scripts\test.ps1
+```
+
+Betik `DERLEM_TEST_DATABASE_URL`'i `.env`'den okur; yoksa `DATABASE_URL`'in
+veritabani adini `derlem_ci_test` ile degistirerek turetir. O veritabani bir kez
+elle olusturulur (`createdb derlem_ci_test`); testler icine izole semalar acar
+ve isleri bitince dusurur. **Adi `_test` ile bitmeyen bir veritabanina hicbir
+test dokunmaz** — kural kodda (`internal/testdb`, `worker/tests/conftest.py`),
+betikte degil.
+
+`go test ./...` veya `pytest` tek basina calistirilir ve degisken yoksa,
+veritabanina bagli testler **sessizce atlanmaz, kirmizi olur**. PostgreSQL
+olmayan makinede bilerek atlamak icin `DERLEM_SKIP_DB_TESTS=1` verin.
+
+Web:
+
+```powershell
 Set-Location web
+npm run typecheck
 npm run lint
 npm run build
 ```

@@ -3,14 +3,13 @@ package repository_test
 import (
 	"context"
 	"fmt"
-	"os"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/celikbros/derlem/internal/database"
 	"github.com/celikbros/derlem/internal/domain"
 	"github.com/celikbros/derlem/internal/repository"
+	"github.com/celikbros/derlem/internal/testdb"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -203,10 +202,7 @@ func setupDocumentClaimResumeFixture(
 	documentCount, reviewerCount int,
 ) (context.Context, *pgxpool.Pool, string, []string) {
 	t.Helper()
-	databaseURL := strings.TrimSpace(os.Getenv("DERLEM_TEST_DATABASE_URL"))
-	if databaseURL == "" {
-		t.Skip("DERLEM_TEST_DATABASE_URL is not set")
-	}
+	databaseURL := testdb.URL(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	t.Cleanup(cancel)

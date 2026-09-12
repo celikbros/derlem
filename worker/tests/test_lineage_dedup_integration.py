@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import UUID, uuid4
@@ -14,10 +13,9 @@ from derlem_worker.jobs import Job, Worker
 
 
 @pytest.fixture()
-def lineage_database_url():
-    base_url = os.environ.get("DERLEM_TEST_DATABASE_URL", "").strip()
-    if not base_url:
-        pytest.skip("DERLEM_TEST_DATABASE_URL is not set")
+def lineage_database_url(test_database_url: str):
+    # Adres ve _test korumasi conftest.test_database_url'de; burada yalniz sema.
+    base_url = test_database_url
 
     schema = f"derlem_lineage_worker_test_{uuid4().hex}"
     with psycopg.connect(base_url, autocommit=True) as admin:

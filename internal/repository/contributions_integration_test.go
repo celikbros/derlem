@@ -12,6 +12,7 @@ import (
 	"github.com/celikbros/derlem/internal/database"
 	"github.com/celikbros/derlem/internal/domain"
 	"github.com/celikbros/derlem/internal/repository"
+	"github.com/celikbros/derlem/internal/testdb"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -20,10 +21,7 @@ import (
 // döngüsünü gerçek PostgreSQL üzerinde doğrular: gönder -> listele -> geri
 // çek -> demetle -> kaynak + ingest job'u + audit.
 func TestContributionLifecycleBundlesPoolIntoSource(t *testing.T) {
-	databaseURL := strings.TrimSpace(os.Getenv("DERLEM_TEST_DATABASE_URL"))
-	if databaseURL == "" {
-		t.Skip("DERLEM_TEST_DATABASE_URL is not set")
-	}
+	databaseURL := testdb.URL(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	t.Cleanup(cancel)

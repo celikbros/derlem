@@ -5,12 +5,12 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io/fs"
-	"os"
 	"sort"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/celikbros/derlem/internal/testdb"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -85,10 +85,7 @@ func TestVersionedDataProfilesMigrationDeclaresAdditiveEvidenceFoundation(t *tes
 
 func newVersionedProfilesTestPool(t *testing.T, ctx context.Context) (*pgxpool.Pool, string) {
 	t.Helper()
-	databaseURL := strings.TrimSpace(os.Getenv(`DERLEM_TEST_DATABASE_URL`))
-	if databaseURL == `` {
-		t.Skip(`DERLEM_TEST_DATABASE_URL is not set`)
-	}
+	databaseURL := testdb.URL(t)
 	adminPool, err := pgxpool.New(ctx, databaseURL)
 	if err != nil {
 		t.Fatalf(`open admin pool: %v`, err)

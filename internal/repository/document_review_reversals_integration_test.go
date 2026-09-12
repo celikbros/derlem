@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -13,15 +12,13 @@ import (
 	"github.com/celikbros/derlem/internal/domain"
 	"github.com/celikbros/derlem/internal/repository"
 	"github.com/celikbros/derlem/internal/storage"
+	"github.com/celikbros/derlem/internal/testdb"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func TestDocumentReviewReversalIsAppendOnlyIdempotentAndRestoresCounts(t *testing.T) {
-	databaseURL := strings.TrimSpace(os.Getenv("DERLEM_TEST_DATABASE_URL"))
-	if databaseURL == "" {
-		t.Skip("DERLEM_TEST_DATABASE_URL is not set")
-	}
+	databaseURL := testdb.URL(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	t.Cleanup(cancel)

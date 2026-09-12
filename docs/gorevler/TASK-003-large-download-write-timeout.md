@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **IN REVIEW** — code done 2026-09-12; needs the full-size human check (see Report) |
+| Status | **DONE** — 2026-09-12, commit `110b77f`; end-to-end verified by the owner |
 | Kind | fix |
 | Moratorium | allowed (defect, no new behaviour) |
 | Estimate | 2–3 h (fix ~30 min; the regression test and a real full-size download take the rest) |
@@ -275,12 +275,25 @@ reproduction of the bug, not merely asserted.
 removed**: a client that never reads is dropped. Had the deadline been cleared
 outright — the pattern the upload handler uses — that test would hang and fail.
 
-**Not verified (honest gap):** no end-to-end download was performed. The API is
-stopped and Derlem services are started by the owner, not from here. The unit tests
-prove the deadline no longer caps the transfer; they do not prove the handler wiring
-serves a complete body over a real socket. **The last acceptance criterion is still
-open** — the throttled `curl.exe` recipe under Verification commands, which takes
-about a minute.
+**End-to-end verified 2026-09-12** by the owner, on a running API, as
+`consumer@derlem.local` (`consumer_team`). All three expectations met:
+
+| Check | Expected | Measured |
+|---|---|---|
+| Elapsed | > 30 s | **42.28 s** |
+| Length | 1707 | **1707** |
+| SHA256 | `ebbc199c…0bf5c699` | **match** |
+
+42.28 s exceeds the 30 s `WriteTimeout`, so the unfixed code would certainly have
+cut this transfer — that is arithmetic on a measured duration, not an inference.
+Every acceptance criterion is now closed.
+
+**The recipe itself needed two rounds** (`d1bb7c8`). The first attempt read
+`$login.token`; the real field is `access_token`, so curl sent `Bearer ` and got a
+74-byte `unauthorized` body — which, at 40 B/s, downloaded in 2.1 s and looked like
+a fast success. Only the length gave it away. The recipe now asserts the token,
+passes `-f` to curl, and writes outside the repo. Worth remembering: under a rate
+limit, **a short run means failure, not speed**.
 
 **Correction made while writing this Report.** The card first described the problem
 as "the 13 GB export cannot be downloaded". Measurement showed otherwise: the 13 GB

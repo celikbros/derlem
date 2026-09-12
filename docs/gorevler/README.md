@@ -57,7 +57,7 @@ yorumluyor); sahiple yazışma ve commit mesajları Türkçe kalır.
 |---|---|---|---|
 | [TASK-001](TASK-001-contribution-screen-fixes.md) | Contribution screen fixes (copy contradiction + checkbox layout) | fix | **DONE** — 2026-08-31, `d0160ab` |
 | [TASK-002](TASK-002-contribution-task-type-registry.md) | Contribution task-type registry (translation, preference, reasoning) | feature | DRAFT — sahip kararı bekliyor (D1–D4). Commit blokeri **kalktı** (2026-08-30); TASK-001 önce gitmeli. |
-| [TASK-003](TASK-003-large-download-write-timeout.md) | Large release downloads cut off by the server write timeout | fix | **IN REVIEW** — 2026-09-12, kod bitti ve testler yeşil; 13 GB'lık gerçek indirme insan eliyle doğrulanmayı bekliyor. |
+| [TASK-003](TASK-003-large-download-write-timeout.md) | Large release downloads cut off by the server write timeout | fix | **DONE** — 2026-09-12, `110b77f`. Uçtan uca doğrulandı: 42.28 sn süren indirme tam geldi (önceden 30 sn'de kesiliyordu). |
 
 ## Doğrulama notu
 
@@ -67,3 +67,10 @@ geçirildi (2026-08-30): TASK-001'de 7, TASK-002'de 20+ düzeltme çıktı; ikis
 olmayan migration'a dayanan talimat, worker'ın kanonik kaydı okuyamadığı gerçeği).
 **Her kart programcıya verilmeden önce bu geçişten geçmeli**; ölçülmeden yazılan
 cümle bu projede tekrar tekrar yanlış çıktı.
+
+TASK-003 (2026-09-12) bunu bir kez daha gösterdi: kart ilk halinde "13 GB'lık
+export indirilemiyor" diyordu, oysa o nesne bir export değil ve hiçbir release'de
+yok; önerilen doğrulama komutu da **düzeltilmemiş kodda geçerdi**. Kabul kriteri
+yazarken sorulacak soru "bu komut hatayı gerçekten üretiyor mu?" — üretmiyorsa
+kriter değil, süstür. Aynı kartta ikinci tuzak: hız sınırı altında **kısa süren
+koşu başarı değil, hatadır** (hata gövdesi küçüktür, hemen iner).

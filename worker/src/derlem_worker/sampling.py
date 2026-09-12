@@ -11,6 +11,8 @@ import re
 from typing import Callable
 import unicodedata
 
+from derlem_worker.canonical import CanonicalSampleError, parse_canonical_sample
+
 
 SAMPLING_METHOD = "risk-stratified-sha256-v1"
 _WORD_RE = re.compile(r"\w+", re.UNICODE)
@@ -186,7 +188,16 @@ def score_document_risk(text: str, raw_line: str | None = None) -> tuple[int, tu
             reasons.append("malformed_json")
             score += 2
         else:
-            if isinstance(structured, dict) and not any(
+            if isinstance(structured, dict) and "schema_version" in structured:
+                # Kanonik kayit metnini mesajlarda tasir; text/content/body aranmaz.
+                # Gecersiz kanonik kayit ihracatta tum release'i bloke eder
+                # (releases.py), bu yuzden incelemede yuksek riskle one cikar.
+                try:
+                    parse_canonical_sample(raw_line, _record_purpose(structured))
+                except CanonicalSampleError:
+                    reasons.append("invalid_canonical_sample")
+                    score += 5
+            elif isinstance(structured, dict) and not any(
                 isinstance(structured.get(key), str) and structured[key].strip()
                 for key in ("text", "content", "body")
             ):
@@ -230,6 +241,14 @@ def _bounded_lines(
             yield ordinal, chunk.decode("utf-8").rstrip("\r\n"), False
 
 
+def _record_purpose(value: dict[str, object]) -> str:
+    # Kanonik kayit kendi icerik amacini tasir; cagiranlar (ornekleme, parmak
+    # izi, decontamination) kaynagin amacini bilmez. Eksik ya da gecersiz amac,
+    # ayristiricida kendi hatasini verir.
+    purpose = value.get("content_purpose")
+    return purpose if isinstance(purpose, str) else ""
+
+
 def _document_from_line(line: str) -> tuple[str, str | None]:
     try:
         value = json.loads(line)
@@ -237,6 +256,21 @@ def _document_from_line(line: str) -> tuple[str, str | None]:
         return line, None
     if not isinstance(value, dict):
         return line, None
+
+    if "schema_version" in value:
+        # Kanonik kayit (derlem.canonical-sample.v1): belge metni ihracatta
+        # sayilan anlamsal metindir, ham JSON degil; kimlik sample_id'dir.
+        # Gecersiz kayit duzeltilmez, ham satir doner; risk puanlayici onu
+        # invalid_canonical_sample ile isaretler.
+        try:
+            sample = parse_canonical_sample(line, _record_purpose(value))
+        except CanonicalSampleError:
+            return line, None
+        if sample is not None:
+            semantic_text = "\n".join(sample.semantic_texts)
+            # Yalniz gorsel/ses parcasi olan kayitta metin yoktur; belge
+            # gorunmez kalmasin diye ham satir doner.
+            return (semantic_text or line), sample.sample_id
 
     external_id_value = value.get("id")
     external_id = str(external_id_value) if isinstance(external_id_value, (str, int)) else None

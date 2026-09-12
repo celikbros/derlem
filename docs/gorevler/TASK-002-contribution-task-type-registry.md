@@ -42,7 +42,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **READY** — owner approved 2026-09-12 (Phase A only, see Scope). Start after TASK-004/005/006 land, or in parallel on separate branches — but **TASK-004 must merge before this card's bundler changes**, both touch `contributions.go`. |
+| Status | **IN PROGRESS** — Phase A, owner approved 2026-09-12. TASK-004/005/006 landed. Slice S1 done 2026-09-13; see the slice table under Report. New migration number is **`000028`** (`000027` was taken by TASK-005). |
 | Kind | feature |
 | Moratorium | **Exception granted by the owner 2026-09-12** for Phase A (backbone + `response_edit_pair`). `docs/diyet_yol_haritasi.md` otherwise still applies; Phase B types (translation, preference, reasoning) are **not** covered by this exception and need their own cards. |
 | Estimate | **8–12 working days** for Phase A. The worker-side canonical intake (§3d) is the bulk of it and is not optional. |
@@ -450,4 +450,71 @@ in `docs/gorevler/README.md`; fill **Report** with test output and SHAs.
 
 ## Report
 
-_(filled by the implementer)_
+Implemented by Claude at the owner's request, in slices. Each slice is one commit, and
+CI must be green for it before the next slice starts.
+
+| Slice | Work | Status |
+|---|---|---|
+| S1 | Worker reads canonical records (§3d) | **done** 2026-09-13 |
+| S2 | Migration `000028`: `payload jsonb`, new task type, origin columns (§2) | next |
+| S3 | Go: per-type allowed/required payload keys, submit validation (§1, §4) | — |
+| S4 | Bundle emits canonical JSONL + shared Go↔Python golden fixture (§3a–3b) | — |
+| S5 | Web form driven by the registry, `response_edit_pair` fields (§5) | — |
+| S6 | Review view shows both sides of an edit pair (acceptance, §3d) | — |
+| S7 | End-to-end walk-through, copy, docs (§6) | — |
+
+### S1 — Worker reads canonical records (§3d) — 2026-09-13
+
+**Design.** `sampling._document_from_line` is the single text extractor behind sampling,
+fingerprinting (`fingerprints.py`, `jobs/gate_jobs.py`), the quality filter
+(`clean_candidate.py`), exact decontamination (`releases.py`) and — now — similarity. A
+line carrying `schema_version` is parsed with `parse_canonical_sample` using the
+record's **own** `content_purpose`: none of the callers know the source's purpose, and
+they do not need to (`similarity.py` already used this pattern). A valid record's
+document text is `"\n".join(semantic_texts)` — the same text the export counts, with
+`review_only` reasoning excluded — and its external id is `sample_id`. An invalid record
+is returned raw, never repaired. `similarity._similarity_text_from_line` now delegates to
+it: one source of truth instead of two copies.
+
+**Risk scoring.** A valid canonical record no longer receives `missing_text_field` (+2).
+An invalid one receives the new reason `invalid_canonical_sample` (+5): export blocks the
+whole release on a single invalid record (`releases.py:747-758`), so review must see it
+first. Non-canonical JSON without a text key still receives `missing_text_field` (the
+existing test is unchanged).
+
+**Fingerprint compatibility — measured, no version bump.** Normalized dedup filters by
+`fingerprint_version` (`gate_jobs.py:316,422,439`); bumping it would orphan all
+11.9M `normalized-document-sha256-v1` rows. Before changing extraction, every source
+object still on disk was read (first 64 KB): **0** canonical lines. The export of the
+release named "Canonical Export Smoke" records `record_type_counts = {"text": 2}` — plain
+text despite the name. Seven small smoke sources' objects are missing from disk (the
+2026-07-16 object-store loss) and could not be checked; the worst case is a missed
+near-duplicate against a test source that is unrecoverable anyway. An earlier check on
+`documents.text_preview` also returned 0 but was not trusted: `schema_version` sits at the
+end of the line, where a truncated preview cannot show it.
+
+**Verification (owner's machine, 2026-09-13):**
+
+- new `worker/tests/test_canonical_intake.py` — 8 passed: semantic text and `sample_id`;
+  an edit pair's text holds the prompt and both answers; an invalid record is returned
+  raw; plain JSON is unchanged; a valid record is not flagged `missing_text_field`; an
+  invalid one is flagged `invalid_canonical_sample`; **two identical canonical records
+  with different `sample_id`s get the same fingerprint** (acceptance criterion); sampling
+  stores semantic text, not JSON
+- `test_similarity.py` and `test_sampling.py` unchanged and green (26 passed together)
+- full worker suite against the scratch database: 251 passed, 1 skipped (pre-existing
+  Windows symlink case)
+
+**Control run.** The same new tests, run in-process against the pre-S1 `sampling.py`
+loaded from git `HEAD`: **6 failed, 2 passed** — exactly the six behaviours S1 adds. The
+two passes (plain JSON unchanged; invalid record returned raw) are behaviours the old code
+already had.
+
+**Limitation handed to S6.** For a preference record the parser adds the context (the
+prompt) once per branch, so the document text reads *prompt, chosen, prompt, rejected*
+without labels. That is consistent for dedup, but a reviewer cannot tell the original
+answer from the edited one. The labelled review view is S6.
+
+**Edge-case behaviour change (no existing data affected):** a valid canonical record whose
+messages carry only non-text parts (image, audio) previously yielded empty similarity
+text; it now yields the raw line, so the document stays visible instead of being skipped.

@@ -2,13 +2,11 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 import hashlib
-import json
 from pathlib import Path
 import sqlite3
 import tempfile
 from typing import Callable, Iterable, Iterator
 
-from derlem_worker.canonical import CanonicalSampleError, parse_canonical_sample
 from derlem_worker.fingerprints import normalize_document_text
 from derlem_worker.sampling import _bounded_lines, _document_from_line
 
@@ -541,25 +539,10 @@ def _iter_simhashes(
 
 
 def _similarity_text_from_line(line: str) -> str:
+    # Kanonik kaydi okuma sampling._document_from_line'da: benzerlik, parmak
+    # izi, ornekleme ve decontamination ayni belge metnini kullanir.
     text, _ = _document_from_line(line)
-    if text != line:
-        return text
-    try:
-        value = json.loads(line)
-    except json.JSONDecodeError:
-        return text
-    if not isinstance(value, dict) or value.get("schema_version") != "derlem.canonical-sample.v1":
-        return text
-    purpose = value.get("content_purpose")
-    if not isinstance(purpose, str):
-        return text
-    try:
-        sample = parse_canonical_sample(line, purpose)
-    except CanonicalSampleError:
-        return text
-    if sample is None:
-        return text
-    return "\n".join(sample.semantic_texts)
+    return text
 
 
 def _signature_bytes(signature: int) -> bytes:

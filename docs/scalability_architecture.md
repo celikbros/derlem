@@ -147,6 +147,25 @@ Buyume asamasi:
   - organization
   - API token
 
+### Buyuk indirmeler: resume elle yazilmaz
+
+Artifact indirmelerinde `Range` / `Accept-Ranges` destegi **bilerek** ertelendi.
+Kopan bir indirmenin sifirdan baslamasi gercek bir eksik, ama:
+
+- Bugunku ekip LAN'dan bagliyor; orada indirme kopmuyor, yani cozdugu sorun
+  henuz yok.
+- Nesneler MinIO/S3'e tasindiginda indirmeler presigned URL ile API'yi hic
+  kullanmayacak ve **range/resume hazir gelecek**. Simdi elle yazilacak kod o
+  gun cope gider.
+
+Karar: resume, S3 gecisiyle birlikte gelir; ayri is olarak yazilmaz. Internet
+uzerinden buyuk indirme ihtiyaci S3 gecisinden **once** dogarsa bu karar
+yeniden gozden gecirilir.
+
+Not: indirmenin 30 saniyede kesilmesi bundan ayri bir hataydi ve kapatildi
+(`docs/gorevler/TASK-003-large-download-write-timeout.md`); yazma suresi artik
+transfer ilerledikce tazeleniyor.
+
 ## Dil Secimi Ozeti
 
 | Katman | Dil | Gerekce |

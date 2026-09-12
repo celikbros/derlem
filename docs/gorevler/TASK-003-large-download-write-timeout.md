@@ -23,8 +23,12 @@ currently broken for anything larger than a few hundred megabytes, so the last
 link of the delivery chain does not work. This is not a scale problem — **one**
 user triggers it.
 
-It has gone unnoticed because the 13 GB export was written to disk by the worker,
-never fetched through the API, and no test covers the download handlers.
+**Severity is latent, not active.** The two multi-GB objects in the store are
+*source uploads* and belong to no release, and every body the download routes can
+currently serve is a few kilobytes — so nobody has been able to hit this yet. It
+fires the moment a release includes a real corpus source, which is precisely what
+release #1 is meant to do. That, plus zero test coverage on these four routes, is
+why it survived unnoticed.
 
 ## Current state (measured)
 
@@ -53,16 +57,18 @@ Four endpoints serve object bodies through that server
 All four funnel into `streamReleaseArtifact` (`internal/httpapi/release_handlers.go:206-224`),
 whose body copy is a bare `io.Copy(w, reader)` — no deadline handling.
 
-Object sizes in the live database:
+Object sizes in the live database — 742 objects, 25 GB total, largest 13 GB. The
+two largest are source uploads not yet attached to a release:
 
-```
- en_buyuk_nesne | toplam | nesne
-----------------+--------+-------
- 13 GB          | 25 GB  |   742
-```
+| Object | Size | Owner | In a release? |
+|---|---|---|---|
+| `9826d58e…` | 13 GB | source `gardash_faz2_tr_dedup_20260621` | no |
+| `ebe29279…` | 12 GB | source `…_20260621_cle…` | no |
+| `ebbc199c…` | 1707 B | `release_exports` (jsonl, Canonical Export Smoke) | yes, frozen |
 
 13 GB within 30 s requires **433 MB/s** sustained. On gigabit LAN (~110 MB/s) the
-transfer needs ~2 minutes and is cut at 30 s.
+transfer needs ~2 minutes and is cut at 30 s. The threshold on such a link is about
+**3.3 GB** — every corpus source of a realistic size is above it.
 
 **The upload path already solved this** (`internal/httpapi/upload_handlers.go:20-24`):
 
@@ -147,9 +153,9 @@ exported behaviour uses the package constants.
 - [ ] A client that stops reading is still disconnected (the deadline is refreshed,
       not removed). Covered by a stalled-reader subtest or, failing that, stated as
       an explicit gap in the Report.
-- [ ] Manual, on a running stack: `consumer_team` downloads the 13 GB JSONL export
-      in full and the SHA256 matches `storage_objects.sha256`. **This is the real
-      acceptance test; the unit test only prevents regression.**
+- [ ] Manual, on a running stack: `consumer_team` completes a download whose
+      **duration** exceeds 30 s and the SHA256 matches `release_exports.object_sha256`.
+      **This is the real acceptance test; the unit test only prevents regression.**
 
 ## Verification commands
 
@@ -157,19 +163,51 @@ exported behaviour uses the package constants.
 go build ./...; go vet ./...; go test ./internal/httpapi/
 ```
 
-Full-size check (API must be running, see `docs/local_development.md`):
+### End-to-end check — throttle, do not inflate
+
+The defect is governed by **elapsed time, not payload size**, so the test must make
+the transfer slow, not big. Do not try to reproduce it by downloading the 13 GB
+object:
+
+- that object is a **source upload** (`sources.object_sha256`,
+  `gardash_faz2_tr_dedup_20260621`) and belongs to **no release**, so no download
+  route exposes it today;
+- the largest body any route currently serves is a **1707-byte** JSONL export;
+- over localhost a multi-GB body moves at ~1 GB/s, finishes inside 30 s and so
+  never trips the deadline — the test would pass even against the unfixed code.
+
+`curl --limit-rate` reproduces it exactly, with the client slowness under our
+control instead of left to chance. 1707 bytes at 40 B/s ≈ 43 s, comfortably past
+the 30 s `WriteTimeout`:
 
 ```powershell
-# Get a token as consumer_team, then:
-curl.exe -H "Authorization: Bearer $token" -o export.jsonl `
-  http://localhost:18401/api/v1/releases/<id>/exports/jsonl/artifact
-Get-FileHash export.jsonl -Algorithm SHA256
+# API only; worker and web are not needed for this check.
+$login = Invoke-RestMethod -Method Post -Uri http://localhost:18401/api/v1/auth/login `
+  -ContentType 'application/json' `
+  -Body (@{ email = 'consumer@derlem.local'; password = 'DerlemTest123!' } | ConvertTo-Json)
+
+$release = 'f442baba-43dc-4da8-a201-d57b34ed0012'   # Canonical Export Smoke (frozen)
+
+Measure-Command {
+  curl.exe -sS --limit-rate 40 -H "Authorization: Bearer $($login.token)" `
+    -o export.jsonl "http://localhost:18401/api/v1/releases/$release/exports/jsonl/artifact"
+}
+(Get-Item export.jsonl).Length          # expect 1707
+(Get-FileHash export.jsonl -Algorithm SHA256).Hash.ToLower()
 ```
 
-Compare against:
+Expected: elapsed **> 30 s**, length exactly `1707`, hash equal to
+`ebbc199c42151b276411209856b53dcaa7a9b4e9f8b281c5ead187810bf5c699`.
+
+Against the unfixed code the same command dies mid-body with a partial file — which
+is what makes this a real reproduction rather than a smoke test.
+
+Cross-check the expected values from the database:
 
 ```sql
-SELECT sha256, byte_size FROM storage_objects ORDER BY byte_size DESC LIMIT 1;
+SELECT object_sha256, byte_size
+FROM public.release_exports
+WHERE release_id = 'f442baba-43dc-4da8-a201-d57b34ed0012' AND format = 'jsonl';
 ```
 
 ## Risks / traps
@@ -225,12 +263,21 @@ reproduction of the bug, not merely asserted.
 removed**: a client that never reads is dropped. Had the deadline been cleared
 outright — the pattern the upload handler uses — that test would hang and fail.
 
-**Not verified (honest gap):** the real 13 GB download was **not** performed. The API,
-worker and web are stopped, and Derlem services are not started without the owner's
-say-so. The unit tests prove the deadline no longer caps the transfer; they do not
-prove a 13 GB body arrives byte-identical over a real network. **The last acceptance
-criterion is still open** and needs a human on a running stack — the `curl.exe` +
-`Get-FileHash` commands under Verification commands.
+**Not verified (honest gap):** no end-to-end download was performed. The API is
+stopped and Derlem services are started by the owner, not from here. The unit tests
+prove the deadline no longer caps the transfer; they do not prove the handler wiring
+serves a complete body over a real socket. **The last acceptance criterion is still
+open** — the throttled `curl.exe` recipe under Verification commands, which takes
+about a minute.
+
+**Correction made while writing this Report.** The card first described the problem
+as "the 13 GB export cannot be downloaded". Measurement showed otherwise: the 13 GB
+object is a *source upload* attached to no release, and the biggest body the
+download routes serve today is 1707 bytes. The defect is unchanged — the deadline
+still caps every transfer at 30 s — but it is **latent** rather than actively
+breaking something, and the verification recipe had to change from "download 13 GB"
+to "throttle a small download past 30 s". The original recipe would have passed
+against the unfixed code and proved nothing.
 
 **Observations for the owner (not changed here):**
 

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/celikbros/derlem/internal/domain"
 )
 
 func TestBuildContributionJSONLFormatsQAPairs(t *testing.T) {
@@ -56,11 +58,21 @@ func TestBuildContributionJSONLKeepsFreeTextVerbatim(t *testing.T) {
 	}
 }
 
+// TestContentPurposeForTaskType, kayıt defterindeki HER tipin bir içerik amacı
+// eşlemesi olduğunu zorlar: yeni tip eklenip amacı unutulursa üretimde kalıcı
+// yanlış kaynak yerine burada kırmızı test çıkar.
 func TestContentPurposeForTaskType(t *testing.T) {
-	if purpose := contentPurposeForTaskType("qa_pair"); purpose != "instruction" {
-		t.Fatalf("qa_pair purpose = %q, want instruction", purpose)
+	want := map[string]string{"qa_pair": "instruction", "free_text": "pretrain"}
+	for taskType := range domain.ContributionTaskTypes {
+		purpose, err := contentPurposeForTaskType(taskType)
+		if err != nil {
+			t.Fatalf("registry task type %q has no content_purpose mapping: %v", taskType, err)
+		}
+		if expected, ok := want[taskType]; ok && purpose != expected {
+			t.Fatalf("%s purpose = %q, want %s", taskType, purpose, expected)
+		}
 	}
-	if purpose := contentPurposeForTaskType("free_text"); purpose != "pretrain" {
-		t.Fatalf("free_text purpose = %q, want pretrain", purpose)
+	if _, err := contentPurposeForTaskType("translation"); err == nil {
+		t.Fatal("unknown task type must not fall through to a default content purpose")
 	}
 }

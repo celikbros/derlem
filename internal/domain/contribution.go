@@ -2,12 +2,21 @@ package domain
 
 import "time"
 
+// ContributionTaskType, bir katkı görev tipinin kayıt defteri satırı. Demet
+// kaynağının içerik amacı buradan türetilir; eşlemesi olmayan tip demetlenemez
+// (sessiz bir "pretrain" varsayılanı yoktur — sources.content_purpose
+// trigger'la değişmez, yanlış amaçla yaratılan kaynak kalıcıdır).
+type ContributionTaskType struct {
+	ContentPurpose string
+}
+
 // ContributionTaskTypes, katkı kuyruğunun ofis ölçeğindeki görev tipleri.
 // Çeviri/preference gibi tipler açık kayıt fazına aittir
-// (docs/katki_platformu_tasarimi.md).
-var ContributionTaskTypes = map[string]struct{}{
-	"qa_pair":   {},
-	"free_text": {},
+// (docs/katki_platformu_tasarimi.md). Yeni tip = yeni satır; amaç eşlemesi
+// TestContentPurposeForTaskType ile her satır için zorlanır.
+var ContributionTaskTypes = map[string]ContributionTaskType{
+	"qa_pair":   {ContentPurpose: "instruction"},
+	"free_text": {ContentPurpose: "pretrain"},
 }
 
 // ContributionTermsVersion, katkı gönderilirken onaylanan kullanım şartının

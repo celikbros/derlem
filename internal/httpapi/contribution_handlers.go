@@ -31,6 +31,11 @@ func normalizeAndValidateContribution(input *domain.SubmitContributionInput) []s
 	if input.TaskType == "qa_pair" && input.Prompt == "" {
 		reasons = append(reasons, "Soru-cevap katkısında soru boş olamaz.")
 	}
+	// Serbest metinde soru alanı demete girmez; kabul edip sessizce düşürmek
+	// yerine gönderim anında reddedilir (katkıcının tepki verebildiği tek yer).
+	if input.TaskType == "free_text" && input.Prompt != "" {
+		reasons = append(reasons, "Serbest metin katkısında soru alanı kullanılmaz; tüm metni tek alana yazın.")
+	}
 	if utf8.RuneCountInString(input.Prompt) > maxContributionPromptChars {
 		reasons = append(reasons, "Soru 10.000 karakteri aşamaz.")
 	}

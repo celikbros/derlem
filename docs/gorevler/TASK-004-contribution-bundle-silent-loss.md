@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | READY |
+| Status | **DONE** — 2026-09-12 (implemented by Claude at the owner's request) |
 | Kind | fix |
 | Moratorium | allowed (closes silent data loss; no new behaviour, no new endpoint, no migration) |
 | Estimate | 1 day |
@@ -125,4 +125,41 @@ go build ./...; go vet ./...; go test ./internal/repository/ ./internal/httpapi/
 
 ## Report
 
-_(to be filled on completion)_
+**Done 2026-09-12.** All three defects closed. Two deliberate deviations from the
+card, both toward the surrounding code's conventions:
+
+1. **Purpose mapping lives in the registry, not in a second table.**
+   `domain.ContributionTaskTypes` became `map[string]ContributionTaskType` with a
+   `ContentPurpose` field; `contentPurposeForTaskType` reads it and returns an error
+   for a missing/empty mapping. Both existing validators keep working unchanged
+   (`_, ok := …[taskType]`). `Bundle` resolves the purpose **before** opening the
+   transaction, so an unmapped type fails fast with nothing written.
+   `TestContentPurposeForTaskType` now iterates the registry — adding a type without a
+   purpose turns the suite red.
+2. **`free_text` + non-empty prompt → 422 with a reason**, not a 400 with a new code.
+   The handler already answers every validation failure as
+   `422 contribution_validation_failed` + `reasons[]`; a one-off 400 would have been the
+   inconsistent choice. The web form already sends `prompt: ""` for `free_text`
+   (`contributions-panel.tsx:74`), so no web change.
+3. **Domain: filter, don't refuse.** Card option (a) ("refuse when domains differ")
+   would have made a mixed pool (fizik + hukuk) permanently unbundleable — the manager
+   could never satisfy it. Instead the `FOR UPDATE` query now takes only contributions
+   whose domain matches the bundle's (case-insensitive) or is empty; the rest stay
+   `submitted` and visible in the pool, to be bundled under their own domain. Nothing is
+   dropped and the source-level `domain` is truthful. The empty-pool gate message says so.
+
+**Verification run (owner's machine, 2026-09-12):**
+
+- `go build ./...` clean; `go vet` clean on the three packages
+- Unit: `go test ./internal/repository/ ./internal/httpapi/` → ok (new registry test,
+  new `free text with prompt` case)
+- Integration, **actually executed** against `derlem_ci_test`:
+  `TestContributionLifecycleBundlesPoolIntoSource` → PASS (1.05 s), extended with a
+  `Hukuk` contribution that the `fizik` bundle must skip (stays `submitted`) and that the
+  `hukuk` bundle then takes (source `domain = 'hukuk'`); audit count 6 → 8
+- Full suite with `DERLEM_TEST_DATABASE_URL` set: every package ok, **0 skipped** —
+  the 29 previously silent tests all ran (repository 41 s, database 19 s)
+
+**Not changed (noted for TASK-002):** the bundle dialog still shows the per-type
+pending count, not per-domain; after a domain-filtered bundle the remaining count is
+simply what is left. Per-record domain in the JSONL waits for canonical emission.

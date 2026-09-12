@@ -58,7 +58,7 @@ yorumluyor); sahiple yazışma ve commit mesajları Türkçe kalır.
 | [TASK-001](TASK-001-contribution-screen-fixes.md) | Contribution screen fixes (copy contradiction + checkbox layout) | fix | **DONE** — 2026-08-31, `d0160ab` |
 | [TASK-002](TASK-002-contribution-task-type-registry.md) | Contribution backbone (`payload jsonb` + kanonik yayın + kanonik-okur worker) + ilk tip `response_edit_pair` — **Faz A** | feature | **READY** — sahip 2026-09-12'de moratoryum istisnası verdi (yalnız Faz A). TASK-004'ten sonra merge. Panel notu: [katki_gorev_tipleri_karar_notu.md](../katki_gorev_tipleri_karar_notu.md). |
 | [TASK-003](TASK-003-large-download-write-timeout.md) | Large release downloads cut off by the server write timeout | fix | **DONE** — 2026-09-12, `110b77f`. Uçtan uca doğrulandı: 42.28 sn süren indirme tam geldi (önceden 30 sn'de kesiliyordu). |
-| [TASK-004](TASK-004-contribution-bundle-silent-loss.md) | Contribution bundling silently loses data and mislabels purpose | fix | **READY** — 2026-09-12. `contentPurposeForTaskType` korumasız varsayılan; `free_text` prompt'u ve katkı `domain`'i demette sessizce düşüyor. |
+| [TASK-004](TASK-004-contribution-bundle-silent-loss.md) | Contribution bundling silently loses data and mislabels purpose | fix | **DONE** — 2026-09-12. Amaç eşlemesi kayıt defterinde + hata varsayılanı; `free_text`+prompt reddi; demet alan filtresi. Entegrasyon testi gerçekten koştu. |
 | [TASK-005](TASK-005-pii-scanner-language-honesty.md) | PII scanner reports "clear" on languages it cannot inspect | fix | **READY** — 2026-09-12. `basic-tr-v1` yalnız TR desenleri; ku/ar/en kaynağa hak edilmemiş "temiz" mührü. `not_evaluated` + freeze bloke. |
 | [TASK-006](TASK-006-preference-branches-identical.md) | Canonical preference records accept identical chosen/rejected branches | fix | **READY** — 2026-09-12. Yarım gün; ilk "iki alanı karşılaştıran" kapı, `canonical.py`'de fail-closed. |
 
@@ -70,7 +70,7 @@ kapanmadan başlamaz. Her madde "bitti" = commit + push + kartta Report.
 
 | # | Madde | Kart | Durum |
 |---|---|---|---|
-| 1 | Demetlemede sessiz veri kaybı | [TASK-004](TASK-004-contribution-bundle-silent-loss.md) | READY |
+| 1 | Demetlemede sessiz veri kaybı | [TASK-004](TASK-004-contribution-bundle-silent-loss.md) | **DONE** 2026-09-12 |
 | 2 | PII tarayıcı dil dürüstlüğü | [TASK-005](TASK-005-pii-scanner-language-honesty.md) | READY |
 | 3 | Özdeş tercih dalları | [TASK-006](TASK-006-preference-branches-identical.md) | READY |
 | 4 | Katkı omurgası + `response_edit_pair` (Faz A) | [TASK-002](TASK-002-contribution-task-type-registry.md) | READY (TASK-004'ten sonra merge) |

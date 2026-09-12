@@ -27,6 +27,8 @@ func TestContributionValidationRejectsBadInput(t *testing.T) {
 	cases := map[string]domain.SubmitContributionInput{
 		"unknown task type": {TaskType: "translation", Body: "metin", AcceptTerms: true},
 		"qa without prompt": {TaskType: "qa_pair", Body: "cevap", AcceptTerms: true},
+		// Serbest metinde soru alanı demete girmez; kabul edip düşürmek yerine reddedilir.
+		"free text with prompt": {TaskType: "free_text", Prompt: "soru", Body: "metin", AcceptTerms: true},
 		"empty body":        {TaskType: "free_text", Body: "   ", AcceptTerms: true},
 		"terms not acked":   {TaskType: "free_text", Body: "metin", AcceptTerms: false},
 		"body too long":     {TaskType: "free_text", Body: strings.Repeat("a", 100001), AcceptTerms: true},

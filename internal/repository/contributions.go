@@ -200,11 +200,16 @@ func buildContributionJSONL(taskType string, items []bundleItem) ([]byte, error)
 	return buffer.Bytes(), nil
 }
 
-func contentPurposeForTaskType(taskType string) string {
-	if taskType == "qa_pair" {
-		return "instruction"
+// contentPurposeForTaskType, demet kaynağının içerik amacını kayıt defterinden
+// okur. Eşlemesi olmayan tip hata döndürür: eski sessiz "pretrain" varsayılanı,
+// yeni bir tip eklenip burası unutulduğunda kaynağı kalıcı olarak yanlış amaçla
+// yaratıyordu (tercih kayıtları ihracatta reddedilir, release bloke olur).
+func contentPurposeForTaskType(taskType string) (string, error) {
+	entry, ok := domain.ContributionTaskTypes[taskType]
+	if !ok || entry.ContentPurpose == "" {
+		return "", fmt.Errorf("contribution task type %q has no content_purpose mapping", taskType)
 	}
-	return "pretrain"
+	return entry.ContentPurpose, nil
 }
 
 // Bundle, bekleyen havuzu tek transaction içinde kaynağa demetler: katkılar
@@ -212,18 +217,28 @@ func contentPurposeForTaskType(taskType string) string {
 // + audit olayları eklenir ve katkılar kaynağa bağlanır. Dosya yazımı
 // transaction dışı tek yan etkidir; commit başarısız olursa dosya silinir.
 func (r *Contributions) Bundle(ctx context.Context, input domain.BundleContributionsInput, stagingRoot, actorID string) (domain.ContributionBundleResult, error) {
+	contentPurpose, err := contentPurposeForTaskType(input.TaskType)
+	if err != nil {
+		return domain.ContributionBundleResult{}, err
+	}
+
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return domain.ContributionBundleResult{}, err
 	}
 	defer tx.Rollback(ctx)
 
+	// Katkının kendi alan etiketi iki anahtarlı JSONL satırına sığmaz; kaynağa
+	// demet düzeyinde tek alan yazılır. Etiketin sessizce düşmemesi için demet
+	// yalnız o alanla eşleşen (veya alanı boş) katkıları alır; kalanlar havuzda
+	// görünür kalır ve kendi alanlarıyla ayrıca demetlenir.
 	rows, err := tx.Query(ctx, `
 		SELECT id::text, prompt, body FROM contributions
 		WHERE status = 'submitted' AND task_type = $1
+		  AND (domain = '' OR lower(domain) = lower($2))
 		ORDER BY created_at
 		FOR UPDATE
-	`, input.TaskType)
+	`, input.TaskType, input.Domain)
 	if err != nil {
 		return domain.ContributionBundleResult{}, err
 	}
@@ -244,7 +259,7 @@ func (r *Contributions) Bundle(ctx context.Context, input domain.BundleContribut
 	}
 	if len(items) == 0 {
 		return domain.ContributionBundleResult{}, &GateError{Reasons: []string{
-			"Bu görev tipinde bekleyen katkı yok.",
+			"Bu görev tipinde ve alanda bekleyen katkı yok (farklı alan etiketli katkılar kendi alanlarıyla demetlenir).",
 		}}
 	}
 
@@ -279,7 +294,7 @@ func (r *Contributions) Bundle(ctx context.Context, input domain.BundleContribut
 		)
 		VALUES ($1, 'community_contribution', $2, 'topluluk-katkisi-ic-sozlesme-v1', 'cleared', $3, $4, $5, $6, $7)
 		RETURNING id::text
-	`, input.Name, contentPurposeForTaskType(input.TaskType), input.Language,
+	`, input.Name, contentPurpose, input.Language,
 		input.Domain, evidence, lineage, actorID).Scan(&sourceID)
 	if err != nil {
 		return domain.ContributionBundleResult{}, err
@@ -307,7 +322,7 @@ func (r *Contributions) Bundle(ctx context.Context, input domain.BundleContribut
 	}
 
 	sourceDetails, err := json.Marshal(map[string]any{
-		"name": input.Name, "content_purpose": contentPurposeForTaskType(input.TaskType), "rights_status": "cleared",
+		"name": input.Name, "content_purpose": contentPurpose, "rights_status": "cleared",
 	})
 	if err != nil {
 		return domain.ContributionBundleResult{}, err

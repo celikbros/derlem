@@ -112,21 +112,31 @@ func TestContributionLifecycleBundlesPoolIntoSource(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("submit free text: %v", err)
 	}
+	// Farklı alan etiketli qa_pair: fizik demeti bunu ALMAMALI (etiket sessizce
+	// düşmez), havuzda kalmalı ve kendi alanıyla demetlenmeli.
+	legal, err := repo.Submit(ctx, contributorID, domain.SubmitContributionInput{
+		TaskType: "qa_pair", Domain: "Hukuk",
+		Prompt: "Zamanaşımı nedir?", Body: "Bir hakkın belirli süre kullanılmaması sonucu dava edilebilirliğini yitirmesidir.",
+		AcceptTerms: true,
+	})
+	if err != nil {
+		t.Fatalf("submit legal: %v", err)
+	}
 
 	mine, err := repo.ListMine(ctx, contributorID)
 	if err != nil {
 		t.Fatalf("list mine: %v", err)
 	}
-	if len(mine) != 3 {
-		t.Fatalf("expected 3 own contributions, got %d", len(mine))
+	if len(mine) != 4 {
+		t.Fatalf("expected 4 own contributions, got %d", len(mine))
 	}
 
 	pending, err := repo.ListPending(ctx)
 	if err != nil {
 		t.Fatalf("list pending: %v", err)
 	}
-	if len(pending) != 3 {
-		t.Fatalf("expected 3 pending contributions, got %d", len(pending))
+	if len(pending) != 4 {
+		t.Fatalf("expected 4 pending contributions, got %d", len(pending))
 	}
 	if pending[0].ContributorName != "Katkıcı Kişi" {
 		t.Fatalf("expected display name in pool, got %q", pending[0].ContributorName)
@@ -152,7 +162,14 @@ func TestContributionLifecycleBundlesPoolIntoSource(t *testing.T) {
 		t.Fatalf("bundle qa_pair: %v", err)
 	}
 	if result.Count != 1 {
-		t.Fatalf("expected 1 bundled contribution (one withdrawn), got %d", result.Count)
+		t.Fatalf("expected 1 bundled contribution (one withdrawn, one other-domain), got %d", result.Count)
+	}
+	var legalStatus string
+	if err := pool.QueryRow(ctx, `SELECT status FROM contributions WHERE id = $1`, legal.ID).Scan(&legalStatus); err != nil {
+		t.Fatalf("read legal contribution: %v", err)
+	}
+	if legalStatus != "submitted" {
+		t.Fatalf("other-domain contribution must stay in the pool, got status %q", legalStatus)
 	}
 
 	var purpose, rights, createdBy string
@@ -228,6 +245,24 @@ func TestContributionLifecycleBundlesPoolIntoSource(t *testing.T) {
 		t.Fatalf("free_text bundle purpose = %q, want pretrain", purpose)
 	}
 
+	// Alan eşleşmesi büyük/küçük harfe duyarsız: "Hukuk" katkısı "hukuk" demetine girer.
+	legalResult, err := repo.Bundle(ctx, domain.BundleContributionsInput{
+		TaskType: "qa_pair", Name: "hukuk_katki_demeti", Language: "tr", Domain: "hukuk",
+	}, stagingRoot, managerID)
+	if err != nil {
+		t.Fatalf("bundle legal: %v", err)
+	}
+	if legalResult.Count != 1 {
+		t.Fatalf("expected 1 legal contribution bundled, got %d", legalResult.Count)
+	}
+	var legalSourceDomain string
+	if err := pool.QueryRow(ctx, `SELECT domain FROM sources WHERE id = $1`, legalResult.SourceID).Scan(&legalSourceDomain); err != nil {
+		t.Fatalf("read legal source: %v", err)
+	}
+	if legalSourceDomain != "hukuk" {
+		t.Fatalf("legal source domain = %q, want hukuk", legalSourceDomain)
+	}
+
 	var auditCount int
 	if err := pool.QueryRow(ctx, `
 		SELECT count(*) FROM audit_events
@@ -235,7 +270,7 @@ func TestContributionLifecycleBundlesPoolIntoSource(t *testing.T) {
 	`).Scan(&auditCount); err != nil {
 		t.Fatalf("count audit events: %v", err)
 	}
-	if auditCount != 6 { // 3 submit + 1 withdraw + 2 bundle
-		t.Fatalf("expected 6 contribution audit events, got %d", auditCount)
+	if auditCount != 8 { // 4 submit + 1 withdraw + 3 bundle
+		t.Fatalf("expected 8 contribution audit events, got %d", auditCount)
 	}
 }

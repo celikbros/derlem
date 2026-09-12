@@ -1,8 +1,43 @@
 # TASK-002 — Contribution task-type registry (translation, preference, reasoning)
 
+> ## Revision 2026-09-12 — reframed after the expert panel
+>
+> A six-lens panel with per-proposal code verification
+> (`docs/katki_gorev_tipleri_karar_notu.md`) changed the **shape** of this card, not
+> its facts. Everything below the header still holds; read it through these corrections:
+>
+> 1. **This is not "add three types". It is one plumbing change that opens a family.**
+>    The wall is `map[string]string{"id","text"}` at `contributions.go:196` plus
+>    `DisallowUnknownFields` at `json.go:35` — not the form and not the taxonomy.
+>    Deliverable of this card = the **backbone** (karar notu §2, four coordinated edits:
+>    `payload jsonb` + per-type allowed-key schema in Go + canonical emission from the
+>    bundle + explicit purpose table), **plus exactly one new type**.
+> 2. **The first new type is `response_edit_pair`, not translation.** Three texts,
+>    canonically native (shared context + chosen/rejected), no tie/both-bad wall, one
+>    gate (diff at submit). Translation waits: it needs the typed-language format
+>    decision, per-language PII (TASK-005), side-by-side review, four new rubric
+>    dimensions — 12–18 days on its own (§5, §6).
+> 3. **Reasoning is not a task type in this card.** It is a per-message attribute
+>    (`reasoning_content` + `reasoning_visibility`, `canonical.py:42-52`); offering a
+>    visibility selector **before** the bundle emits canonical records promises the
+>    contributor something the pipeline cannot keep (§7.4). The backbone must land first;
+>    a reasoning *task* waits for an automatic verifier (§3).
+> 4. **Prerequisites, all moratorium-compatible, all independent of this card:**
+>    TASK-004 (bundle silent loss), TASK-005 (PII language honesty), TASK-006 (identical
+>    preference branches). Every new type would inherit those defects.
+> 5. **The one owner decision that replaces D2–D4:** which fields are **typed**
+>    (validated, gate-able, queryable — requires touching the closed `TOP_LEVEL_FIELDS`
+>    whitelist that blocks releases on unknown keys) versus **untyped** (ride in
+>    `metadata`, cheap, but no gate can ever see them). Recommendation in the karar
+>    notu §2: translation language pair and preference verdict must be typed;
+>    rationale/notes/label sets may stay in metadata. D1 (moratorium) stands as written.
+>
+> Sequencing (§6): release #1 → TASK-004/005/006 → this backbone + `response_edit_pair`
+> → `preference_pair` → `translation_pair`.
+
 | Field | Value |
 |---|---|
-| Status | DRAFT — **owner decisions required** (see Decisions). Dependency 1 (uncommitted work) **CLEARED 2026-08-30**; dependency 2 (TASK-001) still open. |
+| Status | DRAFT — **reframed 2026-09-12** (see Revision block). Waits for release #1 and the single typed/untyped decision. Dependency 1 (uncommitted work) **CLEARED 2026-08-30**; TASK-001 **DONE**. |
 | Kind | feature |
 | Moratorium | **not allowed by default.** `docs/diyet_yol_haritasi.md` permits only bug fixes / pruning / documentation / Phase 0 (delivery) support; `docs/katki_platformu_tasarimi.md` §6 places translation and preference tasks in **Phase C**. Starting this pulls Phase C forward — the owner's call, not the implementer's. |
 | Estimate | **8–12 working days** (was 3–5 before verification; the worker-side canonical intake and the provenance contract were not visible from the surface). Excludes the owner decisions below. |

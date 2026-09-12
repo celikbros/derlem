@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **DONE** — 2026-09-13 (implemented by Claude at the owner's request). **Deploy step pending:** `go run ./cmd/migrate` on the working database (see Report) |
+| Status | **DONE** — 2026-09-13 (implemented by Claude at the owner's request). Migration `000027` applied to the working database 2026-09-13 01:53 with the owner's go-ahead (see Report) |
 | Kind | fix |
 | Moratorium | allowed (an unearned "clear" stamp is the 0e5c7c5 failure class; this closes it) |
 | Estimate | 1–2 days |
@@ -206,11 +206,13 @@ was changed for the control.
 (10 clear, 1 flagged, 1 not_scanned). Sources carrying a false clean stamp today:
 **0**. `pii_scans` history: 11 rows, all `basic-tr-v1`.
 
-**Deploy step — owner.** The working database is at migration `000026`, and only
-`cmd/migrate` applies migrations (the API does not at startup). Run
-`go run ./cmd/migrate` **before** starting a worker on this code. Until then, scanning a
-non-Turkish source fails its job with a CHECK violation — fail-closed, nothing is
-mis-stamped, but noisy. All current sources are Turkish, so nothing breaks today.
+**Deploy step — done 2026-09-13 01:53, with the owner's go-ahead.** Only `cmd/migrate`
+applies migrations (the API does not at startup). `go run ./cmd/migrate` moved the
+working database from `000026` to `000027`; afterwards both constraint definitions list
+`not_evaluated`, and the existing `pii_status` distribution was unchanged (10 clear,
+1 flagged, 1 not_scanned). A worker running this code is now safe to start. Had it
+started before the migration, scanning a non-Turkish source would have failed its job
+with a CHECK violation — fail-closed, never mis-stamped.
 
 **Honest gaps:**
 

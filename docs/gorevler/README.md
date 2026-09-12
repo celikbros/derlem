@@ -59,10 +59,10 @@ yorumluyor); sahiple yazışma ve commit mesajları Türkçe kalır.
 | [TASK-002](TASK-002-contribution-task-type-registry.md) | Contribution backbone (`payload jsonb` + kanonik yayın + kanonik-okur worker) + ilk tip `response_edit_pair` — **Faz A** | feature | **READY** — sahip 2026-09-12'de moratoryum istisnası verdi (yalnız Faz A). TASK-004'ten sonra merge. Panel notu: [katki_gorev_tipleri_karar_notu.md](../katki_gorev_tipleri_karar_notu.md). |
 | [TASK-003](TASK-003-large-download-write-timeout.md) | Large release downloads cut off by the server write timeout | fix | **DONE** — 2026-09-12, `110b77f`. Uçtan uca doğrulandı: 42.28 sn süren indirme tam geldi (önceden 30 sn'de kesiliyordu). |
 | [TASK-004](TASK-004-contribution-bundle-silent-loss.md) | Contribution bundling silently loses data and mislabels purpose | fix | **DONE** — 2026-09-12. Amaç eşlemesi kayıt defterinde + hata varsayılanı; `free_text`+prompt reddi; demet alan filtresi. Entegrasyon testi gerçekten koştu. |
-| [TASK-005](TASK-005-pii-scanner-language-honesty.md) | PII scanner reports "clear" on languages it cannot inspect | fix | **DONE** — 2026-09-13. `basic-tr-v2`: desteklenmeyen dilde `not_evaluated` (freeze bloke, incelemeye ilerlemez); migration 000027. Kontrol koşusu: v1 davranışı 9 testi kırmızı yaptı. Çalışma DB'sine migration sahipte. |
+| [TASK-005](TASK-005-pii-scanner-language-honesty.md) | PII scanner reports "clear" on languages it cannot inspect | fix | **DONE** — 2026-09-13. `basic-tr-v2`: desteklenmeyen dilde `not_evaluated` (freeze bloke, incelemeye ilerlemez); migration 000027. Kontrol koşusu: v1 davranışı 9 testi kırmızı yaptı. Migration çalışma DB'sine uygulandı (2026-09-13, sahip onayıyla). |
 | [TASK-006](TASK-006-preference-branches-identical.md) | Canonical preference records accept identical chosen/rejected branches | fix | **DONE** — 2026-09-12. `preference_branches_identical`; karşılaştırma eğitim sinyali alanlarında (bayrak/metadata hariç). |
 | [TASK-007](TASK-007-silently-skipped-integration-tests.md) | 37 integration tests skip silently on every local run | fix | **DONE** — 2026-09-12, CI düzeltmesi 2026-09-13. `internal/testdb` + conftest: adres yoksa kırmızı, `_test` olmayan DB reddedilir; `scripts/test.ps1`; CI'da `DERLEM_SKIP_DB_TESTS` yasak. İlk CI kontrolü (log grep) kendi birim testini yakalayıp CI'ı kırmızı yapmıştı. |
-| [TASK-008](TASK-008-leaked-test-schemas.md) | Integration tests leaked schemas into the working database | fix | **READY** — 2026-09-12. İki artık şema (21 Ağu); `_test` koruması TASK-007'de indi, kalan: temizlik + süpürücü. |
+| [TASK-008](TASK-008-leaked-test-schemas.md) | Integration tests leaked schemas into the working database | fix | **DONE** — 2026-09-13. Süpürücü: yaş şema adından, yalnız 1 saatten eski, eklenti içeren şema asla; her pakette TestMain + worker oturum başı. Çalışma DB'sindeki iki şema yedeklenip silindi (CASCADE etki alanı ölçüldü: dışarıda 0 nesne). |
 
 ## Altyapı kapanış listesi (sahip onayı: 2026-09-12)
 
@@ -73,11 +73,11 @@ kapanmadan başlamaz. Her madde "bitti" = commit + push + kartta Report.
 | # | Madde | Kart | Durum |
 |---|---|---|---|
 | 1 | Demetlemede sessiz veri kaybı | [TASK-004](TASK-004-contribution-bundle-silent-loss.md) | **DONE** 2026-09-12 |
-| 2 | PII tarayıcı dil dürüstlüğü | [TASK-005](TASK-005-pii-scanner-language-honesty.md) | **DONE** 2026-09-13 (çalışma DB'sine migration sahipte) |
+| 2 | PII tarayıcı dil dürüstlüğü | [TASK-005](TASK-005-pii-scanner-language-honesty.md) | **DONE** 2026-09-13 |
 | 3 | Özdeş tercih dalları | [TASK-006](TASK-006-preference-branches-identical.md) | **DONE** 2026-09-12 |
 | 4 | Katkı omurgası + `response_edit_pair` (Faz A) | [TASK-002](TASK-002-contribution-task-type-registry.md) | READY (TASK-004'ten sonra merge) |
 | 5 | Sessizce atlanan **37** entegrasyon testini (29 Go + 8 worker) yerelde çalıştır; atlama görünür olsun | [TASK-007](TASK-007-silently-skipped-integration-tests.md) | **DONE** 2026-09-12 |
-| 6 | **Çalışma veritabanına** sızmış iki test şemasını temizle (21 Ağu 2026); `_test` koruması + sızıntı süpürücüsü | [TASK-008](TASK-008-leaked-test-schemas.md) | READY |
+| 6 | **Çalışma veritabanına** sızmış iki test şemasını temizle (21 Ağu 2026); `_test` koruması + sızıntı süpürücüsü | [TASK-008](TASK-008-leaked-test-schemas.md) | **DONE** 2026-09-13 |
 
 Ölçek altyapısı (bölümleme, presigned upload, PgBouncer, worker havuzu, üretim web
 sunucusu) bu listede **değil**. Sahip kararı (2026-09-12): **ekip kullanıp ölçtükten
@@ -99,3 +99,8 @@ yok; önerilen doğrulama komutu da **düzeltilmemiş kodda geçerdi**. Kabul kr
 yazarken sorulacak soru "bu komut hatayı gerçekten üretiyor mu?" — üretmiyorsa
 kriter değil, süstür. Aynı kartta ikinci tuzak: hız sınırı altında **kısa süren
 koşu başarı değil, hatadır** (hata gövdesi küçüktür, hemen iner).
+
+TASK-007 (2026-09-13) aynı dersin CI tarafı: "atlama olursa düş" diye eklenen CI
+adımı kendi birim testinin bilerek bastığı satırı yakaladı ve CI'ı iki commit
+boyunca kırmızı yaptı — kart ise CI sonucuna bakılmadan DONE raporlanmıştı.
+**"Bitti" demeden önce CI'ın o commit için yeşil olduğu görülür.**

@@ -20,11 +20,12 @@ from derlem_worker.storage import ContentAddressedStore
 
 
 @pytest.fixture(scope="module")
-def isolated_database_url(test_database_url: str):
-    # Adres ve _test korumasi conftest.test_database_url'de; burada yalniz sema.
+def isolated_database_url(test_database_url: str, isolated_schema_name):
+    # Adres ve _test korumasi conftest.test_database_url'de. Sema adi olusturulma
+    # zamanini tasir; supurucu yalniz kanitlanabilir bicimde eski semalari dusurur.
     base_url = test_database_url
 
-    schema = f"derlem_worker_test_{uuid4().hex}"
+    schema = isolated_schema_name("worker")
     with psycopg.connect(base_url, autocommit=True) as admin:
         admin.execute(f'CREATE SCHEMA "{schema}"')
 

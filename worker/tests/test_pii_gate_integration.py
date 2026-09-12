@@ -14,11 +14,12 @@ from derlem_worker.jobs import Job, Worker
 
 
 @pytest.fixture()
-def pii_database_url(test_database_url: str):
-    # Adres ve _test korumasi conftest.test_database_url'de; burada yalniz sema.
-    # Tablolar _scan_pii ve _complete_pii_scan'in dokundugu kolonlara indirgenmistir;
-    # gercek CHECK kisitlarini Go migration testi (000027) dogrular.
-    schema = f"derlem_pii_worker_test_{uuid4().hex}"
+def pii_database_url(test_database_url: str, isolated_schema_name):
+    # Adres ve _test korumasi conftest.test_database_url'de; sema adi olusturulma
+    # zamanini tasir (supurucu). Tablolar _scan_pii ve _complete_pii_scan'in
+    # dokundugu kolonlara indirgenmistir; gercek CHECK kisitlarini Go migration
+    # testi (000027) dogrular.
+    schema = isolated_schema_name("pii_worker")
     with psycopg.connect(test_database_url, autocommit=True) as admin:
         admin.execute(f'CREATE SCHEMA "{schema}"')
 

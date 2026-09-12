@@ -19,28 +19,51 @@ CARD_PATTERN = re.compile(r"(?<![A-Z0-9])(?:\d[ -]?){13,19}(?![\d -])", re.IGNOR
 PII_KEYS = ("tckn", "iban", "email", "phone", "payment_card")
 
 
+def normalize_language_tag(value: str) -> str:
+    """Kaynak dil etiketinin birincil alt etiketi, kucuk harf: 'tr-TR' -> 'tr'."""
+    return re.split(r"[-_]", value.strip().lower(), maxsplit=1)[0]
+
+
 @dataclass(frozen=True)
 class PIIReport:
     scanner_version: str
     findings: dict[str, int]
+    # Kaynagin dil etiketi (normalize) ve tarayicinin dile ozel dedektorlerinin
+    # (TCKN, TR IBAN, TR telefon) bu dile uygulanabilir olup olmadigi.
+    language: str
+    language_evaluated: bool
 
     @property
     def status(self) -> str:
-        return "flagged" if any(self.findings.values()) else "clear"
+        # E-posta ve kart desenleri dilden bagimsizdir ve her kaynakta calisir;
+        # bir bulgu her dilde "flagged" yapar. Bulgu yoksa "clear" yalniz
+        # desteklenen dilde hak edilir; aksi halde not_evaluated: sifir sayac
+        # "temiz" degil "bakilamadi" demektir.
+        if any(self.findings.values()):
+            return "flagged"
+        return "clear" if self.language_evaluated else "not_evaluated"
 
 
 class PIIScanner:
-    version = "basic-tr-v1"
+    # v2: dil durustlugu. v1 desteklemedigi dildeki kaynaga da "clear" yaziyordu;
+    # pii_scans benzersizligi surumu icerdigi icin eski v1 kararlari audit'te
+    # yeni kararlardan ayirt edilebilir kalir.
+    version = "basic-tr-v2"
+    supported_languages = frozenset({"tr"})
 
     def scan_file(
         self,
         path: Path,
         *,
+        language: str,
         progress_callback: ProgressCallback | None = None,
         progress_interval_bytes: int = PROGRESS_INTERVAL_BYTES,
     ) -> PIIReport:
         if progress_interval_bytes <= 0:
             raise ValueError("progress_interval_bytes must be positive")
+        # Dil zorunlu ve varsayilani yok: bilinmeyen dili 'tr' saymak ayni yalani
+        # geri getirirdi. Bos etiket desteklenmeyen dil sayilir.
+        normalized_language = normalize_language_tag(language)
         counts: Counter[str] = Counter()
         total_bytes = path.stat().st_size
         bytes_processed = 0
@@ -79,7 +102,12 @@ class PIIScanner:
             key: counts.get(key, 0)
             for key in PII_KEYS
         }
-        return PIIReport(scanner_version=self.version, findings=findings)
+        return PIIReport(
+            scanner_version=self.version,
+            findings=findings,
+            language=normalized_language,
+            language_evaluated=normalized_language in self.supported_languages,
+        )
 
 
 def count_pii_in_text(text: str) -> dict[str, int]:

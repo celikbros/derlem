@@ -105,9 +105,9 @@
       "enum": [
         "not_scanned",
         "clear",
-        "warning",
-        "blocked",
-        "quarantined"
+        "flagged",
+        "quarantined",
+        "not_evaluated"
       ]
     },
     "copyright_risk": {

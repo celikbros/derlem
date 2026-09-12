@@ -25,6 +25,7 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { JobStatus } from "@/components/jobs-panel";
 import { EvidenceHash } from "@/components/evidence-hash";
 import { messageFrom, requestJSON } from "@/lib/client-api";
+import { piiStatusText } from "@/lib/pii";
 import { readableParagraphs } from "@/lib/readable-document";
 import type { BackgroundJob, Document, DocumentQualitySummary, DocumentReview, DocumentReviewClaim, DocumentReviewHistoryItem, DocumentSampleGeneration, PIIScan, Review, ReverseDocumentReviewResult, Source, User } from "@/lib/types";
 
@@ -912,7 +913,7 @@ export function SourceInspector({
           <Detail label="Türetildiği kaynak" value={source.derived_from_source_id} mono />
         )}
         <Detail label="Durum" value={source.approval_status} />
-        <Detail label="PII / risk" value={`${source.pii_status} / ${source.risk_level}`} />
+        <Detail label="PII / risk" value={`${piiStatusText(source.pii_status)} / ${source.risk_level}`} />
         <Detail label="Exact tekrar" value={source.duplicate_status} />
         {source.duplicate_of_source_id && <Detail label="Kanonik kaynak" value={source.duplicate_of_source_id} mono />}
         <Detail label="Normalize dedup" value={`${source.normalized_dedup_status} / ${source.normalized_duplicate_count}`} />
@@ -968,7 +969,7 @@ export function SourceInspector({
           <CorpusMetric label="Örnek" value={`${reviewedCount.toLocaleString("tr-TR")} / ${sampleCount.toLocaleString("tr-TR")}`} tone={reviewPercent === 100 ? "good" : "watch"} />
           <CorpusMetric label="Örnek nesli" value={String(source.document_sample_generation)} />
           <CorpusMetric label="Riskli örnek" value={riskSampleCount.toLocaleString("tr-TR")} tone={riskSampleCount > 0 ? "watch" : "good"} />
-          <CorpusMetric label="PII" value={source.pii_status} tone={source.pii_status === "clear" ? "good" : "risk"} />
+          <CorpusMetric label="PII" value={piiStatusText(source.pii_status)} tone={source.pii_status === "clear" ? "good" : "risk"} />
           <CorpusMetric label="Normalize tekrar" value={normalizedDuplicateText} tone={source.normalized_dedup_status === "unique" ? "good" : "risk"} />
         </div>
         {source.object_sha256 && (

@@ -36,6 +36,7 @@ import { SimilarityReviewPanel } from "@/components/similarity-review-panel";
 import { SourceInspector } from "@/components/source-inspector";
 import { UsersPanel } from "@/components/users-panel";
 import { messageFrom, requestJSON } from "@/lib/client-api";
+import { piiStatusText } from "@/lib/pii";
 import { ROLE_INFO, roleInfoByRole, roleSummaryByLabel as accountHints } from "@/lib/roles";
 import type { Source, User } from "@/lib/types";
 import { APP_BUILD, APP_VERSION, versionLabel } from "@/lib/version";
@@ -502,7 +503,7 @@ export function DerlemApp() {
                       <td><Status value={source.rights_status} /></td>
                       <td>{statusLabels[source.approval_status] ?? source.approval_status}</td>
                       <td><NextStep source={source} /></td>
-                      <td><span className={`pii-status ${source.pii_status}`}>{source.pii_status}</span></td>
+                      <td><span className={`pii-status ${source.pii_status}`}>{piiStatusText(source.pii_status)}</span></td>
                     </tr>
                   ))}
                 </tbody>
@@ -762,6 +763,8 @@ function nextStepFor(source: Source) {
   if (!source.object_sha256) return { key: "file", label: "Dosya bekliyor", tone: "neutral" };
   if (source.rights_status !== "cleared") return { key: "rights", label: "Hak incelemesi", tone: "warning" };
   if (!source.license_evidence_ref) return { key: "license", label: "Lisans kanıtı", tone: "warning" };
+  // not_evaluated kendi etiketini alır: yalnız "PII kapısı" bulgu varmış gibi okunur.
+  if (source.pii_status === "not_evaluated") return { key: "pii", label: "PII: dil desteklenmiyor", tone: "danger" };
   if (source.pii_status !== "clear") return { key: "pii", label: "PII kapısı", tone: "danger" };
   if (source.duplicate_status !== "unique") return { key: "exact_dedup", label: "Exact dedup", tone: "danger" };
   if (source.normalized_dedup_status !== "unique") return { key: "normalized_dedup", label: "Normalize dedup", tone: "danger" };

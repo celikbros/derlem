@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | READY |
+| Status | **DONE** — 2026-09-13 (implemented by Claude at the owner's request). **Deploy step pending:** `go run ./cmd/migrate` on the working database (see Report) |
 | Kind | fix |
 | Moratorium | allowed (an unearned "clear" stamp is the 0e5c7c5 failure class; this closes it) |
 | Estimate | 1–2 days |
@@ -132,4 +132,93 @@ go test ./internal/database/
 
 ## Report
 
-_(to be filled on completion)_
+**Done 2026-09-13.** The scanner no longer issues a clean stamp for a language it
+cannot inspect.
+
+Implemented:
+
+- **`pii.py`**: `scan_file(path, *, language, …)` — `language` is required with no
+  default (defaulting unknown to `tr` would reintroduce the lie).
+  `normalize_language_tag` takes the primary subtag, lowercased (`tr-TR` → `tr`).
+  `PIIReport` gains `language` and `language_evaluated`; `status` is `flagged` on any
+  finding, else `clear` only when the language is supported, else `not_evaluated`.
+  `supported_languages = {"tr"}` is declared on the scanner. Version
+  `basic-tr-v1` → `basic-tr-v2`.
+- **`gate_jobs.py`**: `_scan_pii` reads `sources.language` and passes it.
+  `_complete_pii_scan`: only `clear` lowers risk (`unknown` → `low`) and advances
+  approval to `auto_checked` / `sampled_for_review`; `not_evaluated` does neither.
+  Language is recorded in `audit_events.details` and the job `result`.
+- **`000027_pii_not_evaluated.sql`**: `sources_pii_status_check` and
+  `pii_scans_status_check` re-created with `not_evaluated`. Constraint names were read
+  from the live database before writing, not assumed.
+- **Web**: `web/lib/pii.ts` (`piiStatusText`); the sources list, inspector detail and
+  corpus metric show "değerlendirilmedi — dil desteklenmiyor" in amber, never green;
+  next-step label "PII: dil desteklenmiyor".
+- **e2e**: `upload.spec.ts` expects `basic-tr-v2` (a fresh upload is scanned by v2).
+  `catalog.spec.ts` is **deliberately unchanged** — it inspects a pre-existing source
+  whose historical scan row stays `basic-tr-v1`; re-scans are only queued for
+  `not_scanned` sources.
+- **`schemas/source_dataset.schema.json`**: enum corrected to the database's actual set
+  plus the new value. It listed `warning` / `blocked` (never valid in the DB) and lacked
+  `flagged`. Its only consumer is a mention in a planning doc; there is no validator.
+
+Two deviations from the card, both found while reading the code:
+
+1. **Approval must not advance.** The card only said "`not_evaluated` blocks freeze".
+   `_complete_pii_scan`'s CASE would have moved a `not_evaluated` source to
+   `auto_checked` / `sampled_for_review` — into the human review queue, for a source
+   that can never be frozen. Closed with an explicit `status = 'clear'` condition on the
+   advance branch. The exact- and normalized-dedup CASEs already required
+   `pii_status = 'clear'`.
+2. **Scanner version bumped.** Not asked for. The release contract pins PII by its
+   `data_policy_versions` row (key / version / sha), not by the scanner string —
+   `basic-tr` appears only in `pii.py` and two e2e specs — so no frozen manifest is
+   affected. It keeps v1 "clear" verdicts distinguishable from v2 verdicts in
+   `pii_scans`, whose uniqueness includes the version.
+
+**Verification run (owner's machine, 2026-09-13):**
+
+- `go build ./...`, `go vet ./...` clean; web `typecheck`, `lint`, `build` clean
+- Go against `derlem_ci_test`: `TestPIINotEvaluatedMigrationIsInChain` PASS;
+  `TestPIINotEvaluatedIsAcceptedAndJunkStillRejectedOnPostgres` PASS — in a fully
+  migrated schema both constraint definitions contain `not_evaluated`,
+  `UPDATE … 'not_evaluated'` is accepted and `'evaluated_somehow'` is rejected with
+  SQLSTATE 23514; `TestMigrateAppliesAllMigrationsAndIsIdempotent` PASS with 000027 in
+  the chain; full `go test ./...` all `ok`
+- Worker: `test_pii.py` + new `test_pii_gate_integration.py` → 24 passed; full suite
+  with the database → **241 passed, 1 skipped** (pre-existing Windows symlink case)
+- The integration test drives the real `_scan_pii` → `_complete_pii_scan` path with the
+  language read from the source row: `tr` / `tr-TR` → clear / low / auto_checked;
+  `en` / `ku` / `multi` → not_evaluated / unknown / raw_ingested; `en` containing an
+  e-mail → flagged / high / quarantined; audit details and job result carry status and
+  language.
+
+**Control run — the tests must fail against the bug.** In-process,
+`PIIScanner.supported_languages` was patched to claim every language, which is exactly
+v1's behaviour (no finding → clear). The same tests: **9 failed, 15 passed** — the six
+unsupported-language unit cases and the three `not_evaluated` integration cases. No file
+was changed for the control.
+
+**Existing data:** the working database has 12 sources, all `language = 'tr'`
+(10 clear, 1 flagged, 1 not_scanned). Sources carrying a false clean stamp today:
+**0**. `pii_scans` history: 11 rows, all `basic-tr-v1`.
+
+**Deploy step — owner.** The working database is at migration `000026`, and only
+`cmd/migrate` applies migrations (the API does not at startup). Run
+`go run ./cmd/migrate` **before** starting a worker on this code. Until then, scanning a
+non-Turkish source fails its job with a CHECK violation — fail-closed, nothing is
+mis-stamped, but noisy. All current sources are Turkish, so nothing breaks today.
+
+**Honest gaps:**
+
+- Freeze refusal of a `not_evaluated` source is not exercised end to end. The four
+  freeze gates (`releases.go:534`, the `000024` freeze check, `release_jobs.py:680`,
+  `triage.py:210`) were read and are unchanged `<> 'clear'` conditions; an end-to-end
+  test needs the ~150-line approved-source fixture in `releases_contract_integration_test.go`.
+- The approval guard is covered by the integration test's assertions but was not
+  mutation-controlled itself (the control patched the scanner, not the SQL).
+- Open design question: a source already advanced under v1 that is re-scanned and comes
+  back `not_evaluated` keeps its approval — there is no "PII pending" approval state to
+  demote to. Unreachable with today's data (no non-Turkish sources).
+- Per-language detectors (Kurdish / Arabic IDs, phones, IBANs) remain out of scope.
+  Every non-Turkish source now stops honestly at the PII gate until they exist.

@@ -1,6 +1,15 @@
 from pathlib import Path
 
-from derlem_worker.pii import PIIScanner, count_pii_in_text, is_valid_iban, is_valid_luhn, is_valid_tckn
+import pytest
+
+from derlem_worker.pii import (
+    PIIScanner,
+    count_pii_in_text,
+    is_valid_iban,
+    is_valid_luhn,
+    is_valid_tckn,
+    normalize_language_tag,
+)
 
 
 def test_checksum_validators() -> None:
@@ -23,7 +32,7 @@ def test_scanner_records_counts_without_values(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    report = PIIScanner().scan_file(source)
+    report = PIIScanner().scan_file(source, language="tr")
 
     assert report.status == "flagged"
     assert report.findings == {
@@ -40,10 +49,45 @@ def test_scanner_marks_clean_text_clear(tmp_path: Path) -> None:
     source = tmp_path / "clean.txt"
     source.write_text("Bu metin kisisel veri icermiyor.\n", encoding="utf-8")
 
-    report = PIIScanner().scan_file(source)
+    report = PIIScanner().scan_file(source, language="tr")
 
     assert report.status == "clear"
+    assert report.language == "tr"
+    assert report.scanner_version == "basic-tr-v2"
     assert sum(report.findings.values()) == 0
+
+
+@pytest.mark.parametrize("language", ["en", "ku", "ar", "az", "multi", ""])
+def test_scanner_does_not_call_unsupported_language_clean(tmp_path: Path, language: str) -> None:
+    # Turkce'ye ozgu dedektorler bu dillerde uygulanamaz; sifir bulgu "temiz"
+    # degil "bakilamadi" demektir. v1 bunlarin hepsine "clear" yaziyordu.
+    source = tmp_path / "clean.txt"
+    source.write_text("This text contains no personal data.\n", encoding="utf-8")
+
+    report = PIIScanner().scan_file(source, language=language)
+
+    assert report.status == "not_evaluated"
+    assert not report.language_evaluated
+    assert sum(report.findings.values()) == 0
+
+
+def test_language_agnostic_finding_flags_unsupported_language(tmp_path: Path) -> None:
+    # E-posta deseni dilden bagimsiz ve her kaynakta calisir.
+    source = tmp_path / "english-pii.txt"
+    source.write_text("Contact: test@example.com\n", encoding="utf-8")
+
+    report = PIIScanner().scan_file(source, language="en")
+
+    assert report.status == "flagged"
+    assert report.findings["email"] == 1
+
+
+@pytest.mark.parametrize(
+    ("raw", "normalized"),
+    [("tr", "tr"), ("TR", "tr"), ("tr-TR", "tr"), (" tr_tr ", "tr"), ("ku", "ku"), ("", "")],
+)
+def test_normalize_language_tag(raw: str, normalized: str) -> None:
+    assert normalize_language_tag(raw) == normalized
 
 
 def test_scanner_reports_byte_line_and_finding_progress(tmp_path: Path) -> None:
@@ -53,6 +97,7 @@ def test_scanner_reports_byte_line_and_finding_progress(tmp_path: Path) -> None:
 
     report = PIIScanner().scan_file(
         source,
+        language="tr",
         progress_callback=updates.append,
         progress_interval_bytes=5,
     )

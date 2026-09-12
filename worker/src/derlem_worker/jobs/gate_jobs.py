@@ -33,7 +33,7 @@ class GateJobsMixin:
         with psycopg.connect(self.config.database_url, row_factory=dict_row) as connection:
             row = connection.execute(
                 """
-                SELECT source.object_sha256, object.storage_key
+                SELECT source.object_sha256, source.language, object.storage_key
                 FROM sources AS source
                 JOIN storage_objects AS object ON object.sha256 = source.object_sha256
                 WHERE source.id = %s
@@ -51,6 +51,9 @@ class GateJobsMixin:
         with psycopg.connect(self.config.database_url) as progress_connection:
             report = self.pii_scanner.scan_file(
                 object_path,
+                # Dil kaynak kaydindan gelir; tarayici desteklemedigi dilde
+                # "clear" yerine not_evaluated doner.
+                language=str(row["language"]),
                 progress_callback=lambda progress: self._write_job_progress(
                     progress_connection,
                     job,
@@ -91,14 +94,15 @@ class GateJobsMixin:
                 SET pii_status = %s,
                     risk_level = CASE
                         WHEN %s = 'flagged' THEN 'high'
-                        WHEN risk_level = 'unknown' THEN 'low'
+                        WHEN %s = 'clear' AND risk_level = 'unknown' THEN 'low'
                         ELSE risk_level
                     END,
                     approval_status = CASE
                         WHEN %s = 'flagged' THEN 'quarantined'
                         WHEN duplicate_status = 'duplicate' THEN 'quarantined'
                         WHEN normalized_dedup_status = 'duplicates_found' THEN 'quarantined'
-                        WHEN duplicate_status = 'unique' AND normalized_dedup_status = 'unique'
+                        WHEN %s = 'clear'
+                             AND duplicate_status = 'unique' AND normalized_dedup_status = 'unique'
                             THEN CASE
                                 WHEN document_sampling_status = 'sampled' THEN 'sampled_for_review'
                                 ELSE 'auto_checked'
@@ -107,7 +111,18 @@ class GateJobsMixin:
                     END
                 WHERE id = %s AND object_sha256 = %s
                 """,
-                (report.status, report.status, report.status, source_id, object_sha256),
+                # Yalniz 'clear' riski dusurur ve kaynagi incelemeye ilerletir.
+                # not_evaluated ne "dusuk risk" ilan eder ne ilerletir: freeze
+                # edilemeyecek bir kaynaga insan inceleme emegi harcanmaz.
+                (
+                    report.status,
+                    report.status,
+                    report.status,
+                    report.status,
+                    report.status,
+                    source_id,
+                    object_sha256,
+                ),
             )
             if updated.rowcount != 1:
                 raise RuntimeError("Source object changed while completing PII scan")
@@ -120,11 +135,19 @@ class GateJobsMixin:
                         'job_id', %s::text,
                         'scanner_version', %s::text,
                         'status', %s::text,
+                        'language', %s::text,
                         'findings', %s::jsonb
                     )
                 )
                 """,
-                (source_id, str(job.id), report.scanner_version, report.status, findings_json),
+                (
+                    source_id,
+                    str(job.id),
+                    report.scanner_version,
+                    report.status,
+                    report.language,
+                    findings_json,
+                ),
             )
             connection.execute(
                 """
@@ -133,13 +156,14 @@ class GateJobsMixin:
                     result = jsonb_build_object(
                         'scanner_version', %s::text,
                         'status', %s::text,
+                        'language', %s::text,
                         'findings', %s::jsonb
                     ),
                     completed_at = now(),
                     updated_at = now()
                 WHERE id = %s AND status = 'running'
                 """,
-                (report.scanner_version, report.status, findings_json, job.id),
+                (report.scanner_version, report.status, report.language, findings_json, job.id),
             )
 
     def _complete_exact_duplicate_check(

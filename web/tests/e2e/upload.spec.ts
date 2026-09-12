@@ -36,5 +36,5 @@ test("create a source and stream a browser upload", async ({ page }, testInfo) =
   await page.getByRole("button", { name: "Dosyayı yükle" }).click();
   await expect(page.getByRole("status")).toContainText("Dosya yüklendi ve kuyruğa alındı");
   await expect(page.getByText("clear / low", { exact: true })).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText("basic-tr-v1")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("basic-tr-v2")).toBeVisible({ timeout: 30_000 });
 });

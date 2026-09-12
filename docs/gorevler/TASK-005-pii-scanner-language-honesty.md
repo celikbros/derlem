@@ -192,6 +192,9 @@ Two deviations from the card, both found while reading the code:
   `en` / `ku` / `multi` → not_evaluated / unknown / raw_ingested; `en` containing an
   e-mail → flagged / high / quarantined; audit details and job result carry status and
   language.
+- CI on `5108617`: backend **test** step, worker and web green. The backend job was red
+  only at TASK-007's log-grep step — a false positive, fixed in the following commit
+  (see TASK-007 Report).
 
 **Control run — the tests must fail against the bug.** In-process,
 `PIIScanner.supported_languages` was patched to claim every language, which is exactly

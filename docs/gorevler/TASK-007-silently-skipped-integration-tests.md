@@ -156,9 +156,19 @@ Implemented:
 - **`.env.example`**: `DERLEM_TEST_DATABASE_URL` documented with the never-point-at-the-
   working-database warning.
 - **`docs/local_development.md` > Testler**: rewritten around `scripts/test.ps1`.
-- **`.github/workflows/ci.yml`**: both suites now `tee` their output and a following
-  step fails the job if `DERLEM_TEST_DATABASE_URL is not set` appears anywhere in it.
-  CI sets the variable, so such a line can only mean a misconfiguration.
+- **`.github/workflows/ci.yml` — corrected after it turned CI red.** The first version
+  `tee`d both suites' output and failed the job if the string
+  `DERLEM_TEST_DATABASE_URL is not set` appeared anywhere in it. That string is printed
+  by this card's own unit test (`internal/testdb/testdb_test.go:45`, which exercises the
+  deliberate-skip branch), so the backend job failed on `97458e2` and again on
+  `5108617`. Both times the Go **test** step itself was green, the worker assertion
+  printed `0`, and web was green — only the grep failed. This card was reported DONE
+  before its CI run was checked; that was the mistake. The grep was also redundant:
+  after this card a missing URL already **fails** in code. The only remaining
+  silent-skip route is `DERLEM_SKIP_DB_TESTS`, so both test steps now fail the job when
+  that variable is set, and the `tee` / log greps are gone. The guard's shell logic was
+  extracted from the committed workflow and run locally with the variable unset
+  (proceeds) and set (exits 1) before pushing.
 
 **Verification run (owner's machine, 2026-09-12) — each rule proved, not assumed:**
 

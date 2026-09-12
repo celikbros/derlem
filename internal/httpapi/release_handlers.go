@@ -3,7 +3,6 @@ package httpapi
 import (
 	"errors"
 	"fmt"
-	"io"
 	"mime"
 	"net/http"
 	"strconv"
@@ -218,7 +217,8 @@ func (s *Server) streamReleaseArtifact(w http.ResponseWriter, r *http.Request, a
 	w.Header().Set("Content-Disposition", disposition)
 	w.Header().Set("ETag", fmt.Sprintf("\"%s\"", artifact.SHA256))
 	w.WriteHeader(http.StatusOK)
-	if _, err := io.Copy(w, reader); err != nil {
+	// Buyuk artifact'ler icin io.Copy kullanilmaz; gerekcesi copyDownloadBody'de.
+	if _, err := copyDownloadBody(w, reader); err != nil {
 		s.logger.Warn("stream release artifact interrupted", "error", err, "sha256", artifact.SHA256)
 	}
 }

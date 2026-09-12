@@ -57,6 +57,7 @@ yorumluyor); sahiple yazışma ve commit mesajları Türkçe kalır.
 |---|---|---|---|
 | [TASK-001](TASK-001-contribution-screen-fixes.md) | Contribution screen fixes (copy contradiction + checkbox layout) | fix | **DONE** — 2026-08-31, `d0160ab` |
 | [TASK-002](TASK-002-contribution-task-type-registry.md) | Contribution task-type registry (translation, preference, reasoning) | feature | DRAFT — sahip kararı bekliyor (D1–D4). Commit blokeri **kalktı** (2026-08-30); TASK-001 önce gitmeli. |
+| [TASK-003](TASK-003-large-download-write-timeout.md) | Large release downloads cut off by the server write timeout | fix | **IN REVIEW** — 2026-09-12, kod bitti ve testler yeşil; 13 GB'lık gerçek indirme insan eliyle doğrulanmayı bekliyor. |
 
 ## Doğrulama notu
 

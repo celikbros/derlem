@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | READY |
+| Status | **DONE** — 2026-09-12 (implemented by Claude at the owner's request) |
 | Kind | fix |
 | Moratorium | allowed (structural validation gap; half a day; no new behaviour) |
 | Estimate | 0.5 day |
@@ -90,4 +90,36 @@ for branch in ("chosen", "rejected"):
 
 ## Report
 
-_(to be filled on completion)_
+**Done 2026-09-12.** `parse_canonical_sample` now raises
+`CanonicalSampleError("preference_branches_identical")` when the two sanitised
+branches carry the same training signal.
+
+**One correction to the card's design, found by the tests.** "Compare the sanitised
+form" was not enough: sanitisation pops `reasoning_content` for `review_only`/`hidden`
+(`canonical.py:223`) but leaves the `reasoning_visibility` flag on the message, so two
+branches differing only in private reasoning still compared as *different* — the
+second test case failed on the first run. The comparison is therefore made on a
+**projection** of each message to the fields the model actually sees or produces:
+`role, name, content, reasoning_content (if it survived), tool_calls, tool_call_id`.
+`message_id`, `reasoning_visibility` and `metadata` are record bookkeeping, not
+signal, and are excluded (`_branch_signal`, `_BRANCH_SIGNAL_FIELDS`). Both
+`test_canonical.py` and the packaged fixture agree with this.
+
+**Verification run (owner's machine, 2026-09-12):**
+
+- `pytest worker/tests/test_canonical.py` → 11 passed (3 new: identical → error;
+  differs only in `review_only` reasoning → error; differs by one character → accepted)
+- `pytest worker/tests` without DB → 214 passed, 9 skipped (unchanged skips)
+- `pytest worker/tests` **with** `DERLEM_TEST_DATABASE_URL` → `derlem_ci_test`:
+  **222 passed, 1 skipped** (only the Windows symlink privilege case) — the eight
+  DB-backed tests, including `test_lineage_dedup_integration`, ran and passed
+- `data_samples/example_canonical_preferences.jsonl` still passes
+  `test_repository_examples_follow_the_runtime_contract`
+
+**Existing data:** `SELECT count(*) FROM sources WHERE content_purpose='preference'`
+on the working database → **0**, none in any release. The new rule blocks nothing
+that exists today.
+
+**Open question logged (out of scope):** near-identical branches (whitespace-only or
+punctuation-only differences) still pass — exact structural equality on purpose. A
+normalised comparison is a policy decision for the preference-type card.

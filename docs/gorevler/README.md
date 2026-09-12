@@ -60,7 +60,7 @@ yorumluyor); sahiple yazışma ve commit mesajları Türkçe kalır.
 | [TASK-003](TASK-003-large-download-write-timeout.md) | Large release downloads cut off by the server write timeout | fix | **DONE** — 2026-09-12, `110b77f`. Uçtan uca doğrulandı: 42.28 sn süren indirme tam geldi (önceden 30 sn'de kesiliyordu). |
 | [TASK-004](TASK-004-contribution-bundle-silent-loss.md) | Contribution bundling silently loses data and mislabels purpose | fix | **DONE** — 2026-09-12. Amaç eşlemesi kayıt defterinde + hata varsayılanı; `free_text`+prompt reddi; demet alan filtresi. Entegrasyon testi gerçekten koştu. |
 | [TASK-005](TASK-005-pii-scanner-language-honesty.md) | PII scanner reports "clear" on languages it cannot inspect | fix | **READY** — 2026-09-12. `basic-tr-v1` yalnız TR desenleri; ku/ar/en kaynağa hak edilmemiş "temiz" mührü. `not_evaluated` + freeze bloke. |
-| [TASK-006](TASK-006-preference-branches-identical.md) | Canonical preference records accept identical chosen/rejected branches | fix | **READY** — 2026-09-12. Yarım gün; ilk "iki alanı karşılaştıran" kapı, `canonical.py`'de fail-closed. |
+| [TASK-006](TASK-006-preference-branches-identical.md) | Canonical preference records accept identical chosen/rejected branches | fix | **DONE** — 2026-09-12. `preference_branches_identical`; karşılaştırma eğitim sinyali alanlarında (bayrak/metadata hariç). |
 
 ## Altyapı kapanış listesi (sahip onayı: 2026-09-12)
 
@@ -72,7 +72,7 @@ kapanmadan başlamaz. Her madde "bitti" = commit + push + kartta Report.
 |---|---|---|---|
 | 1 | Demetlemede sessiz veri kaybı | [TASK-004](TASK-004-contribution-bundle-silent-loss.md) | **DONE** 2026-09-12 |
 | 2 | PII tarayıcı dil dürüstlüğü | [TASK-005](TASK-005-pii-scanner-language-honesty.md) | READY |
-| 3 | Özdeş tercih dalları | [TASK-006](TASK-006-preference-branches-identical.md) | READY |
+| 3 | Özdeş tercih dalları | [TASK-006](TASK-006-preference-branches-identical.md) | **DONE** 2026-09-12 |
 | 4 | Katkı omurgası + `response_edit_pair` (Faz A) | [TASK-002](TASK-002-contribution-task-type-registry.md) | READY (TASK-004'ten sonra merge) |
 | 5 | Sessizce atlanan **37** entegrasyon testini (29 Go + 8 worker) yerelde çalıştır; atlama görünür olsun | [TASK-007](TASK-007-silently-skipped-integration-tests.md) | READY |
 | 6 | **Çalışma veritabanına** sızmış iki test şemasını temizle (21 Ağu 2026); `_test` koruması + sızıntı süpürücüsü | [TASK-008](TASK-008-leaked-test-schemas.md) | READY |

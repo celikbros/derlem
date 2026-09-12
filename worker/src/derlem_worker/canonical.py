@@ -136,6 +136,16 @@ def parse_canonical_sample(line: str, expected_purpose: str) -> CanonicalSample 
             sanitized_branch = combined[len(context) :]
             sanitized_preference[branch] = sanitized_branch
             semantic_texts.extend(branch_texts)
+        # Ozdes dallar sifir tercih sinyali tasir ama manifestoya "tercih cifti"
+        # olarak sayilirdi. Karsilastirma SANITIZE edilmis dallarin egitim
+        # sinyali uzerinde: yalniz review_only akil yurutmede (ihracattan once
+        # atilir) ayrisan iki dal da ozdes sayilir. Parser'da (kapida degil)
+        # olmasinin nedeni, kapinin dogrudan kanonik dosya yuklemesiyle
+        # atlanabilmesi.
+        if _branch_signal(sanitized_preference["chosen"]) == _branch_signal(
+            sanitized_preference["rejected"]
+        ):
+            raise CanonicalSampleError("preference_branches_identical")
         value["preference"] = sanitized_preference
 
     return CanonicalSample(
@@ -144,6 +154,19 @@ def parse_canonical_sample(line: str, expected_purpose: str) -> CanonicalSample 
         value=value,
         semantic_texts=tuple(text for text in semantic_texts if text),
     )
+
+
+# Bir dalin egitim sinyali: modelin gordugu/urettigi alanlar. message_id,
+# reasoning_visibility ve metadata kayit muhasebesidir, sinyal degildir;
+# sanitize sonrasi hayatta kalan reasoning_content (export_allowed) sinyaldir.
+_BRANCH_SIGNAL_FIELDS = ("role", "name", "content", "reasoning_content", "tool_calls", "tool_call_id")
+
+
+def _branch_signal(messages: list[dict[str, object]]) -> list[dict[str, object]]:
+    return [
+        {key: message[key] for key in _BRANCH_SIGNAL_FIELDS if key in message}
+        for message in messages
+    ]
 
 
 def _validate_tools(value: object) -> tuple[set[str], list[str]]:

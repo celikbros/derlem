@@ -100,6 +100,47 @@ def test_preference_requires_two_message_branches() -> None:
     assert parsed.value["preference"]["chosen"][0]["content"] == "Olur."
 
 
+def _preference_sample(chosen: dict, rejected: dict) -> str:
+    return json.dumps(
+        {
+            "schema_version": "derlem.canonical-sample.v1",
+            "record_type": "preference",
+            "sample_id": "pref-identical",
+            "content_purpose": "preference",
+            "messages": [{"role": "user", "content": "Kısa cevap ver"}],
+            "preference": {"chosen": [chosen], "rejected": [rejected]},
+        },
+        ensure_ascii=False,
+    )
+
+
+def test_preference_rejects_identical_branches() -> None:
+    same = {"role": "assistant", "content": "Olur."}
+    with pytest.raises(CanonicalSampleError, match="preference_branches_identical"):
+        parse_canonical_sample(_preference_sample(same, dict(same)), "preference")
+
+
+def test_preference_rejects_branches_that_differ_only_in_private_reasoning() -> None:
+    # review_only akil yurutme ihracattan once atilir; geriye ozdes iki dal kalir.
+    chosen = {
+        "role": "assistant",
+        "content": "Olur.",
+        "reasoning_content": "Kisa istendi, kisa verdim.",
+        "reasoning_visibility": "review_only",
+    }
+    rejected = {"role": "assistant", "content": "Olur."}
+    with pytest.raises(CanonicalSampleError, match="preference_branches_identical"):
+        parse_canonical_sample(_preference_sample(chosen, rejected), "preference")
+
+
+def test_preference_accepts_branches_that_differ_by_one_character() -> None:
+    chosen = {"role": "assistant", "content": "Olur."}
+    rejected = {"role": "assistant", "content": "Olur!"}
+    parsed = parse_canonical_sample(_preference_sample(chosen, rejected), "preference")
+    assert parsed is not None
+    assert parsed.value["preference"]["rejected"][0]["content"] == "Olur!"
+
+
 @pytest.mark.parametrize(
     ("mutation", "reason"),
     [

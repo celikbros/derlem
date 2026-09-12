@@ -79,8 +79,14 @@ demetten kanonik yayın + kanonik-okur worker) ve **tek** yeni tip
 `response_edit_pair`. Faz B tipleri (çeviri, tercih, düşünce zinciri) istisna
 kapsamında **değildir**; her biri ayrı kart ve ayrı onay ister. Aynı gün üç
 hata düzeltmesi (TASK-004/005/006) programcılara verildi — bunlar zaten
-moratoryum içidir. Release #1'in 35 belgelik insan incelemesi teslimat blokeri
-olarak durur; bu istisna onu ertelemez.
+moratoryum içidir.
+
+**Sıra kararı (2026-09-12, sahip):** "Belgeleri incelemeden önce altyapıyı
+doğru kurmamız lazım; daha önce hiçbir şey incelenmeyecek." Release #1'in
+insan incelemesi, altyapı kapanış listesi tamamlanana kadar **başlamaz**.
+Gerekçe: PII kapısı yalan söyleyen, demetlemesi veri düşüren bir hat üzerinde
+yapılan inceleme kuma yazılmış olur. Kapanış listesi: docs/gorevler/README.md
+"Altyapı kapanış listesi".
 
 **Ölçüt:** Moratoryum süresince `feat:` commit sayısı = 0 — **2026-09-12
 istisnası hariç** (TASK-002 Faz A commit'leri `feat:` taşır ve kart numarasıyla

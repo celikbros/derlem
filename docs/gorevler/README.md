@@ -62,6 +62,24 @@ yorumluyor); sahiple yazışma ve commit mesajları Türkçe kalır.
 | [TASK-005](TASK-005-pii-scanner-language-honesty.md) | PII scanner reports "clear" on languages it cannot inspect | fix | **READY** — 2026-09-12. `basic-tr-v1` yalnız TR desenleri; ku/ar/en kaynağa hak edilmemiş "temiz" mührü. `not_evaluated` + freeze bloke. |
 | [TASK-006](TASK-006-preference-branches-identical.md) | Canonical preference records accept identical chosen/rejected branches | fix | **READY** — 2026-09-12. Yarım gün; ilk "iki alanı karşılaştıran" kapı, `canonical.py`'de fail-closed. |
 
+## Altyapı kapanış listesi (sahip onayı: 2026-09-12)
+
+Sahip kararı: **"Belgeleri incelemeden önce altyapıyı doğru kurmamız lazım; daha
+önce hiçbir şey incelenmeyecek."** Release #1'in insan incelemesi bu altı madde
+kapanmadan başlamaz. Her madde "bitti" = commit + push + kartta Report.
+
+| # | Madde | Kart | Durum |
+|---|---|---|---|
+| 1 | Demetlemede sessiz veri kaybı | [TASK-004](TASK-004-contribution-bundle-silent-loss.md) | READY |
+| 2 | PII tarayıcı dil dürüstlüğü | [TASK-005](TASK-005-pii-scanner-language-honesty.md) | READY |
+| 3 | Özdeş tercih dalları | [TASK-006](TASK-006-preference-branches-identical.md) | READY |
+| 4 | Katkı omurgası + `response_edit_pair` (Faz A) | [TASK-002](TASK-002-contribution-task-type-registry.md) | READY (TASK-004'ten sonra merge) |
+| 5 | Sessizce atlanan 12 repository testini çalıştır (`DERLEM_TEST_DATABASE_URL`, `derlem_ci_test` DB mevcut) | kart yazılacak | — |
+| 6 | Artık test şemalarını temizle (`derlem_claim_test_*`, `derlem_claim_resume_test_*`) ve testin neden artık bıraktığını kapat | kart yazılacak | — |
+
+Ölçek altyapısı (bölümleme, presigned upload, PgBouncer, worker havuzu, üretim web
+sunucusu) bu listede **değil**; sahibin ayrı kararı bekleniyor.
+
 ## Doğrulama notu
 
 Kartlar yazıldıktan sonra 6 bağımsız ajanla koda karşı çürütme geçişinden

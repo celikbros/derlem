@@ -455,13 +455,62 @@ CI must be green for it before the next slice starts.
 
 | Slice | Work | Status |
 |---|---|---|
-| S1 | Worker reads canonical records (§3d) | **done** 2026-09-13 |
-| S2 | Migration `000028`: `payload jsonb`, new task type, origin columns (§2) | next |
-| S3 | Go: per-type allowed/required payload keys, submit validation (§1, §4) | — |
+| S1 | Worker reads canonical records (§3d) | **done** 2026-09-13, `6a8d06d`, CI green |
+| S2 | Migration `000028`: `payload jsonb`, new task type, origin columns (§2) | **done** 2026-09-13 |
+| S3 | Go: per-type allowed/required payload keys, submit validation (§1, §4) | next |
 | S4 | Bundle emits canonical JSONL + shared Go↔Python golden fixture (§3a–3b) | — |
 | S5 | Web form driven by the registry, `response_edit_pair` fields (§5) | — |
 | S6 | Review view shows both sides of an edit pair (acceptance, §3d) | — |
 | S7 | End-to-end walk-through, copy, docs (§6) | — |
+
+### S2 — Migration `000028`: contribution backbone (§2) — 2026-09-13
+
+**Schema.** The `task_type` CHECK is widened to `qa_pair | free_text | response_edit_pair`
+(its real name, `contributions_task_type_check`, was read from the live database first,
+not assumed). New columns: `payload jsonb NOT NULL DEFAULT '{}'`, which must be a JSON
+object and carries a 1 MiB defense-in-depth cap; `data_origin text NOT NULL DEFAULT
+'human'` with the same vocabulary as `sources.data_origin` (`000024:862-863`); and
+`model_id`, required when the origin is `model` or `hybrid`. A `response_edit_pair` must
+have a non-empty prompt. Exact per-key character limits belong to S3's Go registry: a
+100,000-character Turkish answer can exceed 200 KB in UTF-8, so a tight database cap would
+reject valid contributions.
+
+**Field placement — refines §1.** `body` stays `NOT NULL`, 1–100,000 characters. Rather
+than weaken that rule, `response_edit_pair` stores the **edited** answer in `body` (it is
+the text the contribution produces) and the **original** answer in
+`payload.original_response`, with an optional `payload.edit_note`. Previews built from
+`prompt` + `body` stay meaningful. §1's table put both answers in `payload`; this is the
+implemented shape.
+
+**Ledger.** The row-change ledger is an explicit allow-list — 32 tables, each with its own
+`CREATE TRIGGER` across `000023`–`000026` — and `contributions` is deliberately excluded
+(`000023:492-494`: raw user content). `000028` adds no trigger. Its test asserts that the
+file contains none and, at runtime, that inserting an edit pair whose payload holds a
+marker string produces zero ledger events and leaks no marker.
+
+**Existing data.** The working database's `contributions` table is empty, so no rows
+change. Existing two-column inserts keep working through the new defaults (asserted).
+
+**Verification (owner's machine, 2026-09-13):**
+
+- `TestContributionPayloadMigrationIsInChainAndAddsNoLedgerTrigger` — PASS
+- `TestContributionPayloadConstraintsOnPostgres` — PASS: edit pair accepted, origin defaults
+  to `human`, legacy insert works; five invalid rows each rejected with SQLSTATE 23514
+  (non-object payload, empty edit-pair prompt, model origin without `model_id`, unknown
+  origin, unknown task type); hybrid origin with `model_id` accepted; 0 ledger events
+- `TestMigrateAppliesAllMigrationsAndIsIdempotent` and both row-change ledger tests — PASS
+  with `000028` in the chain
+- full `go test ./...` — every package `ok`
+
+**No separate control run, deliberately.** The database test's first statement writes a
+`response_edit_pair` into a `payload` column; without `000028` that column does not exist
+and the type is rejected, so the test cannot pass without the migration. Demonstrating it
+would mean hand-applying a partial chain; running it against the working database would
+mean writing to it.
+
+**Deploy step pending (owner):** the working database is at `000027`. `000028` must be
+applied (`go run ./cmd/migrate`) before an API or worker built from S3 onwards runs. S2 on
+its own changes no application behaviour.
 
 ### S1 — Worker reads canonical records (§3d) — 2026-09-13
 

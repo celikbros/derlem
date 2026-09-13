@@ -456,12 +456,69 @@ CI must be green for it before the next slice starts.
 | Slice | Work | Status |
 |---|---|---|
 | S1 | Worker reads canonical records (§3d) | **done** 2026-09-13, `6a8d06d`, CI green |
-| S2 | Migration `000028`: `payload jsonb`, new task type, origin columns (§2) | **done** 2026-09-13 |
-| S3 | Go: per-type allowed/required payload keys, submit validation (§1, §4) | next |
-| S4 | Bundle emits canonical JSONL + shared Go↔Python golden fixture (§3a–3b) | — |
+| S2 | Migration `000028`: `payload jsonb`, new task type, origin columns (§2) | **done** 2026-09-13, `4b409f6`, CI green |
+| S3 | Go: per-type allowed/required payload keys, submit validation (§1, §4) | **done** 2026-09-13 |
+| S4 | Bundle emits canonical JSONL + shared Go↔Python golden fixture (§3a–3b) | next |
 | S5 | Web form driven by the registry, `response_edit_pair` fields (§5) | — |
 | S6 | Review view shows both sides of an edit pair (acceptance, §3d) | — |
 | S7 | End-to-end walk-through, copy, docs (§6) | — |
+
+### S3 — Go registry and submit validation (§1, §4) — 2026-09-13
+
+**Registry.** Each `domain.ContributionTaskTypes` row now declares everything validation and
+bundling need: content purpose, prompt required or forbidden, allowed payload keys (required?
+maximum characters), a `DistinctFromBody` gate, and `Bundleable`. No handler branch names a
+task type, and the unknown-type message lists the registry, so the next type is one row.
+`response_edit_pair`: purpose `preference`; prompt required; `payload.original_response`
+required (≤ 100,000 characters); `payload.edit_note` optional (≤ 2,000); the original answer
+must differ from `body` ignoring whitespace.
+
+**Validation.** Unknown payload keys are rejected **by name**; missing required keys and
+over-long values are separate reasons; values are trimmed and empty optional keys dropped.
+Data origin defaults to `human` with the `sources.data_origin` vocabulary; `model` / `hybrid`
+need a `model_id`, `human` / `unknown` must not carry one; `model_id` ≤ 200. Errors stay
+`422 contribution_validation_failed` with reasons. JSON decoding errors are a generic
+`400 invalid_json` (`json.go`), which is why key problems are reported by validation, not by
+decoding.
+
+**Repository.** Submit stores `payload` (a nil map is written as `{}`, never `null`, so the
+object CHECK holds), `data_origin` and `model_id`; `ListMine` and `ListPending` return them.
+The submit audit event records `data_origin` and `model_id` — never prompt, body or payload
+values, which are raw user content (`000023`).
+
+**Two silent-loss guards, both removed by S4.** Today's bundle line is `{"id","text"}`:
+
+- a type with `Bundleable: false` (`response_edit_pair`) is refused with a `GateError` (422)
+  instead of being bundled body-only with the original answer silently dropped;
+- `model` / `hybrid` contributions are not selected by a bundle and stay visible in the pool,
+  because the plain line cannot carry origin or model id.
+
+**Verification (owner's machine, 2026-09-13):**
+
+- `gofmt -l` clean; `go build ./...`, `go vet ./internal/...` clean
+- `internal/httpapi`: 11 contribution tests pass — new: every registered type is named in the
+  unknown-type message; an edit pair is accepted and normalised; ten rejection cases each
+  matched by their reason text; hybrid origin with `model_id` accepted
+- `internal/repository`: new `TestContributionPayloadRoundTripAndBundleGuards` passes —
+  payload and origin round-trip through `Submit`, `ListMine`, `ListPending`; the edit-pair
+  bundle is refused; a `qa_pair` bundle takes only the human row while the hybrid row and the
+  edit pair stay `submitted`; the submit audit records origin and model id and contains no
+  content marker. The existing lifecycle test is unchanged and green.
+- full `go test ./...` against the scratch database: every package `ok`
+
+**Control run.** In a temporary git worktree at `4b409f6` with the S3 files copied in (main
+tree untouched, worktree removed afterwards): the unmodified copy passes; **(A)** with the
+`Bundleable` guard removed the test fails with *"bundling response_edit_pair must be refused
+with a GateError, got <nil>"* — the bundle would have succeeded and silently dropped the
+original answer; **(B)** with the origin filter removed it fails with *"expected only the
+human qa pair bundled, got 2"*.
+
+**Deployed.** Migration `000028` applied to the working database 2026-09-13 03:15 with the
+owner's go-ahead: `000027` → `000028`, the three columns and seven constraints present,
+0 rows before and after, still only the `contributions_set_updated_at` trigger. The running
+API predates S3 and is unaffected; it must be restarted to serve S3.
+
+Web is unchanged: responses gain fields, and the TypeScript types move in S5.
 
 ### S2 — Migration `000028`: contribution backbone (§2) — 2026-09-13
 
@@ -508,9 +565,9 @@ and the type is rejected, so the test cannot pass without the migration. Demonst
 would mean hand-applying a partial chain; running it against the working database would
 mean writing to it.
 
-**Deploy step pending (owner):** the working database is at `000027`. `000028` must be
-applied (`go run ./cmd/migrate`) before an API or worker built from S3 onwards runs. S2 on
-its own changes no application behaviour.
+**Deployed** 2026-09-13 03:15 with the owner's go-ahead, together with S3 — see the S3
+report for the before/after checks. S2 on its own changed no application behaviour; S3 is
+the first code that reads the new columns.
 
 ### S1 — Worker reads canonical records (§3d) — 2026-09-13
 

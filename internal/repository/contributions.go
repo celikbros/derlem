@@ -27,6 +27,7 @@ func NewContributions(pool *pgxpool.Pool) *Contributions {
 
 const contributionColumns = `
 	id::text, contributor_id::text, task_type, domain, prompt, body,
+	payload, data_origin, model_id,
 	terms_ack_version, status, source_id::text, created_at, updated_at
 `
 
@@ -35,6 +36,7 @@ func scanContribution(row pgx.Row) (domain.Contribution, error) {
 	err := row.Scan(
 		&contribution.ID, &contribution.ContributorID, &contribution.TaskType,
 		&contribution.Domain, &contribution.Prompt, &contribution.Body,
+		&contribution.Payload, &contribution.DataOrigin, &contribution.ModelID,
 		&contribution.TermsVersion, &contribution.Status, &contribution.SourceID,
 		&contribution.CreatedAt, &contribution.UpdatedAt,
 	)
@@ -42,7 +44,28 @@ func scanContribution(row pgx.Row) (domain.Contribution, error) {
 }
 
 // Submit yeni bir katkı kaydeder ve audit olayını aynı transaction'da yazar.
+// Audit ayrıntısı içerik taşımaz: prompt, body ve payload değerleri ham
+// kullanıcı içeriğidir (000023), yalnız tip, alan, şart ve köken yazılır.
 func (r *Contributions) Submit(ctx context.Context, contributorID string, input domain.SubmitContributionInput) (domain.Contribution, error) {
+	payload := input.Payload
+	if payload == nil {
+		// Boş map "null" olarak serileşir ve contributions_payload_object
+		// kısıtını ihlal ederdi.
+		payload = map[string]string{}
+	}
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		return domain.Contribution{}, err
+	}
+	dataOrigin := input.DataOrigin
+	if dataOrigin == "" {
+		dataOrigin = "human"
+	}
+	var modelID any
+	if input.ModelID != "" {
+		modelID = input.ModelID
+	}
+
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return domain.Contribution{}, err
@@ -50,20 +73,25 @@ func (r *Contributions) Submit(ctx context.Context, contributorID string, input 
 	defer tx.Rollback(ctx)
 
 	contribution, err := scanContribution(tx.QueryRow(ctx, `
-		INSERT INTO contributions(contributor_id, task_type, domain, prompt, body, terms_ack_version)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO contributions(
+			contributor_id, task_type, domain, prompt, body,
+			payload, data_origin, model_id, terms_ack_version
+		)
+		VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9)
 		RETURNING `+contributionColumns,
 		contributorID, input.TaskType, input.Domain, input.Prompt, input.Body,
-		domain.ContributionTermsVersion,
+		string(payloadJSON), dataOrigin, modelID, domain.ContributionTermsVersion,
 	))
 	if err != nil {
 		return domain.Contribution{}, err
 	}
 
 	details, err := json.Marshal(map[string]any{
-		"task_type": contribution.TaskType,
-		"domain":    contribution.Domain,
-		"terms_ack": contribution.TermsVersion,
+		"task_type":   contribution.TaskType,
+		"domain":      contribution.Domain,
+		"terms_ack":   contribution.TermsVersion,
+		"data_origin": contribution.DataOrigin,
+		"model_id":    contribution.ModelID,
 	})
 	if err != nil {
 		return domain.Contribution{}, err
@@ -107,6 +135,7 @@ func (r *Contributions) ListMine(ctx context.Context, contributorID string) ([]d
 func (r *Contributions) ListPending(ctx context.Context) ([]domain.PendingContribution, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT c.id::text, c.task_type, c.domain, c.prompt, c.body,
+		       c.payload, c.data_origin, c.model_id,
 		       u.display_name, c.created_at
 		FROM contributions c
 		JOIN users u ON u.id = c.contributor_id
@@ -124,6 +153,7 @@ func (r *Contributions) ListPending(ctx context.Context) ([]domain.PendingContri
 		var item domain.PendingContribution
 		if err := rows.Scan(
 			&item.ID, &item.TaskType, &item.Domain, &item.Prompt, &item.Body,
+			&item.Payload, &item.DataOrigin, &item.ModelID,
 			&item.ContributorName, &item.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -221,6 +251,12 @@ func (r *Contributions) Bundle(ctx context.Context, input domain.BundleContribut
 	if err != nil {
 		return domain.ContributionBundleResult{}, err
 	}
+	if !domain.ContributionTaskTypes[input.TaskType].Bundleable {
+		return domain.ContributionBundleResult{}, &GateError{Reasons: []string{
+			"Bu görev tipi henüz demetlenemez: bugünkü demet satırı yalnız metni taşır ve " +
+				"payload alanları sessizce kaybolurdu. Kanonik kayıt yayını gelince açılacak (TASK-002 S4).",
+		}}
+	}
 
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -231,11 +267,14 @@ func (r *Contributions) Bundle(ctx context.Context, input domain.BundleContribut
 	// Katkının kendi alan etiketi iki anahtarlı JSONL satırına sığmaz; kaynağa
 	// demet düzeyinde tek alan yazılır. Etiketin sessizce düşmemesi için demet
 	// yalnız o alanla eşleşen (veya alanı boş) katkıları alır; kalanlar havuzda
-	// görünür kalır ve kendi alanlarıyla ayrıca demetlenir.
+	// görünür kalır ve kendi alanlarıyla ayrıca demetlenir. Aynı nedenle model ya
+	// da karma kökenli katkılar (köken ve model adı düz satıra sığmaz) kanonik
+	// yayına (TASK-002 S4) kadar havuzda kalır.
 	rows, err := tx.Query(ctx, `
 		SELECT id::text, prompt, body FROM contributions
 		WHERE status = 'submitted' AND task_type = $1
 		  AND (domain = '' OR lower(domain) = lower($2))
+		  AND data_origin NOT IN ('model', 'hybrid')
 		ORDER BY created_at
 		FOR UPDATE
 	`, input.TaskType, input.Domain)
@@ -259,7 +298,8 @@ func (r *Contributions) Bundle(ctx context.Context, input domain.BundleContribut
 	}
 	if len(items) == 0 {
 		return domain.ContributionBundleResult{}, &GateError{Reasons: []string{
-			"Bu görev tipinde ve alanda bekleyen katkı yok (farklı alan etiketli katkılar kendi alanlarıyla demetlenir).",
+			"Bu görev tipinde ve alanda demetlenebilir katkı yok (farklı alan etiketli katkılar kendi alanlarıyla, " +
+				"model ya da karma kökenli katkılar kanonik yayından sonra demetlenir).",
 		}}
 	}
 

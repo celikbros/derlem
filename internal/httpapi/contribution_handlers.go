@@ -2,7 +2,9 @@ package httpapi
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"unicode/utf8"
 
@@ -11,30 +13,50 @@ import (
 )
 
 const (
-	maxContributionPromptChars = 10000
-	maxContributionBodyChars   = 100000
-	maxContributionDomainChars = 100
+	maxContributionPromptChars  = 10000
+	maxContributionBodyChars    = 100000
+	maxContributionDomainChars  = 100
+	maxContributionModelIDChars = 200
 )
 
+// contributionTaskTypeNames, hata mesajı için kayıt defterindeki tipleri sıralı
+// verir; mesaj yeni tip eklendiğinde kendiliğinden güncel kalır.
+func contributionTaskTypeNames() string {
+	names := make([]string, 0, len(domain.ContributionTaskTypes))
+	for name := range domain.ContributionTaskTypes {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return strings.Join(names, ", ")
+}
+
 // normalizeAndValidateContribution, katkı girdisini kırpar ve neden listesi
-// döndürür (normalizeAndValidateSource ile aynı desen).
+// döndürür (normalizeAndValidateSource ile aynı desen). Tipe özel kurallar
+// domain.ContributionTaskTypes'tan okunur.
 func normalizeAndValidateContribution(input *domain.SubmitContributionInput) []string {
 	input.TaskType = strings.TrimSpace(input.TaskType)
 	input.Domain = strings.TrimSpace(input.Domain)
 	input.Prompt = strings.TrimSpace(input.Prompt)
 	input.Body = strings.TrimSpace(input.Body)
+	input.DataOrigin = strings.TrimSpace(input.DataOrigin)
+	input.ModelID = strings.TrimSpace(input.ModelID)
+	if input.DataOrigin == "" {
+		input.DataOrigin = "human"
+	}
 
 	reasons := make([]string, 0)
-	if _, ok := domain.ContributionTaskTypes[input.TaskType]; !ok {
-		reasons = append(reasons, "Görev tipi qa_pair veya free_text olmalıdır.")
+	taskType, known := domain.ContributionTaskTypes[input.TaskType]
+	if !known {
+		reasons = append(reasons, "Görev tipi şunlardan biri olmalıdır: "+contributionTaskTypeNames()+".")
 	}
-	if input.TaskType == "qa_pair" && input.Prompt == "" {
-		reasons = append(reasons, "Soru-cevap katkısında soru boş olamaz.")
+	if known && taskType.PromptRequired && input.Prompt == "" {
+		reasons = append(reasons, "Bu görev tipinde soru boş olamaz.")
 	}
-	// Serbest metinde soru alanı demete girmez; kabul edip sessizce düşürmek
-	// yerine gönderim anında reddedilir (katkıcının tepki verebildiği tek yer).
-	if input.TaskType == "free_text" && input.Prompt != "" {
-		reasons = append(reasons, "Serbest metin katkısında soru alanı kullanılmaz; tüm metni tek alana yazın.")
+	// Soru alanı kullanılmayan tipte gönderilen soru demete girmez; kabul edip
+	// sessizce düşürmek yerine gönderim anında reddedilir (katkıcının tepki
+	// verebildiği tek yer).
+	if known && taskType.PromptForbidden && input.Prompt != "" {
+		reasons = append(reasons, "Bu görev tipinde soru alanı kullanılmaz; tüm metni tek alana yazın.")
 	}
 	if utf8.RuneCountInString(input.Prompt) > maxContributionPromptChars {
 		reasons = append(reasons, "Soru 10.000 karakteri aşamaz.")
@@ -51,7 +73,85 @@ func normalizeAndValidateContribution(input *domain.SubmitContributionInput) []s
 	if !input.AcceptTerms {
 		reasons = append(reasons, "Kullanım şartı onaylanmadan katkı gönderilemez.")
 	}
+	if known {
+		reasons = append(reasons, validateContributionPayload(input, taskType)...)
+	}
+	reasons = append(reasons, validateContributionOrigin(input)...)
 	return reasons
+}
+
+// validateContributionPayload, payload'ı tipin anahtar şemasına göre doğrular,
+// değerleri kırpar ve boş isteğe bağlı anahtarları atar. Bilinmeyen anahtar
+// adıyla reddedilir.
+func validateContributionPayload(input *domain.SubmitContributionInput, taskType domain.ContributionTaskType) []string {
+	reasons := make([]string, 0)
+	normalized := make(map[string]string, len(input.Payload))
+
+	submittedKeys := make([]string, 0, len(input.Payload))
+	for key := range input.Payload {
+		submittedKeys = append(submittedKeys, key)
+	}
+	sort.Strings(submittedKeys)
+	for _, key := range submittedKeys {
+		field, allowed := taskType.Payload[key]
+		if !allowed {
+			reasons = append(reasons, fmt.Sprintf("payload.%s bu görev tipinde kullanılmaz.", key))
+			continue
+		}
+		value := strings.TrimSpace(input.Payload[key])
+		if utf8.RuneCountInString(value) > field.MaxChars {
+			reasons = append(reasons, fmt.Sprintf("payload.%s %d karakteri aşamaz.", key, field.MaxChars))
+		}
+		if value != "" {
+			normalized[key] = value
+		}
+	}
+
+	declaredKeys := make([]string, 0, len(taskType.Payload))
+	for key := range taskType.Payload {
+		declaredKeys = append(declaredKeys, key)
+	}
+	sort.Strings(declaredKeys)
+	for _, key := range declaredKeys {
+		if taskType.Payload[key].Required && normalized[key] == "" {
+			reasons = append(reasons, fmt.Sprintf("payload.%s zorunludur.", key))
+		}
+	}
+
+	if key := taskType.DistinctFromBody; key != "" && normalized[key] != "" &&
+		collapseWhitespace(normalized[key]) == collapseWhitespace(input.Body) {
+		reasons = append(reasons, fmt.Sprintf(
+			"payload.%s metinle aynı; değişiklik yoksa bu katkı gönderilmez.", key,
+		))
+	}
+
+	input.Payload = normalized
+	return reasons
+}
+
+// validateContributionOrigin, kökeni sources.data_origin sözlüğüyle doğrular.
+// Model ya da karma kökenli katkı model adını taşır; insan kökenli katkıda model
+// adı anlamsızdır ve reddedilir.
+func validateContributionOrigin(input *domain.SubmitContributionInput) []string {
+	if _, ok := domain.ContributionDataOrigins[input.DataOrigin]; !ok {
+		return []string{"Köken unknown, human, model veya hybrid olmalıdır."}
+	}
+	reasons := make([]string, 0)
+	modelOrigin := input.DataOrigin == "model" || input.DataOrigin == "hybrid"
+	if modelOrigin && input.ModelID == "" {
+		reasons = append(reasons, "Model ya da karma kökenli katkıda model adı zorunludur.")
+	}
+	if !modelOrigin && input.ModelID != "" {
+		reasons = append(reasons, "Model adı yalnız model ya da karma kökenli katkıda verilir.")
+	}
+	if utf8.RuneCountInString(input.ModelID) > maxContributionModelIDChars {
+		reasons = append(reasons, "Model adı 200 karakteri aşamaz.")
+	}
+	return reasons
+}
+
+func collapseWhitespace(value string) string {
+	return strings.Join(strings.Fields(value), " ")
 }
 
 func (s *Server) submitContribution(w http.ResponseWriter, r *http.Request) {
@@ -130,7 +230,7 @@ func normalizeAndValidateBundle(input *domain.BundleContributionsInput) []string
 
 	reasons := make([]string, 0)
 	if _, ok := domain.ContributionTaskTypes[input.TaskType]; !ok {
-		reasons = append(reasons, "Görev tipi qa_pair veya free_text olmalıdır.")
+		reasons = append(reasons, "Görev tipi şunlardan biri olmalıdır: "+contributionTaskTypeNames()+".")
 	}
 	if input.Name == "" {
 		reasons = append(reasons, "Kaynak adı zorunludur.")

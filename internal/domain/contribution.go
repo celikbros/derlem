@@ -11,6 +11,18 @@ type ContributionPayloadField struct {
 	MaxChars int
 }
 
+// Demetin bir görev tipini yazma biçimleri.
+const (
+	// BundleEmissionPlainText: {"id","text"} satırı. Yapısı olmayan tip içindir.
+	BundleEmissionPlainText = "plain_text"
+	// BundleEmissionConversation: kanonik konuşma kaydı (user = prompt,
+	// assistant = body).
+	BundleEmissionConversation = "canonical_conversation"
+	// BundleEmissionPreference: kanonik tercih kaydı (bağlam = prompt,
+	// chosen = body, rejected = payload[DistinctFromBody]).
+	BundleEmissionPreference = "canonical_preference"
+)
+
 // ContributionTaskType, bir katkı görev tipinin kayıt defteri satırı. Doğrulama
 // ve demetleme tipe özel dal yazmaz, buradan okur; yeni tip = yeni satır.
 type ContributionTaskType struct {
@@ -25,13 +37,13 @@ type ContributionTaskType struct {
 	// Payload, tipin izin verdiği anahtarlar.
 	Payload map[string]ContributionPayloadField
 	// DistinctFromBody, değeri body'den (boşluk farkı yok sayılarak) farklı olmak
-	// zorunda olan payload anahtarı; boşsa kapı yok. Düzeltme çiftinin tek
-	// otomatik kapısı: düzeltme gerçekten bir şey değiştirmeli.
+	// zorunda olan payload anahtarı; boşsa kapı yok. Tercih yayınında bu anahtar
+	// rejected dalıdır: gönderim kapısı, ihracatta özdeş dal reddinin
+	// (preference_branches_identical) hiç tetiklenmemesini garanti eder.
 	DistinctFromBody string
-	// Bundleable: demet bu tipi kaybetmeden yazabiliyor mu. Bugünkü demet satırı
-	// yalnız {"id","text"} taşır; payload'lı tip orada sessizce kaybolurdu
-	// (TASK-004 sınıfı). Kanonik yayın (TASK-002 S4) gelene kadar false.
-	Bundleable bool
+	// BundleEmission, demetin bu tipi nasıl yazdığı. Boşsa tip demetlenemez:
+	// yazılamayan alanlar sessizce kaybolurdu (TASK-004 sınıfı).
+	BundleEmission string
 }
 
 // ContributionTaskTypes, katkı kuyruğunun görev tipleri. Çeviri ve tercih
@@ -39,8 +51,16 @@ type ContributionTaskType struct {
 // (docs/katki_gorev_tipleri_karar_notu.md). Her satırın içerik amacı
 // TestContentPurposeForTaskType ile zorlanır.
 var ContributionTaskTypes = map[string]ContributionTaskType{
-	"qa_pair":   {ContentPurpose: "instruction", PromptRequired: true, Bundleable: true},
-	"free_text": {ContentPurpose: "pretrain", PromptForbidden: true, Bundleable: true},
+	"qa_pair": {
+		ContentPurpose: "instruction",
+		PromptRequired: true,
+		BundleEmission: BundleEmissionConversation,
+	},
+	"free_text": {
+		ContentPurpose:  "pretrain",
+		PromptForbidden: true,
+		BundleEmission:  BundleEmissionPlainText,
+	},
 	// Cevap düzeltme: prompt = soru, body = düzeltilmiş cevap (katkının ürettiği
 	// metin), payload.original_response = orijinal cevap (000028).
 	"response_edit_pair": {
@@ -51,7 +71,7 @@ var ContributionTaskTypes = map[string]ContributionTaskType{
 			"edit_note":         {MaxChars: 2000},
 		},
 		DistinctFromBody: "original_response",
-		Bundleable:       false,
+		BundleEmission:   BundleEmissionPreference,
 	},
 }
 

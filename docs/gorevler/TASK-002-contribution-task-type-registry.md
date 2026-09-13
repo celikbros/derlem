@@ -457,11 +457,76 @@ CI must be green for it before the next slice starts.
 |---|---|---|
 | S1 | Worker reads canonical records (§3d) | **done** 2026-09-13, `6a8d06d`, CI green |
 | S2 | Migration `000028`: `payload jsonb`, new task type, origin columns (§2) | **done** 2026-09-13, `4b409f6`, CI green |
-| S3 | Go: per-type allowed/required payload keys, submit validation (§1, §4) | **done** 2026-09-13 |
-| S4 | Bundle emits canonical JSONL + shared Go↔Python golden fixture (§3a–3b) | next |
-| S5 | Web form driven by the registry, `response_edit_pair` fields (§5) | — |
+| S3 | Go: per-type allowed/required payload keys, submit validation (§1, §4) | **done** 2026-09-13, `9a8d460`, CI green |
+| S4 | Bundle emits canonical JSONL + shared Go↔Python golden fixture (§3a–3b) | **done** 2026-09-13 |
+| S5 | Web form driven by the registry, `response_edit_pair` fields (§5) | next |
 | S6 | Review view shows both sides of an edit pair (acceptance, §3d) | — |
 | S7 | End-to-end walk-through, copy, docs (§6) | — |
+
+### S4 — Bundle emits canonical records + shared Go↔Python fixture (§3a–3b) — 2026-09-13
+
+**Emission is a registry field.** `Bundleable` became `BundleEmission`: `plain_text` for
+`free_text` (the unchanged `{"id","text"}` line), `canonical_conversation` for `qa_pair`
+(user = prompt, assistant = body), and `canonical_preference` for `response_edit_pair`
+(context = prompt; chosen = body, the edited answer; rejected = the `DistinctFromBody`
+payload key, the original answer). An empty emission means the type cannot be bundled.
+Using `DistinctFromBody` as the rejected branch ties the two languages together: S3's submit
+gate already guarantees that TASK-006's `preference_branches_identical` can never block an
+export on a bundled edit pair.
+
+**Nothing is dropped.** Every canonical record carries `sample_id` (the contribution id),
+`task_type`, `language`, the contribution's own `domain` — omitted when empty, because the
+parser rejects empty strings and one invalid record blocks a whole release at export —
+`train_policy: assistant_only`, and `metadata` holding `data_origin`, `model_id` when
+present, and every payload key not already written as a branch (`edit_note`). Contributor
+identity is never written. S3's two temporary guards are gone: edit pairs bundle, and
+`model` / `hybrid` contributions bundle with their origin in metadata. Source-level
+`data_origin` stays `unknown` (D2a).
+
+**A contract that binds both languages.** CI runs backend and worker as separate jobs, so one
+committed file ties them: `data_samples/example_contribution_bundles.jsonl`.
+`TestContributionBundleGoldenFixture` rebuilds it from fixed items and compares byte for byte
+(regenerate with `DERLEM_UPDATE_GOLDEN=1`); `worker/tests/test_contribution_bundle_fixture.py`
+reads the same file with the worker's real parser and document-text extractor. It is a
+separate Python test rather than an addition to
+`test_repository_examples_follow_the_runtime_contract`, whose record-type list is exact.
+
+**Behaviour changes.**
+
+- A release containing a `qa_pair` bundle can now be exported only as JSONL
+  (`releases.py:762-775`: any canonical record requires JSONL). That is inherent to keeping
+  question and answer apart; `free_text` bundles stay plain and TXT-exportable. The working
+  database holds **0** contribution-bundle sources, so nothing existing is affected.
+- §3b asked a bundle to reject mixed origins. With origin carried per record and the
+  source-level origin fixed at `unknown`, mixing is lossless, so it is allowed.
+
+**Verification (owner's machine, 2026-09-13):**
+
+- `gofmt -l` clean; `go build ./...`, `go vet ./internal/...` clean
+- `internal/repository` unit tests: golden fixture byte-equal; `qa_pair` emitted as a
+  canonical conversation (separate messages, empty domain omitted, origin and model id in
+  metadata, no `created_by`, raw UTF-8); edit pair emitted as a preference (chosen = edited,
+  rejected = original, `edit_note` in metadata, original not duplicated there); `free_text`
+  unchanged; an edit pair without a rejected branch is refused; an unknown type is refused;
+  the registry test now also requires an emission for every type
+- integration `TestContributionPayloadRoundTripAndCanonicalBundles`: the edit-pair bundle's
+  source has purpose `preference` and its staged record keeps every field, including the raw
+  marker; human and hybrid `qa_pair`s both bundle with origin and model id; nothing is left
+  `submitted`; audit details carry no content. The lifecycle test now expects the canonical
+  record instead of the flattened `Soru:` text.
+- full `go test ./...` against the scratch database — every package `ok`
+- Python: the fixture contract test 3/3; full worker suite 254 passed, 1 skipped
+
+**Control run — does the cross-language contract actually bind?** In a temporary worktree at
+`9a8d460` with the S4 files copied in: the unmodified copy passes on both sides. With
+`omitempty` removed from `domain`, so an empty tag is written as `""`: the Go unit test fails
+(*"an empty domain must be omitted"*), the regenerated fixture contains the `"domain":""` line,
+and **all three Python tests fail** with `CanonicalSampleError: sample_domain_must_be_string` —
+the exact error that would block a release at export. The worktree was removed; the committed
+fixture is untouched.
+
+**Deploy.** No migration. The API must be restarted to bundle this way; the running API
+predates S3.
 
 ### S3 — Go registry and submit validation (§1, §4) — 2026-09-13
 

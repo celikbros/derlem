@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"github.com/celikbros/derlem/internal/domain"
 	"github.com/jackc/pgx/v5"
@@ -203,31 +204,124 @@ func (r *Contributions) Withdraw(ctx context.Context, contributionID, contributo
 }
 
 type bundleItem struct {
-	ID     string
-	Prompt string
-	Body   string
+	ID         string
+	Domain     string
+	Prompt     string
+	Body       string
+	Payload    map[string]string
+	DataOrigin string
+	ModelID    *string
 }
 
-// buildContributionJSONL, demet dosyasının satırlarını üretir. Sampler her
-// satırda "text" alanını belge metni, "id" alanını external id olarak okur;
-// katkıcı kimliği dosyaya asla yazılmaz (kimlik-içerik ayrımı).
-func buildContributionJSONL(taskType string, items []bundleItem) ([]byte, error) {
+// canonicalSchemaVersion, worker/src/derlem_worker/canonical.py
+// CANONICAL_SCHEMA_VERSION ile aynı olmalıdır; sözleşme
+// data_samples/example_contribution_bundles.jsonl ile iki dilde de sınanır.
+const canonicalSchemaVersion = "derlem.canonical-sample.v1"
+
+type canonicalMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+type canonicalPreference struct {
+	Chosen   []canonicalMessage `json:"chosen"`
+	Rejected []canonicalMessage `json:"rejected"`
+}
+
+// canonicalRecord, demetin yazdığı kanonik satır. Boş isteğe bağlı alanlar
+// yazılmaz: ayrıştırıcı boş dizeyi reddeder ve tek geçersiz kayıt ihracatta tüm
+// release'i bloke eder. Katkıcı kimliği (created_by) bilerek yoktur.
+type canonicalRecord struct {
+	SchemaVersion  string               `json:"schema_version"`
+	RecordType     string               `json:"record_type"`
+	SampleID       string               `json:"sample_id"`
+	ContentPurpose string               `json:"content_purpose"`
+	TaskType       string               `json:"task_type"`
+	Language       string               `json:"language,omitempty"`
+	Domain         string               `json:"domain,omitempty"`
+	TrainPolicy    string               `json:"train_policy"`
+	Messages       []canonicalMessage   `json:"messages"`
+	Preference     *canonicalPreference `json:"preference,omitempty"`
+	Metadata       map[string]string    `json:"metadata"`
+}
+
+// buildContributionJSONL, demet dosyasının satırlarını kayıt defterindeki
+// yayın biçimine göre üretir. Yapısı olmayan tip düz {"id","text"} satırı;
+// yapılı tipler kanonik kayıt (derlem.canonical-sample.v1) olur ve soru, cevap,
+// orijinal cevap, köken, model adı ile kalan payload anahtarları kaybolmaz.
+// Katkıcı kimliği dosyaya asla yazılmaz (kimlik-içerik ayrımı).
+func buildContributionJSONL(taskType, contentPurpose, language string, items []bundleItem) ([]byte, error) {
+	entry, ok := domain.ContributionTaskTypes[taskType]
+	if !ok || entry.BundleEmission == "" {
+		return nil, fmt.Errorf("contribution task type %q has no bundle emission", taskType)
+	}
+
 	var buffer bytes.Buffer
 	encoder := json.NewEncoder(&buffer)
 	encoder.SetEscapeHTML(false)
 	for _, item := range items {
-		text := item.Body
-		if taskType == "qa_pair" {
-			// Şablonsuz, insan-okur düz metin: canonical conversation
-			// kaydına terfi, pipeline conversation'ı uçtan uca
-			// işlediğinde yapılacak (katkı_platformu_tasarimi.md).
-			text = "Soru: " + item.Prompt + "\n\nCevap: " + item.Body
+		var line any
+		switch entry.BundleEmission {
+		case domain.BundleEmissionPlainText:
+			line = map[string]string{"id": item.ID, "text": item.Body}
+		case domain.BundleEmissionConversation:
+			record := newCanonicalRecord(item, taskType, contentPurpose, language, "conversation", "")
+			record.Messages = []canonicalMessage{
+				{Role: "user", Content: item.Prompt},
+				{Role: "assistant", Content: item.Body},
+			}
+			line = record
+		case domain.BundleEmissionPreference:
+			rejected := item.Payload[entry.DistinctFromBody]
+			if entry.DistinctFromBody == "" || rejected == "" {
+				return nil, fmt.Errorf("contribution %s has no rejected branch in payload.%s", item.ID, entry.DistinctFromBody)
+			}
+			record := newCanonicalRecord(item, taskType, contentPurpose, language, "preference", entry.DistinctFromBody)
+			record.Messages = []canonicalMessage{{Role: "user", Content: item.Prompt}}
+			record.Preference = &canonicalPreference{
+				Chosen:   []canonicalMessage{{Role: "assistant", Content: item.Body}},
+				Rejected: []canonicalMessage{{Role: "assistant", Content: rejected}},
+			}
+			line = record
+		default:
+			return nil, fmt.Errorf("contribution task type %q has unknown bundle emission %q", taskType, entry.BundleEmission)
 		}
-		if err := encoder.Encode(map[string]string{"id": item.ID, "text": text}); err != nil {
+		if err := encoder.Encode(line); err != nil {
 			return nil, err
 		}
 	}
 	return buffer.Bytes(), nil
+}
+
+// newCanonicalRecord, kaydın ortak alanlarını ve metadata'sını kurar. metadata:
+// köken, varsa model adı ve kayda başka yerde yazılmayan payload anahtarları
+// (consumedKey, tercih dalına yazılan anahtardır).
+func newCanonicalRecord(item bundleItem, taskType, contentPurpose, language, recordType, consumedKey string) canonicalRecord {
+	metadata := map[string]string{"data_origin": item.DataOrigin}
+	if item.ModelID != nil && *item.ModelID != "" {
+		metadata["model_id"] = *item.ModelID
+	}
+	keys := make([]string, 0, len(item.Payload))
+	for key := range item.Payload {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		if key != consumedKey && item.Payload[key] != "" {
+			metadata[key] = item.Payload[key]
+		}
+	}
+	return canonicalRecord{
+		SchemaVersion:  canonicalSchemaVersion,
+		RecordType:     recordType,
+		SampleID:       item.ID,
+		ContentPurpose: contentPurpose,
+		TaskType:       taskType,
+		Language:       language,
+		Domain:         item.Domain,
+		TrainPolicy:    "assistant_only",
+		Metadata:       metadata,
+	}
 }
 
 // contentPurposeForTaskType, demet kaynağının içerik amacını kayıt defterinden
@@ -251,10 +345,9 @@ func (r *Contributions) Bundle(ctx context.Context, input domain.BundleContribut
 	if err != nil {
 		return domain.ContributionBundleResult{}, err
 	}
-	if !domain.ContributionTaskTypes[input.TaskType].Bundleable {
+	if domain.ContributionTaskTypes[input.TaskType].BundleEmission == "" {
 		return domain.ContributionBundleResult{}, &GateError{Reasons: []string{
-			"Bu görev tipi henüz demetlenemez: bugünkü demet satırı yalnız metni taşır ve " +
-				"payload alanları sessizce kaybolurdu. Kanonik kayıt yayını gelince açılacak (TASK-002 S4).",
+			"Bu görev tipinin demet yayın biçimi tanımlı değil; alanları sessizce kaybolacağı için demetlenemez.",
 		}}
 	}
 
@@ -264,17 +357,15 @@ func (r *Contributions) Bundle(ctx context.Context, input domain.BundleContribut
 	}
 	defer tx.Rollback(ctx)
 
-	// Katkının kendi alan etiketi iki anahtarlı JSONL satırına sığmaz; kaynağa
-	// demet düzeyinde tek alan yazılır. Etiketin sessizce düşmemesi için demet
-	// yalnız o alanla eşleşen (veya alanı boş) katkıları alır; kalanlar havuzda
-	// görünür kalır ve kendi alanlarıyla ayrıca demetlenir. Aynı nedenle model ya
-	// da karma kökenli katkılar (köken ve model adı düz satıra sığmaz) kanonik
-	// yayına (TASK-002 S4) kadar havuzda kalır.
+	// Kaynağa demet düzeyinde tek alan yazılır; kaynak etiketi yanlış olmasın
+	// diye demet yalnız o alanla eşleşen (veya alanı boş) katkıları alır, kalanlar
+	// havuzda görünür kalır. Köken ve model adı kanonik kaydın metadata'sında
+	// yolculuk eder; kaynak düzeyinde data_origin 'unknown' kalır (TASK-002 D2a).
 	rows, err := tx.Query(ctx, `
-		SELECT id::text, prompt, body FROM contributions
+		SELECT id::text, domain, prompt, body, payload, data_origin, model_id
+		FROM contributions
 		WHERE status = 'submitted' AND task_type = $1
 		  AND (domain = '' OR lower(domain) = lower($2))
-		  AND data_origin NOT IN ('model', 'hybrid')
 		ORDER BY created_at
 		FOR UPDATE
 	`, input.TaskType, input.Domain)
@@ -285,7 +376,10 @@ func (r *Contributions) Bundle(ctx context.Context, input domain.BundleContribut
 	ids := make([]string, 0)
 	for rows.Next() {
 		var item bundleItem
-		if err := rows.Scan(&item.ID, &item.Prompt, &item.Body); err != nil {
+		if err := rows.Scan(
+			&item.ID, &item.Domain, &item.Prompt, &item.Body,
+			&item.Payload, &item.DataOrigin, &item.ModelID,
+		); err != nil {
 			rows.Close()
 			return domain.ContributionBundleResult{}, err
 		}
@@ -298,12 +392,11 @@ func (r *Contributions) Bundle(ctx context.Context, input domain.BundleContribut
 	}
 	if len(items) == 0 {
 		return domain.ContributionBundleResult{}, &GateError{Reasons: []string{
-			"Bu görev tipinde ve alanda demetlenebilir katkı yok (farklı alan etiketli katkılar kendi alanlarıyla, " +
-				"model ya da karma kökenli katkılar kanonik yayından sonra demetlenir).",
+			"Bu görev tipinde ve alanda bekleyen katkı yok (farklı alan etiketli katkılar kendi alanlarıyla demetlenir).",
 		}}
 	}
 
-	payloadBytes, err := buildContributionJSONL(input.TaskType, items)
+	payloadBytes, err := buildContributionJSONL(input.TaskType, contentPurpose, input.Language, items)
 	if err != nil {
 		return domain.ContributionBundleResult{}, err
 	}

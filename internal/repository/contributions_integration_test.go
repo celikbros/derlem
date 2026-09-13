@@ -198,8 +198,11 @@ func TestContributionLifecycleBundlesPoolIntoSource(t *testing.T) {
 	if int64(len(content)) != uploadedBytes {
 		t.Fatalf("uploaded_bytes=%d but file has %d bytes", uploadedBytes, len(content))
 	}
-	if !strings.Contains(string(content), "Soru: Işık hızı nedir?") {
-		t.Fatalf("staged file lacks bundled QA text: %s", string(content))
+	// Soru-cevap artık kanonik konuşma kaydı olarak yazılır (TASK-002 S4): soru ve
+	// cevap ayrı mesajlardır, tek bir "Soru:/Cevap:" metnine düzleştirilmez.
+	if !strings.Contains(string(content), `"schema_version":"derlem.canonical-sample.v1"`) ||
+		!strings.Contains(string(content), `"content":"Işık hızı nedir?"`) {
+		t.Fatalf("staged file lacks the canonical QA record: %s", string(content))
 	}
 	if strings.Contains(string(content), contributorID) || strings.Contains(string(content), "katkici@example.test") {
 		t.Fatalf("contributor identity must not leak into the bundle file")

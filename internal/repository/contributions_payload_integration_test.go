@@ -2,8 +2,9 @@ package repository_test
 
 import (
 	"context"
-	"errors"
+	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -16,11 +17,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// TestContributionPayloadRoundTripAndBundleGuards, TASK-002 S3'ün depo katmanını
-// gerçek PostgreSQL üzerinde doğrular: payload ve köken saklanıp geri okunur,
-// audit ayrıntısına içerik sızmaz, ve kanonik yayın (S4) gelene kadar hiçbir
-// katkı payload'ı ya da kökeni kaybedilerek demetlenemez.
-func TestContributionPayloadRoundTripAndBundleGuards(t *testing.T) {
+// TestContributionPayloadRoundTripAndCanonicalBundles, TASK-002 S3–S4'ün depo
+// katmanını gerçek PostgreSQL üzerinde doğrular: payload ve köken saklanıp geri
+// okunur, audit ayrıntısına içerik sızmaz, ve demet düzeltme çiftini ve model
+// kökenli soru-cevabı hiçbir alanı kaybetmeden kanonik kayıt olarak yazar.
+func TestContributionPayloadRoundTripAndCanonicalBundles(t *testing.T) {
 	ctx, pool := newContributionPayloadTestPool(t)
 
 	var contributorID, managerID string
@@ -41,7 +42,7 @@ func TestContributionPayloadRoundTripAndBundleGuards(t *testing.T) {
 	}
 
 	repo := repository.NewContributions(pool)
-	const rawMarker = "HAM-ICERIK-S3"
+	const rawMarker = "HAM-ICERIK-S4"
 
 	editPair, err := repo.Submit(ctx, contributorID, domain.SubmitContributionInput{
 		TaskType: "response_edit_pair", Domain: "fizik",
@@ -56,11 +57,9 @@ func TestContributionPayloadRoundTripAndBundleGuards(t *testing.T) {
 		t.Fatalf("submit edit pair: %v", err)
 	}
 	if editPair.Payload["original_response"] != "Saniyede 300 km'dir. "+rawMarker ||
-		editPair.Payload["edit_note"] != "Birim düzeltildi." {
-		t.Fatalf("payload did not round-trip: %+v", editPair.Payload)
-	}
-	if editPair.DataOrigin != "human" || editPair.ModelID != nil {
-		t.Fatalf("origin defaults wrong: origin=%q model_id=%v", editPair.DataOrigin, editPair.ModelID)
+		editPair.DataOrigin != "human" || editPair.ModelID != nil {
+		t.Fatalf("edit pair did not round-trip: payload=%v origin=%q model_id=%v",
+			editPair.Payload, editPair.DataOrigin, editPair.ModelID)
 	}
 
 	hybrid, err := repo.Submit(ctx, contributorID, domain.SubmitContributionInput{
@@ -71,10 +70,6 @@ func TestContributionPayloadRoundTripAndBundleGuards(t *testing.T) {
 	if err != nil {
 		t.Fatalf("submit hybrid qa pair: %v", err)
 	}
-	if hybrid.ModelID == nil || *hybrid.ModelID != "model-x" || len(hybrid.Payload) != 0 {
-		t.Fatalf("hybrid qa pair stored wrongly: model_id=%v payload=%v", hybrid.ModelID, hybrid.Payload)
-	}
-
 	human, err := repo.Submit(ctx, contributorID, domain.SubmitContributionInput{
 		TaskType: "qa_pair", Domain: "fizik",
 		Prompt: "Ses boşlukta yayılır mı?", Body: "Hayır; ses yayılmak için ortam ister.",
@@ -84,88 +79,128 @@ func TestContributionPayloadRoundTripAndBundleGuards(t *testing.T) {
 		t.Fatalf("submit human qa pair: %v", err)
 	}
 
-	mine, err := repo.ListMine(ctx, contributorID)
-	if err != nil {
-		t.Fatalf("list mine: %v", err)
-	}
 	pending, err := repo.ListPending(ctx)
 	if err != nil {
 		t.Fatalf("list pending: %v", err)
 	}
-	for label, payloads := range map[string][]map[string]string{
-		"mine":    payloadsByID(mine, editPair.ID),
-		"pending": pendingPayloadsByID(pending, editPair.ID),
-	} {
-		if len(payloads) != 1 || payloads[0]["original_response"] != "Saniyede 300 km'dir. "+rawMarker {
-			t.Fatalf("%s listing lost the edit pair payload: %v", label, payloads)
+	var listedPayload map[string]string
+	for _, item := range pending {
+		if item.ID == editPair.ID {
+			listedPayload = item.Payload
 		}
 	}
-
-	// Payload'lı tip bugünkü demet satırına sığmaz: açıkça reddedilmeli.
-	var gateError *repository.GateError
-	if _, err := repo.Bundle(ctx, domain.BundleContributionsInput{
-		TaskType: "response_edit_pair", Name: "duzeltme_demeti", Language: "tr", Domain: "fizik",
-	}, t.TempDir(), managerID); !errors.As(err, &gateError) {
-		t.Fatalf("bundling response_edit_pair must be refused with a GateError, got %v", err)
+	if listedPayload["original_response"] != "Saniyede 300 km'dir. "+rawMarker {
+		t.Fatalf("pending listing lost the edit pair payload: %v", listedPayload)
 	}
 
-	// qa_pair demeti yalnız insan kökenli katkıyı alır; karma kökenli havuzda kalır.
-	result, err := repo.Bundle(ctx, domain.BundleContributionsInput{
-		TaskType: "qa_pair", Name: "fizik_insan_demeti", Language: "tr", Domain: "fizik",
+	editResult, err := repo.Bundle(ctx, domain.BundleContributionsInput{
+		TaskType: "response_edit_pair", Name: "duzeltme_demeti", Language: "tr", Domain: "fizik",
 	}, t.TempDir(), managerID)
 	if err != nil {
-		t.Fatalf("bundle human qa pairs: %v", err)
+		t.Fatalf("bundle edit pairs: %v", err)
 	}
-	if result.Count != 1 {
-		t.Fatalf("expected only the human qa pair bundled, got %d", result.Count)
+	editRecords := stagedRecords(t, ctx, pool, editResult)
+	if editResult.Count != 1 || len(editRecords) != 1 {
+		t.Fatalf("expected 1 bundled edit pair, got count=%d records=%d", editResult.Count, len(editRecords))
 	}
-	for id, want := range map[string]string{
-		human.ID:    "bundled",
-		hybrid.ID:   "submitted",
-		editPair.ID: "submitted",
-	} {
-		var status string
-		if err := pool.QueryRow(ctx, `SELECT status FROM contributions WHERE id = $1`, id).Scan(&status); err != nil {
-			t.Fatalf("read status %s: %v", id, err)
+	if sourcePurpose(t, ctx, pool, editResult.SourceID) != "preference" {
+		t.Fatal("edit pair bundle source must have content_purpose preference")
+	}
+	editRecord := editRecords[0]
+	preference := editRecord["preference"].(map[string]any)
+	rejected := preference["rejected"].([]any)[0].(map[string]any)
+	chosen := preference["chosen"].([]any)[0].(map[string]any)
+	if editRecord["record_type"] != "preference" || editRecord["sample_id"] != editPair.ID ||
+		rejected["content"] != "Saniyede 300 km'dir. "+rawMarker ||
+		chosen["content"] != "Boşlukta yaklaşık 299.792 km/s'dir." {
+		t.Fatalf("edit pair lost a field in the bundle: %v", editRecord)
+	}
+	if editRecord["metadata"].(map[string]any)["edit_note"] != "Birim düzeltildi." {
+		t.Fatalf("edit note lost in the bundle: %v", editRecord["metadata"])
+	}
+
+	qaResult, err := repo.Bundle(ctx, domain.BundleContributionsInput{
+		TaskType: "qa_pair", Name: "fizik_soru_cevap_demeti", Language: "tr", Domain: "fizik",
+	}, t.TempDir(), managerID)
+	if err != nil {
+		t.Fatalf("bundle qa pairs: %v", err)
+	}
+	qaRecords := stagedRecords(t, ctx, pool, qaResult)
+	if qaResult.Count != 2 || len(qaRecords) != 2 {
+		t.Fatalf("human and hybrid qa pairs must both be bundled, got count=%d records=%d", qaResult.Count, len(qaRecords))
+	}
+	originByID := map[string]map[string]any{}
+	for _, record := range qaRecords {
+		if record["record_type"] != "conversation" {
+			t.Fatalf("qa pair must be a conversation record: %v", record)
 		}
-		if status != want {
-			t.Fatalf("contribution %s status = %q, want %q", id, status, want)
-		}
+		originByID[record["sample_id"].(string)] = record["metadata"].(map[string]any)
+	}
+	if originByID[human.ID]["data_origin"] != "human" {
+		t.Fatalf("human origin lost: %v", originByID[human.ID])
+	}
+	if originByID[hybrid.ID]["data_origin"] != "hybrid" || originByID[hybrid.ID]["model_id"] != "model-x" {
+		t.Fatalf("hybrid origin or model id lost: %v", originByID[hybrid.ID])
+	}
+
+	var remaining int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM contributions WHERE status = 'submitted'`).Scan(&remaining); err != nil {
+		t.Fatalf("count remaining: %v", err)
+	}
+	if remaining != 0 {
+		t.Fatalf("every contribution must be bundled, %d still submitted", remaining)
 	}
 
 	var auditText string
 	if err := pool.QueryRow(ctx, `
 		SELECT COALESCE(string_agg(details::text, E'\n'), '')
-		FROM audit_events WHERE action = 'contribution.submitted'
+		FROM audit_events WHERE action IN ('contribution.submitted', 'contributions.bundled', 'source.created')
 	`).Scan(&auditText); err != nil {
-		t.Fatalf("read submit audit: %v", err)
+		t.Fatalf("read audit: %v", err)
 	}
 	if strings.Contains(auditText, rawMarker) || strings.Contains(auditText, "Işık hızı") {
-		t.Fatalf("submit audit details leaked contribution content: %s", auditText)
+		t.Fatalf("audit details leaked contribution content: %s", auditText)
 	}
 	if !strings.Contains(auditText, `"data_origin": "hybrid"`) || !strings.Contains(auditText, `"model_id": "model-x"`) {
 		t.Fatalf("submit audit details must record origin and model id: %s", auditText)
 	}
-}
-
-func payloadsByID(items []domain.Contribution, id string) []map[string]string {
-	payloads := make([]map[string]string, 0)
-	for _, item := range items {
-		if item.ID == id {
-			payloads = append(payloads, item.Payload)
+	for _, record := range append(editRecords, qaRecords...) {
+		if strings.Contains(fmt.Sprint(record), contributorID) {
+			t.Fatal("contributor identity must never be written into the bundle file")
 		}
 	}
-	return payloads
 }
 
-func pendingPayloadsByID(items []domain.PendingContribution, id string) []map[string]string {
-	payloads := make([]map[string]string, 0)
-	for _, item := range items {
-		if item.ID == id {
-			payloads = append(payloads, item.Payload)
-		}
+func stagedRecords(t *testing.T, ctx context.Context, pool *pgxpool.Pool, result domain.ContributionBundleResult) []map[string]any {
+	t.Helper()
+	var stagedPath string
+	if err := pool.QueryRow(ctx, `
+		SELECT payload->>'staged_path' FROM background_jobs WHERE id = $1
+	`, result.JobID).Scan(&stagedPath); err != nil {
+		t.Fatalf("read staged path: %v", err)
 	}
-	return payloads
+	content, err := os.ReadFile(stagedPath)
+	if err != nil {
+		t.Fatalf("read staged bundle: %v", err)
+	}
+	records := make([]map[string]any, 0)
+	for _, line := range strings.Split(strings.TrimRight(string(content), "\n"), "\n") {
+		var record map[string]any
+		if err := json.Unmarshal([]byte(line), &record); err != nil {
+			t.Fatalf("staged line is not JSON: %v", err)
+		}
+		records = append(records, record)
+	}
+	return records
+}
+
+func sourcePurpose(t *testing.T, ctx context.Context, pool *pgxpool.Pool, sourceID string) string {
+	t.Helper()
+	var purpose string
+	if err := pool.QueryRow(ctx, `SELECT content_purpose FROM sources WHERE id = $1`, sourceID).Scan(&purpose); err != nil {
+		t.Fatalf("read source purpose: %v", err)
+	}
+	return purpose
 }
 
 func newContributionPayloadTestPool(t *testing.T) (context.Context, *pgxpool.Pool) {

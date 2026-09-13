@@ -130,12 +130,12 @@ const viewHelpContent: Partial<Record<ActiveView, { purpose: string; tips: ViewT
     ],
   },
   contribute: {
-    purpose: "Katkı kuyruğu: kendi ürettiğiniz soru-cevap çiftleri ve metinler burada havuzda birikir, kaynağa demetlenir ve normal kalite kapılarından geçer.",
+    purpose: "Katkı kuyruğu: görev tipine göre gönderdiğiniz katkılar burada havuzda birikir, kaynağa demetlenir ve normal kalite kapılarından geçer.",
     tips: [
       { text: "Görev tipini seçin, metninizi yazın ve kullanım şartını onaylayıp gönderin; katkınız listenizde birikir.", roles: ["contributor", "admin"] },
       { text: "Demetlenmemiş katkınızı geri çekebilirsiniz; demetlenen katkı değişmez kaynağın parçasıdır.", roles: ["contributor", "admin"] },
       { text: "Yalnız kendi ürettiğiniz metni gönderin; başka yerden kopyalanan içerik hak/lisans kapısına takılır.", roles: ["contributor"] },
-      { text: "“Kaynağa demetle” bekleyen havuzu tek kaynağa yazar: soru-cevap → instruction, serbest metin → pretrain.", roles: ["admin", "data_manager"] },
+      { text: "“Kaynağa demetle” bekleyen havuzu tek kaynağa yazar; her görev tipi kendi içerik amacına demetlenir (demet penceresi amacı gösterir).", roles: ["admin", "data_manager"] },
       { text: "Demetlenen kaynak PII, tekrar ve örneklem incelemesinden geçer; katkıcılar kendi metnini inceleyemez.", roles: ["admin", "data_manager"] },
     ],
   },

@@ -135,13 +135,18 @@ export type DocumentReviewClaim = {
   resumed: boolean;
 };
 
+// task_type, Go kayıt defterindeki tiplerden biridir; liste burada tekrarlanmaz
+// (web/lib/contribution-task-types.ts).
 export type Contribution = {
   id: string;
   contributor_id: string;
-  task_type: "qa_pair" | "free_text";
+  task_type: string;
   domain: string;
   prompt: string;
   body: string;
+  payload: Record<string, string>;
+  data_origin: string;
+  model_id: string | null;
   terms_ack_version: string;
   status: "submitted" | "withdrawn" | "bundled";
   source_id: string | null;
@@ -151,10 +156,13 @@ export type Contribution = {
 
 export type PendingContribution = {
   id: string;
-  task_type: "qa_pair" | "free_text";
+  task_type: string;
   domain: string;
   prompt: string;
   body: string;
+  payload: Record<string, string>;
+  data_origin: string;
+  model_id: string | null;
   contributor_name: string;
   created_at: string;
 };

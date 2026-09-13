@@ -1,0 +1,72 @@
+{
+  "task_types": [
+    {
+      "name": "qa_pair",
+      "label": "Soru-cevap çifti",
+      "content_purpose": "instruction",
+      "prompt_required": true,
+      "prompt_forbidden": false,
+      "prompt_label": "Soru",
+      "body_label": "Cevap",
+      "payload": [],
+      "distinct_from_body": ""
+    },
+    {
+      "name": "free_text",
+      "label": "Serbest metin",
+      "content_purpose": "pretrain",
+      "prompt_required": false,
+      "prompt_forbidden": true,
+      "prompt_label": "",
+      "body_label": "Metin",
+      "payload": [],
+      "distinct_from_body": ""
+    },
+    {
+      "name": "response_edit_pair",
+      "label": "Cevap düzeltme (öncesi / sonrası)",
+      "content_purpose": "preference",
+      "prompt_required": true,
+      "prompt_forbidden": false,
+      "prompt_label": "Soru",
+      "body_label": "Düzeltilmiş cevap",
+      "payload": [
+        {
+          "key": "original_response",
+          "label": "Orijinal cevap",
+          "required": true,
+          "max_chars": 100000
+        },
+        {
+          "key": "edit_note",
+          "label": "Ne düzeltildi? (opsiyonel)",
+          "required": false,
+          "max_chars": 2000
+        }
+      ],
+      "distinct_from_body": "original_response"
+    }
+  ],
+  "data_origins": [
+    {
+      "value": "human",
+      "label": "Kendim yazdım",
+      "requires_model_id": false
+    },
+    {
+      "value": "hybrid",
+      "label": "Model çıktısını düzenledim",
+      "requires_model_id": true
+    },
+    {
+      "value": "model",
+      "label": "Model çıktısı",
+      "requires_model_id": true
+    },
+    {
+      "value": "unknown",
+      "label": "Bilinmiyor",
+      "requires_model_id": false
+    }
+  ]
+}

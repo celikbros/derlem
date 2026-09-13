@@ -458,10 +458,59 @@ CI must be green for it before the next slice starts.
 | S1 | Worker reads canonical records (§3d) | **done** 2026-09-13, `6a8d06d`, CI green |
 | S2 | Migration `000028`: `payload jsonb`, new task type, origin columns (§2) | **done** 2026-09-13, `4b409f6`, CI green |
 | S3 | Go: per-type allowed/required payload keys, submit validation (§1, §4) | **done** 2026-09-13, `9a8d460`, CI green |
-| S4 | Bundle emits canonical JSONL + shared Go↔Python golden fixture (§3a–3b) | **done** 2026-09-13 |
-| S5 | Web form driven by the registry, `response_edit_pair` fields (§5) | next |
-| S6 | Review view shows both sides of an edit pair (acceptance, §3d) | — |
+| S4 | Bundle emits canonical JSONL + shared Go↔Python golden fixture (§3a–3b) | **done** 2026-09-13, `7ec1273`, CI green |
+| S5 | Web form driven by the registry, `response_edit_pair` fields (§5) | **done** 2026-09-13 |
+| S6 | Review view shows both sides of an edit pair (acceptance, §3d) | next |
 | S7 | End-to-end walk-through, copy, docs (§6) | — |
+
+### S5 — Web form driven by the registry (§5) — 2026-09-13
+
+**No second list.** The Go registry now also declares everything the form shows — type label,
+prompt and body labels, payload-field labels and order, display order — plus ordered origin
+options (`ContributionDataOriginOptions`, each flagged `requires_model_id`).
+`domain.ContributionTaskTypeCatalog()` renders that view, and
+`TestContributionCatalogMatchesWebFixture` writes and compares
+`web/lib/contribution-task-types.json` byte for byte (regenerate with
+`DERLEM_UPDATE_GOLDEN=1`). The web imports that file through
+`web/lib/contribution-task-types.ts`; `types.ts` no longer unions the old type names.
+`TestContributionCatalogCoversEveryRegistryEntry` requires a label for every type and field,
+a unique positive display order, `distinct_from_body` to be a declared payload key, and origin
+options identical to the validation vocabulary with a matching `requires_model_id`.
+
+**Form (`contributions-panel.tsx`).** The type select comes from the catalog. The prompt is
+shown unless the type forbids it, and required when the type says so. The `distinct_from_body`
+field — the original answer — is rendered **beside** the body — the edited answer — so both
+sides sit next to each other; other payload fields take the full width. An origin select adds a
+required model-name field when the origin needs one, and the terms attestation switches from
+*"I produced this text myself"* (false for model output) to *"I have the right to submit this
+model output and have reviewed it"* for model and hybrid origins. Payload values are sent only
+when non-empty. The form name "Yeni katkı" and its heading are kept for
+`authorization.spec.ts`. The contributor's list and the manager's pool use catalog labels and
+summarise an edit pair as *question — original → edited*; the bundle dialog lists every type
+with its pending count and target purpose.
+
+**Copy.** The contributor texts in `roles.ts` and two guide sentences in `derlem-app.tsx`
+enumerated the two old types. They now describe the flow without listing types, which would
+only drift again.
+
+**Verification (owner's machine, 2026-09-13):**
+
+- `gofmt -l` clean, `go vet` clean; `internal/domain` catalog tests pass; full
+  `go test ./...` against the scratch database — every package `ok`
+- web: `npm run typecheck`, `npm run lint`, `npm run build` clean
+- a grep of `web/` for the task-type names and their old Turkish labels finds nothing outside
+  the generated catalog
+
+**Control run.** In a temporary worktree at `7ec1273` with the S5 registry and catalog: the
+unmodified copy passes; changing a type label in Go without regenerating the JSON turns
+`TestContributionCatalogMatchesWebFixture` red (*"contribution registry drifted"*); dropping one
+origin option turns the coverage test red (*"origin options (3) and validation vocabulary (4)
+differ"*).
+
+**Not verified in a browser.** This session has no browser automation, and Derlem services are
+started by the owner. The web dev server hot-reloads, so the new form is already visible on
+port 18400 — but the running API predates S3, so submitting a `response_edit_pair` is rejected
+until the API is restarted.
 
 ### S4 — Bundle emits canonical records + shared Go↔Python fixture (§3a–3b) — 2026-09-13
 

@@ -126,16 +126,18 @@ export const ROLE_INFO: RoleInfo[] = [
     role: "contributor",
     label: "contributor",
     title: "Katkıcı (contributor)",
-    summary: "Soru-cevap çifti ve serbest metin katkısı",
+    // Görev tipleri burada sayılmaz: liste Go kayıt defterinden gelir
+    // (web/lib/contribution-task-types.ts) ve burada tekrarlanırsa eskir.
+    summary: "Görev tiplerine göre metin katkısı",
     who: "Kendi ürettiği metinle veri havuzunu besleyen kişi.",
     duties: [
-      "Katkılar ekranından soru-cevap çifti veya serbest metin gönderir.",
+      "Katkılar ekranından görev tipini seçip katkı gönderir; her tip kendi alanlarını gösterir.",
       "Gönderdiği katkıların durumunu izler; demetlenmemiş katkısını geri çekebilir.",
       "Katkılar doğrudan corpus'a girmez: havuz kaynağa demetlenir ve PII, tekrar ve insan inceleme kapılarından geçer.",
     ],
     firstSteps: [
-      "Katkılar ekranını açın ve görev tipini seçin: soru-cevap çifti veya serbest metin.",
-      "Metninizi yazın, alan (domain) etiketini ekleyin ve kullanım şartını onaylayıp gönderin.",
+      "Katkılar ekranını açın ve görev tipini seçin; form, seçtiğiniz tipin alanlarını gösterir.",
+      "Alanları doldurun, alan (domain) etiketini ekleyin, kökeni seçin ve kullanım şartını onaylayıp gönderin.",
       "Gönderdikleriniz listenizde birikir; demetlenmeden önce hatalı katkıyı geri çekebilirsiniz.",
       "Katkılarınız kaynağa demetlenince normal kalite kapılarından geçer; sonucu durum sütunundan izlersiniz.",
     ],

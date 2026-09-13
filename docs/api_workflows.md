@@ -52,21 +52,57 @@ da degistirilemez.
 
 ## Katkı Kuyruğu
 
-`POST /contributions` ile katkıcı (`contributor`) soru-cevap çifti
-(`qa_pair`) veya serbest metin (`free_text`) gönderir; kullanım şartı onayı
-(`accept_terms`) zorunludur ve sürümü (`office-v1`) kayda işlenir. Katkı
-doğrudan corpus'a girmez: `submitted` durumunda havuzda bekler, katkıcı
+`POST /contributions` ile katkıcı (`contributor`) katkı gönderir; kullanım
+şartı onayı (`accept_terms`) zorunludur ve sürümü (`office-v1`) kayda işlenir.
+Katkı doğrudan corpus'a girmez: `submitted` durumunda havuzda bekler, katkıcı
 demetlenmeden önce `DELETE /contributions/{id}` ile geri çekebilir.
+
+Görev tipleri Go kayıt defterinde tanımlıdır (`internal/domain/contribution.go`);
+web formu aynı kayıt defterinden üretilen katalogu kullanır. Tipe özel alanlar
+`payload` içinde gönderilir; kayıt defterinde olmayan anahtar adıyla birlikte
+`400` ile reddedilir. `data_origin` `human` (varsayılan), `hybrid`, `model` veya
+`unknown`'dır; `hybrid` ve `model` için `model_id` zorunludur.
+
+| `task_type` | Zorunlu | Opsiyonel | Demet satırı | İçerik amacı |
+|---|---|---|---|---|
+| `qa_pair` | `prompt`, `body` | `domain` | kanonik conversation (user = prompt, assistant = body) | `instruction` |
+| `free_text` | `body` (`prompt` yasak) | `domain` | `{"id": "<katkı-uuid>", "text": "..."}` | `pretrain` |
+| `response_edit_pair` | `prompt`, `body` (düzeltilmiş cevap), `payload.original_response` | `payload.edit_note` (≤ 2000), `domain` | kanonik preference (chosen = body, rejected = original_response) | `preference` |
+
+`response_edit_pair` için orijinal ve düzeltilmiş cevap (boşluk farkı yok
+sayılarak) aynıysa istek reddedilir.
+
+```json
+POST /api/v1/contributions
+{
+  "task_type": "response_edit_pair",
+  "domain": "fizik",
+  "prompt": "Ses boşlukta yayılır mı?",
+  "body": "Hayır; ses yayılmak için bir ortam ister.",
+  "payload": {
+    "original_response": "Evet, ses her yerde yayılır.",
+    "edit_note": "Fiziksel olarak yanlış olan cevap düzeltildi."
+  },
+  "data_origin": "hybrid",
+  "model_id": "model-x",
+  "accept_terms": true
+}
+```
 
 `POST /contribution-bundles` (yalnız `admin`/`data_manager`) seçilen görev
 tipindeki tüm bekleyen katkıları tek transaction içinde bir kaynağa demetler:
 JSONL staging'e yazılır, kaynak + `ingest_staged_file` job'u + audit olayları
 eklenir ve katkılar kaynağa bağlanır. İçerik amacı görev tipinden türetilir
-(`qa_pair` → `instruction`, `free_text` → `pretrain`). Demet dosyasına
-katkıcı kimliği yazılmaz; satırlar `{"id": "<katkı-uuid>", "text": "..."}`
-biçimindedir. Demetlenen kaynak normal PII/tekrar/örneklem/insan inceleme
-kapılarından geçer. Katkı gönderme inceleyici rollerine bilinçli kapalıdır;
-böylece kimse kendi katkısını içeren kaynağı inceleyemez.
+(tablo). Kanonik satırlar `derlem.canonical-sample.v1` biçimindedir:
+`sample_id` katkı kimliğidir, `metadata` `data_origin`, varsa `model_id` ve
+`edit_note` taşır; katkıcı kimliği yazılmaz. Kanonik kayıtlı kaynak yalnız
+`jsonl` ihracatına girer. Kaynak düzeyinde `data_origin` `unknown` kalır; köken
+her kayıttadır, bu yüzden bir demette farklı kökenler kayıpsız birlikte durur.
+Ortak sözleşme örneği: `data_samples/example_contribution_bundles.jsonl`.
+Demetlenen kaynak normal PII/tekrar/örneklem/insan inceleme kapılarından geçer;
+inceleme ekranı kanonik kaydı etiketli bölümler halinde gösterir. Katkı gönderme
+inceleyici rollerine bilinçli kapalıdır; böylece kimse kendi katkısını içeren
+kaynağı inceleyemez.
 
 ## Ingest Zinciri
 

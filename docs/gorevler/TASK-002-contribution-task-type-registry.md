@@ -460,8 +460,47 @@ CI must be green for it before the next slice starts.
 | S3 | Go: per-type allowed/required payload keys, submit validation (§1, §4) | **done** 2026-09-13, `9a8d460`, CI green |
 | S4 | Bundle emits canonical JSONL + shared Go↔Python golden fixture (§3a–3b) | **done** 2026-09-13, `7ec1273`, CI green |
 | S5 | Web form driven by the registry, `response_edit_pair` fields (§5) | **done** 2026-09-13, `7cc30a4`, CI green |
-| S6 | Review view shows both sides of an edit pair (acceptance, §3d) | **done** 2026-09-13 |
-| S7 | End-to-end walk-through, copy, docs (§6) | — |
+| S6 | Review view shows both sides of an edit pair (acceptance, §3d) | **done** 2026-09-13, `62b0268`, CI green |
+| S7 | End-to-end walk-through, copy, docs (§6) | **in progress** — docs and export-gate tests done; owner's UI walk-through pending |
+
+### S7 — Copy, docs, acceptance evidence (§6) — 2026-09-13 (walk-through pending)
+
+**Docs.** `docs/api_workflows.md` *Katkı Kuyruğu* no longer says every bundle line is
+`{"id","text"}`: it lists the three types (required/optional fields, bundle line, purpose), a
+`response_edit_pair` request example, the origin rules, canonical lines being jsonl-only, and
+mixed origins being lossless. `docs/katki_platformu_tasarimi.md` gets a 2026-09-13 update note
+and marks the implemented types in §2 (new row: model-answer correction → `preference`).
+`roles.ts` / `derlem-app.tsx` copy was done in S5; `docs/diyet_yol_haritasi.md` already carries
+the 2026-09-12 exception.
+
+**New tests (`test_contribution_bundle_fixture.py`).** The Go-generated fixture goes through
+the real export gate: the edit pair via `build_release_export(purpose=preference, jsonl)` —
+chosen, rejected and `edit_note` survive; the two QA pairs via `instruction` — origin and model
+id survive in metadata. 18 passed together with `test_canonical_intake.py`.
+
+**Acceptance criteria — where each one stands:**
+
+| # | Criterion | Evidence |
+|---|---|---|
+| 1 | constraints on `contributions` | **verified** on the working database (read-only query, 2026-09-13): `contributions_task_type_check` lists the three types; `contributions_payload_object`, `contributions_payload_size`, `contributions_data_origin`, `contributions_model_origin_requires_model_id`, `contributions_model_id_length`, `contributions_edit_pair_prompt` present; also `contribution_payload_migration_test.go` (S2) |
+| 2 | unknown payload key → 400 naming it | handler tests (S3); **live API check pending** — the running API predates S3 |
+| 3 | submit from UI, listed with label | **owner walk-through** |
+| 4 | identical original/edited rejected; model/hybrid without `model_id` rejected | handler tests (S3) + DB CHECK; the form's message on screen is **owner walk-through** |
+| 5 | bundled lines pass `parse_canonical_sample`; `free_text` plain | fixture tests (S4). *"A bundle cannot mix origins"* was deliberately dropped in S4: origin is per record and the source stays `unknown`, so mixing is lossless |
+| 6 | no `missing_text_field`; exact duplicates across `sample_id`s; both sides visible | tests (S1, S6); on screen **owner walk-through** |
+| 7 | edit pair passes the `preference` / `jsonl` export gate | **verified**, test above. The full UI path to a frozen release is the half-day walk-through |
+| 8 | registry drift | Go ↔ web: `TestContributionCatalogMatchesWebFixture` (S5); Go ↔ Python: shared bundle fixture (S4). The worker holds **no** task-type constants (grep of `worker/src` for the type names is empty) — it reads canonical records only, so there is nothing to drift |
+| 9 | full test suites | `scripts/test.ps1` green at S6; CI green on every slice |
+
+**Owner walk-through (needs the owner to restart the API and start the worker):**
+
+1. As a contributor: submit a `Cevap düzeltme` with identical original and edited answer →
+   rejected with a field message; with *Model çıktısını düzenledim* and no model name →
+   rejected; a correct one → listed under *Katkılarım* with the type label.
+2. As data manager: bundle `Cevap düzeltme` → a new source with purpose `preference`.
+3. After the worker has ingested it: open a sample document → the review screen shows
+   `[Kullanıcı]`, `[Seçilen yanıt — chosen]`, `[Reddedilen yanıt — rejected]`,
+   `[Kayıt bilgisi]` as separate headed sections.
 
 ### S6 — Review view shows both sides of an edit pair (§3d) — 2026-09-13
 

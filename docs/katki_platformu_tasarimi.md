@@ -7,6 +7,14 @@
 içi qa_pair/free_text gönderimi, geri çekme, havuzun kaynağa demetlenmesi ve
 mevcut kapılardan geçiş canlıdır (Faz A-B arası). Güven kademeleri, N-onay,
 altın görevler, self-signup/CLA/OIDC bu belgedeki ön koşullara bağlı kalır.
+**Güncelleme (2026-09-13, TASK-002 Faz A):** Katkı omurgası uygulandı — görev
+tipleri Go kayıt defterinde (`internal/domain/contribution.go`) tanımlanır,
+tipe özel alanlar `payload` içinde ve anahtar şemasıyla doğrulanır, demet
+`qa_pair` ve `response_edit_pair` için kanonik kayıt (`derlem.canonical-sample.v1`)
+yazar, köken (`data_origin`, `model_id`) her kayıtta taşınır. Yeni tip:
+`response_edit_pair` (model cevabının düzeltilmesi → `preference`). Çeviri,
+karşılaştırma, düşünce zinciri tipleri ayrı kart ve ayrı onay ister
+(katki_gorev_tipleri_karar_notu.md).
 **Vizyon:** Çok sayıda gönüllü/uzmanın (hedef: yüz binler kayıtlı, binlerce aktif)
 Türkçe yapay zekâ verisine katkı vermesi: soru-cevap, çeviri, yorum/derecelendirme,
 veri bağışı ve kalite kontrolü.
@@ -25,10 +33,17 @@ veri bağışı ve kalite kontrolü.
 
 ## 2. Görev Tipleri ve Veri Karşılıkları
 
+Uygulanan tipler (2026-09-13): `qa_pair` (soru + cevap, tek kişi; kanonik
+conversation → `instruction`), `free_text` (düz metin → `pretrain`),
+`response_edit_pair` (soru + model cevabı + düzeltilmiş cevap; kanonik preference,
+chosen = düzeltilmiş, rejected = orijinal → `preference`). Aşağıdaki tablo hedef
+görev yelpazesidir; "Soru yazma"/"Cevap yazma" ayrımı ve güven kuralları henüz yok.
+
 | Görev | Kim yapabilir | Ürettiği veri (`content_purpose`) | Not |
 |---|---|---|---|
 | Soru yazma | Herkes (eğitimli) | `instruction` / `eval` adayı | Soru yazan cevabını yazamaz/onaylayamaz |
 | Cevap yazma | Alan uzmanı | `instruction` | Kanonik conversation kaydı (user→assistant) |
+| Model cevabını düzeltme | Alan uzmanı | `preference` (chosen = düzeltilmiş, rejected = orijinal) | **Uygulandı** (`response_edit_pair`); köken ve model adı kayıtta |
 | Cevap karşılaştırma ("hangisi daha iyi?") | Herkes | `preference` (chosen/rejected) | Şema hazır; RLHF/DPO girdisi |
 | EN→TR çeviri | Dil yetkinliği ölçülmüş | `instruction` / paralel korpus | **Kaynak metnin hakkı şart**: yalnız izinli/kamu malı kaynak (Wikipedia, PD kitaplar); çeviri türev eserdir |
 | Yorum/derecelendirme | Herkes | Kalite sinyali (veri değil, metadata) | Belge kalite rubric'ine kitlesel girdi |

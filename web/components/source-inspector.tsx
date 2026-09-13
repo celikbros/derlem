@@ -26,7 +26,7 @@ import { JobStatus } from "@/components/jobs-panel";
 import { EvidenceHash } from "@/components/evidence-hash";
 import { messageFrom, requestJSON } from "@/lib/client-api";
 import { piiStatusText } from "@/lib/pii";
-import { readableParagraphs } from "@/lib/readable-document";
+import { isSectionLabel, readableParagraphs } from "@/lib/readable-document";
 import type { BackgroundJob, Document, DocumentQualitySummary, DocumentReview, DocumentReviewClaim, DocumentReviewHistoryItem, DocumentSampleGeneration, PIIScan, Review, ReverseDocumentReviewResult, Source, User } from "@/lib/types";
 
 const purposeLabels: Record<string, string> = {
@@ -1351,7 +1351,12 @@ export function SourceInspector({
 
                 <div className="readable-document" role="document" aria-label="Okuma görünümü" tabIndex={0}>
                   {readableParagraphs(documentContent).map((paragraph, paragraphIndex) => (
-                    <p key={`${activeDocument.id}-paragraph-${paragraphIndex}`}>{paragraph}</p>
+                    <p
+                      key={`${activeDocument.id}-paragraph-${paragraphIndex}`}
+                      className={isSectionLabel(paragraph) ? "document-section-label" : undefined}
+                    >
+                      {paragraph}
+                    </p>
                   ))}
                 </div>
 

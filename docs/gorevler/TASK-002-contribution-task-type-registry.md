@@ -42,7 +42,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **IN PROGRESS** — Phase A, owner approved 2026-09-12. TASK-004/005/006 landed. Slice S1 done 2026-09-13; see the slice table under Report. New migration number is **`000028`** (`000027` was taken by TASK-005). |
+| Status | **IN PROGRESS** — Phase A, owner approved 2026-09-12. TASK-004/005/006 landed. Slices S1–S6 done 2026-09-13; S7 next; see the slice table under Report. New migration number is **`000028`** (`000027` was taken by TASK-005). |
 | Kind | feature |
 | Moratorium | **Exception granted by the owner 2026-09-12** for Phase A (backbone + `response_edit_pair`). `docs/diyet_yol_haritasi.md` otherwise still applies; Phase B types (translation, preference, reasoning) are **not** covered by this exception and need their own cards. |
 | Estimate | **8–12 working days** for Phase A. The worker-side canonical intake (§3d) is the bulk of it and is not optional. |
@@ -459,9 +459,58 @@ CI must be green for it before the next slice starts.
 | S2 | Migration `000028`: `payload jsonb`, new task type, origin columns (§2) | **done** 2026-09-13, `4b409f6`, CI green |
 | S3 | Go: per-type allowed/required payload keys, submit validation (§1, §4) | **done** 2026-09-13, `9a8d460`, CI green |
 | S4 | Bundle emits canonical JSONL + shared Go↔Python golden fixture (§3a–3b) | **done** 2026-09-13, `7ec1273`, CI green |
-| S5 | Web form driven by the registry, `response_edit_pair` fields (§5) | **done** 2026-09-13 |
-| S6 | Review view shows both sides of an edit pair (acceptance, §3d) | next |
+| S5 | Web form driven by the registry, `response_edit_pair` fields (§5) | **done** 2026-09-13, `7cc30a4`, CI green |
+| S6 | Review view shows both sides of an edit pair (acceptance, §3d) | **done** 2026-09-13 |
 | S7 | End-to-end walk-through, copy, docs (§6) | — |
+
+### S6 — Review view shows both sides of an edit pair (§3d) — 2026-09-13
+
+**Closes the S1 limitation.** S1 stored the semantic text of a canonical record as the review
+document, so an edit pair read *prompt, chosen, prompt, rejected* with no labels and a reviewer
+could not tell the original answer from the edited one.
+
+**Worker (`sampling.py`).** New `review_text_from_line(line)` renders a **valid** canonical
+record as labelled sections separated by a blank line, each starting with a `[label]` line:
+`[Kullanıcı]` / `[Asistan]` / … for context messages, `[Seçilen yanıt — chosen]` and
+`[Reddedilen yanıt — rejected]` for preference branches, and `[Kayıt bilgisi]` with
+`task_type` and every `metadata` key (`data_origin`, `model_id`, `edit_note`). It renders the
+parser's sanitized value, so `review_only` reasoning that export would drop is not shown either.
+Labels are generic canonical roles, not task-type labels — those stay in the Go registry.
+Plain lines and invalid canonical records return `None` and keep the previous text.
+`sample_line_documents` stores the labelled text as `SampledDocument.text`; **risk scoring
+stays on the semantic text** (the same text as dedup and fingerprints). Fingerprints and
+similarity are unchanged.
+
+**Export is not affected.** Release export reads source objects; from `documents` it reads only
+review metadata (`release_jobs._release_quality_rows`), never document content. The labelled
+text is review-only.
+
+**Web.** `readableParagraphs` first splits on blank lines (CRLF included); a block whose first
+line is a `[label]` yields the label as its own paragraph, and each block is then collapsed and
+sentence-chunked as before — a single-block document renders exactly as before.
+`isSectionLabel` marks those paragraphs, and `source-inspector.tsx` gives them the
+`document-section-label` class (small bold green heading, `globals.css`).
+
+**Verification (owner's machine, 2026-09-13):**
+
+- `scripts/test.ps1` against the scratch database: every Go package `ok`; worker 258 passed,
+  1 skipped (pre-existing Windows symlink case). One worker test was added afterwards; its file
+  passes (13 passed)
+- web: `tsc --noEmit` and `eslint` on the changed files clean; `readable-document.spec.ts`
+  6 passed (3 new: labelled sections, CRLF breaks, bracketed prose is not a label)
+
+**Control runs.** New tests against pre-S6 `sampling.py` fail at import. Two mutations of the
+S6 code, each on a copy: **M1** store the unlabelled semantic text → 1 failed
+(`test_sampling_stores_labelled_review_text_but_scores_risk_on_semantic_text`); **M2** score
+risk on the labelled text → first run **survived** (the fixture scored the same either way), so
+`test_labels_do_not_hide_risk_signals_of_the_actual_content` was added (a short exchange loses
+`short_text` once labels lengthen it) → 1 failed.
+
+**Existing samples.** Documents sampled before S6 keep their old text until the source is
+re-sampled. No canonical line was found on disk at S1, so nothing is expected to need it.
+
+**Not verified in a browser** (no browser automation in this session; services are started by
+the owner). The worker must be restarted to sample with the new code.
 
 ### S5 — Web form driven by the registry (§5) — 2026-09-13
 

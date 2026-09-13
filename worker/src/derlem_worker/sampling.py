@@ -25,6 +25,22 @@ ProgressCallback = Callable[[dict[str, int]], None]
 ByteProgressCallback = Callable[[int, int], None]
 PROGRESS_INTERVAL_BYTES = 64 * 1024 * 1024
 
+# Inceleme metnindeki bolum etiketleri genel kanonik rollerdir. Gorev tipi
+# etiketleri Go kayit defterindedir (internal/domain/contribution.go); burada
+# kopyalanmaz, kopyalanirsa eskir.
+_REVIEW_ROLE_LABELS = {
+    "system": "Sistem",
+    "developer": "Geliştirici",
+    "user": "Kullanıcı",
+    "assistant": "Asistan",
+    "tool": "Araç",
+    "other": "Diğer",
+}
+_REVIEW_BRANCH_LABELS = (
+    ("chosen", "Seçilen yanıt — chosen"),
+    ("rejected", "Reddedilen yanıt — rejected"),
+)
+
 
 @dataclass(frozen=True)
 class SampledDocument:
@@ -103,8 +119,12 @@ def sample_line_documents(
         if not text:
             continue
         eligible_documents += 1
+        # Risk anlamsal metinde puanlanir (tekrar ve parmak iziyle ayni metin).
+        # Inceleyiciye saklanan metin kanonik kayitta etiketli bolumlerdir: kim ne
+        # dedi, hangi dal secildi gorunur (TASK-002 S6).
         risk_score, risk_reasons = score_document_risk(text, stripped)
-        candidate = SampledDocument(ordinal, text, external_id, risk_score, risk_reasons)
+        review_text = review_text_from_line(stripped) or text
+        candidate = SampledDocument(ordinal, review_text, external_id, risk_score, risk_reasons)
         if risk_score > 0:
             risk_candidate_documents += 1
             risk_reason_counts.update(risk_reasons)
@@ -279,3 +299,69 @@ def _document_from_line(line: str) -> tuple[str, str | None]:
         if isinstance(candidate, str) and candidate.strip():
             return candidate.strip(), external_id
     return line, external_id
+
+
+def review_text_from_line(line: str) -> str | None:
+    """Gecerli kanonik kayit icin inceleyiciye etiketli metin; degilse None.
+
+    Bolumler bos satirla ayrilir ve her bolum "[etiket]" satiriyla baslar; web okuma
+    gorunumu bos satirda bolumlere ayirir (web/lib/readable-document.ts). Metin,
+    ayristiricinin temizledigi kayittan uretilir: ihracata girmeyecek review_only
+    akil yurutme burada da gosterilmez.
+    """
+    try:
+        value = json.loads(line)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(value, dict) or "schema_version" not in value:
+        return None
+    try:
+        sample = parse_canonical_sample(line, _record_purpose(value))
+    except CanonicalSampleError:
+        return None
+    if sample is None:
+        return None
+
+    record = sample.value
+    sections: list[str] = []
+    for message in record.get("messages", []):
+        sections.append(_review_message_section(message, None))
+    preference = record.get("preference")
+    if isinstance(preference, dict):
+        for branch, label in _REVIEW_BRANCH_LABELS:
+            for message in preference.get(branch, []):
+                sections.append(_review_message_section(message, label))
+
+    info: list[str] = []
+    task_type = record.get("task_type")
+    if isinstance(task_type, str):
+        info.append(f"görev tipi: {task_type}")
+    metadata = record.get("metadata")
+    if isinstance(metadata, dict):
+        for key in sorted(metadata):
+            item = metadata[key]
+            info.append(f"{key}: {item if isinstance(item, str) else json.dumps(item, ensure_ascii=False)}")
+    if info:
+        sections.append("[Kayıt bilgisi]\n" + "\n".join(info))
+    return "\n\n".join(sections)
+
+
+def _review_message_section(message: dict[str, object], branch_label: str | None) -> str:
+    role = str(message.get("role", "other"))
+    label = branch_label or _REVIEW_ROLE_LABELS.get(role, role)
+    lines: list[str] = []
+    content = message.get("content")
+    if isinstance(content, str) and content:
+        lines.append(content)
+    elif isinstance(content, list):
+        for part in content:
+            if not isinstance(part, dict):
+                continue
+            if part.get("type") == "text" and isinstance(part.get("text"), str):
+                lines.append(str(part["text"]))
+            else:
+                lines.append(f"(ek: {part.get('type')})")
+    for call in message.get("tool_calls", []) or []:
+        if isinstance(call, dict):
+            lines.append(f"(araç çağrısı: {call.get('name')})")
+    return f"[{label}]\n" + ("\n".join(lines) if lines else "(metin yok)")

@@ -2460,6 +2460,21 @@ textarea:focus {
   margin-bottom: 0;
 }
 
+/* Kanonik kayıt inceleme metnindeki bölüm etiketi ("[Seçilen yanıt — chosen]"):
+   inceleyici hangi paragrafın kime / hangi dala ait olduğunu ayırt eder. */
+.readable-document p.document-section-label {
+  margin-top: 1.2em;
+  margin-bottom: 0.2em;
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.readable-document p.document-section-label:first-child {
+  margin-top: 0;
+}
+
 .raw-document-details {
   margin-top: 10px;
   padding: 9px 11px;

@@ -63,6 +63,7 @@ yorumluyor); sahiple yazışma ve commit mesajları Türkçe kalır.
 | [TASK-006](TASK-006-preference-branches-identical.md) | Canonical preference records accept identical chosen/rejected branches | fix | **DONE** — 2026-09-12. `preference_branches_identical`; karşılaştırma eğitim sinyali alanlarında (bayrak/metadata hariç). |
 | [TASK-007](TASK-007-silently-skipped-integration-tests.md) | 37 integration tests skip silently on every local run | fix | **DONE** — 2026-09-12, CI düzeltmesi 2026-09-13. `internal/testdb` + conftest: adres yoksa kırmızı, `_test` olmayan DB reddedilir; `scripts/test.ps1`; CI'da `DERLEM_SKIP_DB_TESTS` yasak. İlk CI kontrolü (log grep) kendi birim testini yakalayıp CI'ı kırmızı yapmıştı. |
 | [TASK-008](TASK-008-leaked-test-schemas.md) | Integration tests leaked schemas into the working database | fix | **DONE** — 2026-09-13. Süpürücü: yaş şema adından, yalnız 1 saatten eski, eklenti içeren şema asla; her pakette TestMain + worker oturum başı. Çalışma DB'sindeki iki şema yedeklenip silindi (CASCADE etki alanı ölçüldü: dışarıda 0 nesne). |
+| [TASK-009](TASK-009-contribution-form-help.md) | Contribution form explains nothing | fix | **IN REVIEW** — 2026-09-16. Açıklama/ipucu/örnek metinleri Go kayıt defterinde (test zorlar); her alanda (?) yardım düğmesi; tip açıklaması; düzeltme çiftinde varsayılan köken "Model çıktısını düzenledim"; demet penceresinde konu önerileri + "kaç katkı demetlenecek" önizlemesi; hata mesajları alan adlarıyla. Sahibin ekran kontrolü bekleniyor. |
 
 ## Altyapı kapanış listesi (sahip onayı: 2026-09-12)
 

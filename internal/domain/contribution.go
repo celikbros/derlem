@@ -12,9 +12,14 @@ import (
 type ContributionPayloadField struct {
 	Required bool
 	MaxChars int
-	// Label ve Order, web formundaki alan etiketi ve sırası (katalog).
+	// Label ve Order, web formundaki alan etiketi ve sırası (katalog). Label
+	// doğrulama mesajlarında da kullanılır; "(opsiyonel)" eki web'dedir.
 	Label string
 	Order int
+	// Hint, alanın yanındaki yardım düğmesinin açtığı açıklama; Placeholder,
+	// boş kutuda görünen örnek.
+	Hint        string
+	Placeholder string
 }
 
 // Demetin bir görev tipini yazma biçimleri.
@@ -56,6 +61,17 @@ type ContributionTaskType struct {
 	PromptLabel  string
 	BodyLabel    string
 	DisplayOrder int
+	// Yardım metinleri (katalog): Description tip seçiminin altında hep görünür;
+	// *Hint yardım düğmesiyle açılır; *Placeholder boş kutudaki örnektir.
+	Description       string
+	PromptHint        string
+	PromptPlaceholder string
+	BodyHint          string
+	BodyPlaceholder   string
+	// OriginHint, bu tipte kökenin nasıl seçileceği (boşsa genel açıklama yeter);
+	// DefaultDataOrigin, formun bu tip seçilince önerdiği köken (boşsa human).
+	OriginHint        string
+	DefaultDataOrigin string
 }
 
 // ContributionTaskTypes, katkı kuyruğunun görev tipleri. Çeviri ve tercih
@@ -72,6 +88,15 @@ var ContributionTaskTypes = map[string]ContributionTaskType{
 		PromptLabel:    "Soru",
 		BodyLabel:      "Cevap",
 		DisplayOrder:   1,
+		Description: "Bir soru ve ona sizin yazdığınız doğru, eksiksiz cevap. " +
+			"Modele soruları nasıl cevaplayacağını öğretir.",
+		PromptHint: "Bir kullanıcının yapay zekâya soracağı gibi, tek başına anlaşılır bir soru " +
+			"ya da istek yazın.",
+		PromptPlaceholder: "örn. Fotosentez nedir, kısaca anlatır mısın?",
+		BodyHint: "Sorunun ideal cevabı: doğru, açık ve soruyu tam karşılayan. Başka yerden " +
+			"kopyalamayın, kendi cümlelerinizle yazın.",
+		BodyPlaceholder: "örn. Fotosentez, bitkilerin güneş ışığını kullanarak su ve karbondioksitten " +
+			"besin ve oksijen üretmesidir.",
 	},
 	"free_text": {
 		ContentPurpose:  "pretrain",
@@ -80,6 +105,11 @@ var ContributionTaskTypes = map[string]ContributionTaskType{
 		Label:           "Serbest metin",
 		BodyLabel:       "Metin",
 		DisplayOrder:    2,
+		Description: "Soru-cevap biçiminde olmayan, kendi yazdığınız düz metin (açıklama, makale, " +
+			"hikâye). Modelin genel Türkçe bilgisini besler.",
+		BodyHint: "Birkaç cümle ya da daha uzun, kendi yazdığınız bir metin. Ad-soyad, telefon, " +
+			"e-posta, kimlik numarası gibi kişisel bilgi içermesin.",
+		BodyPlaceholder: "Metninizi buraya yazın…",
 	},
 	// Cevap düzeltme: prompt = soru, body = düzeltilmiş cevap (katkının ürettiği
 	// metin), payload.original_response = orijinal cevap (000028).
@@ -87,8 +117,18 @@ var ContributionTaskTypes = map[string]ContributionTaskType{
 		ContentPurpose: "preference",
 		PromptRequired: true,
 		Payload: map[string]ContributionPayloadField{
-			"original_response": {Required: true, MaxChars: 100000, Label: "Orijinal cevap", Order: 1},
-			"edit_note":         {MaxChars: 2000, Label: "Ne düzeltildi? (opsiyonel)", Order: 2},
+			"original_response": {
+				Required: true, MaxChars: 100000, Label: "Orijinal cevap", Order: 1,
+				Hint: "Yapay zekânın bu soruya verdiği cevabı olduğu gibi yapıştırın; " +
+					"içindeki hataları burada düzeltmeyin.",
+				Placeholder: "örn. Evet, ses her yerde yayılır.",
+			},
+			"edit_note": {
+				MaxChars: 2000, Label: "Ne düzeltildi?", Order: 2,
+				Hint: "İnceleyene kısa bir not: neyi, neden değiştirdiniz? " +
+					"Boş bırakabilirsiniz.",
+				Placeholder: "örn. Bilgi yanlıştı; ses boşlukta yayılmaz.",
+			},
 		},
 		DistinctFromBody: "original_response",
 		BundleEmission:   BundleEmissionPreference,
@@ -96,6 +136,17 @@ var ContributionTaskTypes = map[string]ContributionTaskType{
 		PromptLabel:      "Soru",
 		BodyLabel:        "Düzeltilmiş cevap",
 		DisplayOrder:     3,
+		Description: "Bir yapay zekânın verdiği hatalı ya da zayıf cevabı düzeltirsiniz. Model, " +
+			"düzeltilmiş cevabı orijinaline tercih etmeyi öğrenir.",
+		PromptHint:        "Yapay zekâya sorulan soru. Orijinal cevap bu soruya verilmiş olmalı.",
+		PromptPlaceholder: "örn. Ses boşlukta yayılır mı?",
+		BodyHint: "Cevabın sizin düzelttiğiniz, doğru hâli. Orijinal cevaptan farklı olmalı; " +
+			"aynıysa katkı gönderilmez.",
+		BodyPlaceholder: "örn. Hayır; ses yayılmak için hava ya da su gibi bir ortam ister, " +
+			"boşlukta yayılmaz.",
+		OriginHint: "Orijinal cevabı bir yapay zekâ verdiyse \"Model çıktısını düzenledim\" seçin " +
+			"ve o modelin adını yazın. Orijinal cevabı da siz yazdıysanız \"Kendim yazdım\" seçin.",
+		DefaultDataOrigin: "hybrid",
 	},
 }
 
@@ -113,16 +164,21 @@ type ContributionDataOriginOption struct {
 	Value string `json:"value"`
 	Label string `json:"label"`
 	// RequiresModelID: bu kökende model adı zorunludur (doğrulamayla aynı kural).
-	RequiresModelID bool `json:"requires_model_id"`
+	RequiresModelID bool   `json:"requires_model_id"`
+	Hint            string `json:"hint"`
 }
 
 // ContributionDataOriginOptions, köken seçeneklerinin form sırası. Üyeleri
 // ContributionDataOrigins ile aynı olmak zorundadır (katalog testi zorlar).
 var ContributionDataOriginOptions = []ContributionDataOriginOption{
-	{Value: "human", Label: "Kendim yazdım"},
-	{Value: "hybrid", Label: "Model çıktısını düzenledim", RequiresModelID: true},
-	{Value: "model", Label: "Model çıktısı", RequiresModelID: true},
-	{Value: "unknown", Label: "Bilinmiyor"},
+	{Value: "human", Label: "Kendim yazdım",
+		Hint: "Metnin tamamını siz yazdınız."},
+	{Value: "hybrid", Label: "Model çıktısını düzenledim", RequiresModelID: true,
+		Hint: "Bir yapay zekânın çıktısını alıp üzerinde değişiklik yaptınız."},
+	{Value: "model", Label: "Model çıktısı", RequiresModelID: true,
+		Hint: "Metin bir yapay zekânın çıktısı; siz değiştirmediniz."},
+	{Value: "unknown", Label: "Bilinmiyor",
+		Hint: "Metnin nasıl üretildiğini bilmiyorsunuz."},
 }
 
 // ContributionCatalog, kayıt defterinin web'e verilen görünümü. Web formu tip
@@ -134,22 +190,31 @@ type ContributionCatalog struct {
 }
 
 type ContributionCatalogTaskType struct {
-	Name             string                     `json:"name"`
-	Label            string                     `json:"label"`
-	ContentPurpose   string                     `json:"content_purpose"`
-	PromptRequired   bool                       `json:"prompt_required"`
-	PromptForbidden  bool                       `json:"prompt_forbidden"`
-	PromptLabel      string                     `json:"prompt_label"`
-	BodyLabel        string                     `json:"body_label"`
-	Payload          []ContributionCatalogField `json:"payload"`
-	DistinctFromBody string                     `json:"distinct_from_body"`
+	Name              string                     `json:"name"`
+	Label             string                     `json:"label"`
+	Description       string                     `json:"description"`
+	ContentPurpose    string                     `json:"content_purpose"`
+	PromptRequired    bool                       `json:"prompt_required"`
+	PromptForbidden   bool                       `json:"prompt_forbidden"`
+	PromptLabel       string                     `json:"prompt_label"`
+	PromptHint        string                     `json:"prompt_hint"`
+	PromptPlaceholder string                     `json:"prompt_placeholder"`
+	BodyLabel         string                     `json:"body_label"`
+	BodyHint          string                     `json:"body_hint"`
+	BodyPlaceholder   string                     `json:"body_placeholder"`
+	Payload           []ContributionCatalogField `json:"payload"`
+	DistinctFromBody  string                     `json:"distinct_from_body"`
+	OriginHint        string                     `json:"origin_hint"`
+	DefaultDataOrigin string                     `json:"default_data_origin"`
 }
 
 type ContributionCatalogField struct {
-	Key      string `json:"key"`
-	Label    string `json:"label"`
-	Required bool   `json:"required"`
-	MaxChars int    `json:"max_chars"`
+	Key         string `json:"key"`
+	Label       string `json:"label"`
+	Hint        string `json:"hint"`
+	Placeholder string `json:"placeholder"`
+	Required    bool   `json:"required"`
+	MaxChars    int    `json:"max_chars"`
 }
 
 // ContributionTaskTypeCatalog, kayıt defterini sıralı ve belirlenimci biçimde
@@ -164,7 +229,8 @@ func ContributionTaskTypeCatalog() ContributionCatalog {
 		fields := make([]ContributionCatalogField, 0, len(entry.Payload))
 		for key, field := range entry.Payload {
 			fields = append(fields, ContributionCatalogField{
-				Key: key, Label: field.Label, Required: field.Required, MaxChars: field.MaxChars,
+				Key: key, Label: field.Label, Hint: field.Hint, Placeholder: field.Placeholder,
+				Required: field.Required, MaxChars: field.MaxChars,
 			})
 		}
 		sort.Slice(fields, func(i, j int) bool {
@@ -175,15 +241,22 @@ func ContributionTaskTypeCatalog() ContributionCatalog {
 			return fields[i].Key < fields[j].Key
 		})
 		catalog.TaskTypes = append(catalog.TaskTypes, ContributionCatalogTaskType{
-			Name:             name,
-			Label:            entry.Label,
-			ContentPurpose:   entry.ContentPurpose,
-			PromptRequired:   entry.PromptRequired,
-			PromptForbidden:  entry.PromptForbidden,
-			PromptLabel:      entry.PromptLabel,
-			BodyLabel:        entry.BodyLabel,
-			Payload:          fields,
-			DistinctFromBody: entry.DistinctFromBody,
+			Name:              name,
+			Label:             entry.Label,
+			Description:       entry.Description,
+			ContentPurpose:    entry.ContentPurpose,
+			PromptRequired:    entry.PromptRequired,
+			PromptForbidden:   entry.PromptForbidden,
+			PromptLabel:       entry.PromptLabel,
+			PromptHint:        entry.PromptHint,
+			PromptPlaceholder: entry.PromptPlaceholder,
+			BodyLabel:         entry.BodyLabel,
+			BodyHint:          entry.BodyHint,
+			BodyPlaceholder:   entry.BodyPlaceholder,
+			Payload:           fields,
+			DistinctFromBody:  entry.DistinctFromBody,
+			OriginHint:        entry.OriginHint,
+			DefaultDataOrigin: entry.DefaultDataOrigin,
 		})
 	}
 	sort.Slice(catalog.TaskTypes, func(i, j int) bool {

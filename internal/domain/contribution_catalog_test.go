@@ -78,5 +78,37 @@ func TestContributionCatalogCoversEveryRegistryEntry(t *testing.T) {
 		if option.RequiresModelID != wantsModel {
 			t.Errorf("origin %q requires_model_id=%v, but validation requires a model id: %v", option.Value, option.RequiresModelID, wantsModel)
 		}
+		if strings.TrimSpace(option.Hint) == "" {
+			t.Errorf("origin %q needs a help text", option.Value)
+		}
+	}
+}
+
+// Formun kendini anlatması kayıt defterine bağlıdır: yeni tip ya da alan
+// açıklamasız eklenemez (TASK-009).
+func TestContributionCatalogExplainsEveryField(t *testing.T) {
+	for _, taskType := range ContributionTaskTypeCatalog().TaskTypes {
+		if strings.TrimSpace(taskType.Description) == "" {
+			t.Errorf("%s: a type needs a description shown under the type select", taskType.Name)
+		}
+		if !taskType.PromptForbidden && (strings.TrimSpace(taskType.PromptHint) == "" || strings.TrimSpace(taskType.PromptPlaceholder) == "") {
+			t.Errorf("%s: a type that uses the prompt needs a prompt hint and an example", taskType.Name)
+		}
+		if strings.TrimSpace(taskType.BodyHint) == "" || strings.TrimSpace(taskType.BodyPlaceholder) == "" {
+			t.Errorf("%s: the body needs a hint and an example", taskType.Name)
+		}
+		for _, field := range taskType.Payload {
+			if strings.TrimSpace(field.Hint) == "" || strings.TrimSpace(field.Placeholder) == "" {
+				t.Errorf("%s.payload.%s: a form field needs a hint and an example", taskType.Name, field.Key)
+			}
+			if strings.Contains(field.Label, "opsiyonel") {
+				t.Errorf("%s.payload.%s: the form adds the optional marker; the label is also used in error messages", taskType.Name, field.Key)
+			}
+		}
+		if origin := taskType.DefaultDataOrigin; origin != "" {
+			if _, valid := ContributionDataOrigins[origin]; !valid {
+				t.Errorf("%s: default origin %q is not in the validation vocabulary", taskType.Name, origin)
+			}
+		}
 	}
 }

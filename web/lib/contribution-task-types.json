@@ -3,70 +3,99 @@
     {
       "name": "qa_pair",
       "label": "Soru-cevap çifti",
+      "description": "Bir soru ve ona sizin yazdığınız doğru, eksiksiz cevap. Modele soruları nasıl cevaplayacağını öğretir.",
       "content_purpose": "instruction",
       "prompt_required": true,
       "prompt_forbidden": false,
       "prompt_label": "Soru",
+      "prompt_hint": "Bir kullanıcının yapay zekâya soracağı gibi, tek başına anlaşılır bir soru ya da istek yazın.",
+      "prompt_placeholder": "örn. Fotosentez nedir, kısaca anlatır mısın?",
       "body_label": "Cevap",
+      "body_hint": "Sorunun ideal cevabı: doğru, açık ve soruyu tam karşılayan. Başka yerden kopyalamayın, kendi cümlelerinizle yazın.",
+      "body_placeholder": "örn. Fotosentez, bitkilerin güneş ışığını kullanarak su ve karbondioksitten besin ve oksijen üretmesidir.",
       "payload": [],
-      "distinct_from_body": ""
+      "distinct_from_body": "",
+      "origin_hint": "",
+      "default_data_origin": ""
     },
     {
       "name": "free_text",
       "label": "Serbest metin",
+      "description": "Soru-cevap biçiminde olmayan, kendi yazdığınız düz metin (açıklama, makale, hikâye). Modelin genel Türkçe bilgisini besler.",
       "content_purpose": "pretrain",
       "prompt_required": false,
       "prompt_forbidden": true,
       "prompt_label": "",
+      "prompt_hint": "",
+      "prompt_placeholder": "",
       "body_label": "Metin",
+      "body_hint": "Birkaç cümle ya da daha uzun, kendi yazdığınız bir metin. Ad-soyad, telefon, e-posta, kimlik numarası gibi kişisel bilgi içermesin.",
+      "body_placeholder": "Metninizi buraya yazın…",
       "payload": [],
-      "distinct_from_body": ""
+      "distinct_from_body": "",
+      "origin_hint": "",
+      "default_data_origin": ""
     },
     {
       "name": "response_edit_pair",
       "label": "Cevap düzeltme (öncesi / sonrası)",
+      "description": "Bir yapay zekânın verdiği hatalı ya da zayıf cevabı düzeltirsiniz. Model, düzeltilmiş cevabı orijinaline tercih etmeyi öğrenir.",
       "content_purpose": "preference",
       "prompt_required": true,
       "prompt_forbidden": false,
       "prompt_label": "Soru",
+      "prompt_hint": "Yapay zekâya sorulan soru. Orijinal cevap bu soruya verilmiş olmalı.",
+      "prompt_placeholder": "örn. Ses boşlukta yayılır mı?",
       "body_label": "Düzeltilmiş cevap",
+      "body_hint": "Cevabın sizin düzelttiğiniz, doğru hâli. Orijinal cevaptan farklı olmalı; aynıysa katkı gönderilmez.",
+      "body_placeholder": "örn. Hayır; ses yayılmak için hava ya da su gibi bir ortam ister, boşlukta yayılmaz.",
       "payload": [
         {
           "key": "original_response",
           "label": "Orijinal cevap",
+          "hint": "Yapay zekânın bu soruya verdiği cevabı olduğu gibi yapıştırın; içindeki hataları burada düzeltmeyin.",
+          "placeholder": "örn. Evet, ses her yerde yayılır.",
           "required": true,
           "max_chars": 100000
         },
         {
           "key": "edit_note",
-          "label": "Ne düzeltildi? (opsiyonel)",
+          "label": "Ne düzeltildi?",
+          "hint": "İnceleyene kısa bir not: neyi, neden değiştirdiniz? Boş bırakabilirsiniz.",
+          "placeholder": "örn. Bilgi yanlıştı; ses boşlukta yayılmaz.",
           "required": false,
           "max_chars": 2000
         }
       ],
-      "distinct_from_body": "original_response"
+      "distinct_from_body": "original_response",
+      "origin_hint": "Orijinal cevabı bir yapay zekâ verdiyse \"Model çıktısını düzenledim\" seçin ve o modelin adını yazın. Orijinal cevabı da siz yazdıysanız \"Kendim yazdım\" seçin.",
+      "default_data_origin": "hybrid"
     }
   ],
   "data_origins": [
     {
       "value": "human",
       "label": "Kendim yazdım",
-      "requires_model_id": false
+      "requires_model_id": false,
+      "hint": "Metnin tamamını siz yazdınız."
     },
     {
       "value": "hybrid",
       "label": "Model çıktısını düzenledim",
-      "requires_model_id": true
+      "requires_model_id": true,
+      "hint": "Bir yapay zekânın çıktısını alıp üzerinde değişiklik yaptınız."
     },
     {
       "value": "model",
       "label": "Model çıktısı",
-      "requires_model_id": true
+      "requires_model_id": true,
+      "hint": "Metin bir yapay zekânın çıktısı; siz değiştirmediniz."
     },
     {
       "value": "unknown",
       "label": "Bilinmiyor",
-      "requires_model_id": false
+      "requires_model_id": false,
+      "hint": "Metnin nasıl üretildiğini bilmiyorsunuz."
     }
   ]
 }

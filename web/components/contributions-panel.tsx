@@ -1,7 +1,7 @@
 "use client";
 
-import { PackagePlus, PenLine, RefreshCw, Trash2, X } from "lucide-react";
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { CircleHelp, PackagePlus, PenLine, RefreshCw, Trash2, X } from "lucide-react";
+import { FormEvent, ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { messageFrom, requestJSON } from "@/lib/client-api";
 import {
@@ -22,6 +22,29 @@ const statusChips: Record<string, { label: string; tone: string }> = {
 
 const defaultTaskType = contributionTaskTypes[0]?.name ?? "";
 
+// Genel alanların yardım metinleri. Tipe özel metinler Go kayıt defterindedir
+// (internal/domain/contribution.go → contribution-task-types.json).
+const domainHint =
+  "Katkının konusu; tek kelime, küçük harfle (örn. fizik, tarih, hukuk). Emin değilseniz boş bırakın: " +
+  "veri yöneticisi demetlerken konuyu belirler. Aynı konuyu hep aynı yazın; daha önce kullandıklarınız öneri olarak çıkar.";
+const modelIDHint =
+  "Cevabı üreten yapay zekânın adı; biliyorsanız sürümüyle birlikte. Kaydın hangi modelden geldiği bununla izlenir.";
+const bundleDomainHint =
+  "Oluşacak kaynağın konusu. Seçilen tipte bu konuyla etiketlenmiş katkılar ve konusu boş bırakılmış katkılar demete girer; " +
+  "başka konudaki katkılar havuzda kalır.";
+const bundleLanguageHint =
+  "Katkıların dili (örn. tr). Kişisel veri taraması şu an yalnız Türkçe metni değerlendirir.";
+const bundleNameHint =
+  "Kaynaklar listesinde görünecek ad. Konu ve tarih içermesi sonradan bulmayı kolaylaştırır.";
+
+function defaultOriginFor(taskType: string) {
+  return taskTypeSpec(taskType)?.default_data_origin || "human";
+}
+
+function sameDomain(left: string, right: string) {
+  return left.trim().toLowerCase() === right.trim().toLowerCase();
+}
+
 function preview(value: string, limit = 140) {
   const flattened = value.replace(/\s+/g, " ").trim();
   return flattened.length > limit ? `${flattened.slice(0, limit)}…` : flattened;
@@ -36,17 +59,63 @@ function contributionSummary(item: Pick<Contribution, "task_type" | "prompt" | "
   return preview(item.prompt ? `${item.prompt} — ${answer}` : answer);
 }
 
+/**
+ * Etiket + yardım düğmesi + (açılır) açıklama + kontrol. Düğme <label> içine
+ * konmaz: etiketlenebilir ilk öğe olarak etiketi kutudan çalardı. Açıklama kapalıyken
+ * de aria-describedby ile ekran okuyucuya iletilir.
+ */
+function FormField({ label, hint, optional = false, fullWidth = false, children }: {
+  label: string;
+  hint?: string;
+  optional?: boolean;
+  fullWidth?: boolean;
+  children: (controlId: string, describedBy: string | undefined) => ReactNode;
+}) {
+  const controlId = useId();
+  const hintId = `${controlId}-hint`;
+  const [open, setOpen] = useState(false);
+  return (
+    <div className={`form-field${fullWidth ? " full-width" : ""}`}>
+      <div className="form-field-label">
+        <label htmlFor={controlId}>
+          {label}
+          {optional && <span className="optional-mark"> (opsiyonel)</span>}
+        </label>
+        {hint && (
+          <button
+            className="field-help-button"
+            type="button"
+            aria-expanded={open}
+            aria-controls={hintId}
+            aria-label={`${label}: bu alan ne işe yarar?`}
+            title="Bu alan ne işe yarar?"
+            onClick={() => setOpen((value) => !value)}
+          >
+            <CircleHelp size={15} aria-hidden="true" />
+          </button>
+        )}
+      </div>
+      {hint && <p id={hintId} className="field-hint" hidden={!open}>{hint}</p>}
+      {children(controlId, hint ? hintId : undefined)}
+    </div>
+  );
+}
+
 function PayloadField({ field, fullWidth }: { field: ContributionPayloadFieldSpec; fullWidth: boolean }) {
   return (
-    <label className={fullWidth ? "full-width" : undefined}>
-      {field.label}
-      <textarea
-        name={`payload.${field.key}`}
-        rows={field.max_chars > 2000 ? 4 : 2}
-        required={field.required}
-        maxLength={field.max_chars}
-      />
-    </label>
+    <FormField label={field.label} hint={field.hint} optional={!field.required} fullWidth={fullWidth}>
+      {(id, describedBy) => (
+        <textarea
+          id={id}
+          aria-describedby={describedBy}
+          name={`payload.${field.key}`}
+          rows={field.max_chars > 2000 ? 4 : 2}
+          required={field.required}
+          maxLength={field.max_chars}
+          placeholder={field.placeholder}
+        />
+      )}
+    </FormField>
   );
 }
 
@@ -63,13 +132,21 @@ export function ContributionsPanel({ user, onNotice, onBundled }: {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [taskType, setTaskType] = useState(defaultTaskType);
-  const [dataOrigin, setDataOrigin] = useState("human");
+  const [dataOrigin, setDataOrigin] = useState(defaultOriginFor(defaultTaskType));
+  const [bundleTaskType, setBundleTaskType] = useState(defaultTaskType);
+  const [bundleDomain, setBundleDomain] = useState("");
   const bundleDialog = useRef<HTMLDialogElement>(null);
+  const domainListId = useId();
+  const bundleDomainListId = useId();
 
   const spec = taskTypeSpec(taskType);
   const origin = dataOriginSpec(dataOrigin);
   const distinctField = spec?.payload.find((field) => field.key === spec.distinct_from_body);
   const otherFields = spec?.payload.filter((field) => field.key !== spec.distinct_from_body) ?? [];
+  const originHint = [
+    spec?.origin_hint,
+    ...contributionDataOrigins.map((option) => `${option.label}: ${option.hint}`),
+  ].filter(Boolean).join("\n");
 
   const load = useCallback(async () => {
     try {
@@ -92,6 +169,11 @@ export function ContributionsPanel({ user, onNotice, onBundled }: {
     const timer = window.setTimeout(() => { void load(); }, 0);
     return () => window.clearTimeout(timer);
   }, [load]);
+
+  function changeTaskType(next: string) {
+    setTaskType(next);
+    setDataOrigin(defaultOriginFor(next));
+  }
 
   async function submitContribution(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -121,7 +203,7 @@ export function ContributionsPanel({ user, onNotice, onBundled }: {
         }),
       });
       form.reset();
-      setDataOrigin("human");
+      setDataOrigin(defaultOriginFor(spec.name));
       onNotice("Katkınız havuza alındı. Demetlenene kadar geri çekebilirsiniz.");
       setLoading(true);
       await load();
@@ -146,6 +228,17 @@ export function ContributionsPanel({ user, onNotice, onBundled }: {
     }
   }
 
+  function openBundleDialog() {
+    // Bekleyen katkısı olan ilk tip seçili gelir; boş tiple açılan pencere
+    // "0 katkı" demetlemeye çalışırdı.
+    const firstWithPending = contributionTaskTypes.find((type) => pending.some((item) => item.task_type === type.name));
+    const nextType = firstWithPending?.name ?? defaultTaskType;
+    setBundleTaskType(nextType);
+    const domains = pendingDomains(nextType);
+    setBundleDomain(domains.length === 1 ? domains[0].domain : "");
+    bundleDialog.current?.showModal();
+  }
+
   async function bundleContributions(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -156,13 +249,14 @@ export function ContributionsPanel({ user, onNotice, onBundled }: {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          task_type: String(data.get("task_type") ?? defaultTaskType),
+          task_type: bundleTaskType,
           name: String(data.get("name") ?? ""),
           language: String(data.get("language") ?? "tr"),
-          domain: String(data.get("domain") ?? ""),
+          domain: bundleDomain.trim(),
         }),
       });
       form.reset();
+      setBundleDomain("");
       bundleDialog.current?.close();
       onNotice(`${result.count.toLocaleString("tr-TR")} katkı kaynağa demetlendi; normal kapılardan geçiyor.`);
       setLoading(true);
@@ -179,30 +273,75 @@ export function ContributionsPanel({ user, onNotice, onBundled }: {
     contributionTaskTypes.map((type) => [type.name, pending.filter((item) => item.task_type === type.name).length]),
   );
 
+  // Seçilen tipteki bekleyen katkıların konuları (büyük/küçük harf farkı tek konu
+  // sayılır; demet sorgusu da lower() ile eşleştirir).
+  function pendingDomains(type: string) {
+    const counts = new Map<string, { domain: string; count: number }>();
+    for (const item of pending) {
+      if (item.task_type !== type || !item.domain) continue;
+      const key = item.domain.toLowerCase();
+      const entry = counts.get(key);
+      if (entry) entry.count += 1;
+      else counts.set(key, { domain: item.domain, count: 1 });
+    }
+    return [...counts.values()].sort((left, right) => right.count - left.count || left.domain.localeCompare(right.domain, "tr"));
+  }
+
+  const bundleTypePending = pending.filter((item) => item.task_type === bundleTaskType);
+  const bundleUnlabeled = bundleTypePending.filter((item) => !item.domain).length;
+  const bundleLabeled = bundleDomain.trim()
+    ? bundleTypePending.filter((item) => item.domain && sameDomain(item.domain, bundleDomain)).length
+    : 0;
+  const bundleOtherDomains = pendingDomains(bundleTaskType).filter((entry) => !sameDomain(entry.domain, bundleDomain));
+  const myDomains = [...new Set(mine.map((item) => item.domain.trim().toLowerCase()).filter(Boolean))].sort((left, right) => left.localeCompare(right, "tr"));
+
   return (
     <section className="jobs-panel">
       {canContribute && (
         <form className="contribution-form" onSubmit={submitContribution} aria-label="Yeni katkı">
           <h3><PenLine size={16} aria-hidden="true" /> Yeni katkı</h3>
           <p className="muted-copy">
-            Katkınız doğrudan corpus&apos;a girmez: havuzda birikir, kaynağa demetlenir ve PII,
-            tekrar ve insan inceleme kapılarından geçer.
+            Katkınız doğrudan corpus&apos;a girmez: havuzda birikir, kaynağa demetlenir ve kişisel veri,
+            tekrar ve insan inceleme kontrollerinden geçer. Her alanın yanındaki
+            <CircleHelp className="inline-icon" size={13} role="img" aria-label="yardım" /> düğmesi alanın ne istediğini açıklar.
           </p>
           <div className="form-grid">
-            <label>
-              Görev tipi
-              <select name="task_type" value={taskType} onChange={(event) => setTaskType(event.target.value)}>
-                {contributionTaskTypes.map((type) => (
-                  <option key={type.name} value={type.name}>{type.label}</option>
-                ))}
-              </select>
-            </label>
-            <label>Alan (opsiyonel)<input name="domain" maxLength={100} placeholder="fizik, hukuk, genel..." /></label>
+            <FormField label="Görev tipi">
+              {(id) => (
+                <select id={id} name="task_type" value={taskType} onChange={(event) => changeTaskType(event.target.value)}>
+                  {contributionTaskTypes.map((type) => (
+                    <option key={type.name} value={type.name}>{type.label}</option>
+                  ))}
+                </select>
+              )}
+            </FormField>
+            <FormField label="Alan" hint={domainHint} optional>
+              {(id, describedBy) => (
+                <>
+                  <input id={id} aria-describedby={describedBy} name="domain" maxLength={100} placeholder="örn. fizik" list={domainListId} autoComplete="off" />
+                  <datalist id={domainListId}>
+                    {myDomains.map((value) => <option key={value} value={value} />)}
+                  </datalist>
+                </>
+              )}
+            </FormField>
+            {spec?.description && (
+              <p className="task-type-description full-width" aria-live="polite">{spec.description}</p>
+            )}
             {spec && !spec.prompt_forbidden && (
-              <label className="full-width">
-                {spec.prompt_label}
-                <textarea name="prompt" rows={2} required={spec.prompt_required} maxLength={10000} />
-              </label>
+              <FormField label={spec.prompt_label} hint={spec.prompt_hint} optional={!spec.prompt_required} fullWidth>
+                {(id, describedBy) => (
+                  <textarea
+                    id={id}
+                    aria-describedby={describedBy}
+                    name="prompt"
+                    rows={2}
+                    required={spec.prompt_required}
+                    maxLength={10000}
+                    placeholder={spec.prompt_placeholder}
+                  />
+                )}
+              </FormField>
             )}
             {spec && distinctField && (
               // Metinle karşılaştırılan alan (düzeltme çiftinde orijinal cevap) metnin
@@ -210,24 +349,38 @@ export function ContributionsPanel({ user, onNotice, onBundled }: {
               <PayloadField field={distinctField} fullWidth={false} />
             )}
             {spec && (
-              <label className={distinctField ? undefined : "full-width"}>
-                {spec.body_label}
-                <textarea name="body" rows={distinctField ? 4 : 6} required maxLength={100000} />
-              </label>
+              <FormField label={spec.body_label} hint={spec.body_hint} fullWidth={!distinctField}>
+                {(id, describedBy) => (
+                  <textarea
+                    id={id}
+                    aria-describedby={describedBy}
+                    name="body"
+                    rows={distinctField ? 4 : 6}
+                    required
+                    maxLength={100000}
+                    placeholder={spec.body_placeholder}
+                  />
+                )}
+              </FormField>
             )}
             {otherFields.map((field) => (
               <PayloadField key={field.key} field={field} fullWidth />
             ))}
-            <label>
-              Köken
-              <select name="data_origin" value={dataOrigin} onChange={(event) => setDataOrigin(event.target.value)}>
-                {contributionDataOrigins.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </label>
+            <FormField label="Köken" hint={originHint}>
+              {(id, describedBy) => (
+                <select id={id} aria-describedby={describedBy} name="data_origin" value={dataOrigin} onChange={(event) => setDataOrigin(event.target.value)}>
+                  {contributionDataOrigins.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              )}
+            </FormField>
             {origin?.requires_model_id && (
-              <label>Model adı<input name="model_id" required maxLength={200} placeholder="örn. model-x" /></label>
+              <FormField label="Model adı" hint={modelIDHint}>
+                {(id, describedBy) => (
+                  <input id={id} aria-describedby={describedBy} name="model_id" required maxLength={200} placeholder="örn. modelin adı ve sürümü" />
+                )}
+              </FormField>
             )}
             <label className="full-width terms-check">
               <input type="checkbox" name="accept_terms" required />
@@ -265,7 +418,7 @@ export function ContributionsPanel({ user, onNotice, onBundled }: {
             <RefreshCw className={loading ? "spin" : ""} size={18} aria-hidden="true" />
           </button>
           {canManage && (
-            <button className="primary-button" type="button" disabled={pending.length === 0} onClick={() => bundleDialog.current?.showModal()}>
+            <button className="primary-button" type="button" disabled={pending.length === 0} onClick={openBundleDialog}>
               <PackagePlus size={18} aria-hidden="true" />Kaynağa demetle
             </button>
           )}
@@ -341,27 +494,76 @@ export function ContributionsPanel({ user, onNotice, onBundled }: {
             </button>
           </div>
           <div className="form-grid">
-            <label>
-              Görev tipi
-              <select name="task_type" defaultValue={defaultTaskType}>
-                {contributionTaskTypes.map((type) => (
-                  <option key={type.name} value={type.name}>
-                    {type.label} ({(pendingByType[type.name] ?? 0).toLocaleString("tr-TR")} bekliyor) → {type.content_purpose}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>Dil<input name="language" defaultValue="tr" maxLength={20} /></label>
-            <label className="full-width">Kaynak adı<input name="name" required maxLength={200} placeholder="ekip_katki_demeti_2026_07" /></label>
-            <label className="full-width">Alan (domain)<input name="domain" required maxLength={100} placeholder="genel" /></label>
+            <FormField label="Görev tipi">
+              {(id) => (
+                <select id={id} name="task_type" value={bundleTaskType} onChange={(event) => setBundleTaskType(event.target.value)}>
+                  {contributionTaskTypes.map((type) => (
+                    <option key={type.name} value={type.name}>
+                      {type.label} ({(pendingByType[type.name] ?? 0).toLocaleString("tr-TR")} bekliyor) → {type.content_purpose}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </FormField>
+            <FormField label="Dil" hint={bundleLanguageHint}>
+              {(id, describedBy) => (
+                <input id={id} aria-describedby={describedBy} name="language" defaultValue="tr" maxLength={20} />
+              )}
+            </FormField>
+            <FormField label="Kaynak adı" hint={bundleNameHint} fullWidth>
+              {(id, describedBy) => (
+                <input id={id} aria-describedby={describedBy} name="name" required maxLength={200} placeholder="örn. katki_fizik_2026_09" />
+              )}
+            </FormField>
+            <FormField label="Alan (konu)" hint={bundleDomainHint} fullWidth>
+              {(id, describedBy) => (
+                <>
+                  <input
+                    id={id}
+                    aria-describedby={describedBy}
+                    name="domain"
+                    required
+                    maxLength={100}
+                    placeholder="örn. fizik"
+                    list={bundleDomainListId}
+                    autoComplete="off"
+                    value={bundleDomain}
+                    onChange={(event) => setBundleDomain(event.target.value)}
+                  />
+                  <datalist id={bundleDomainListId}>
+                    {pendingDomains(bundleTaskType).map((entry) => <option key={entry.domain} value={entry.domain} />)}
+                  </datalist>
+                </>
+              )}
+            </FormField>
+            <div className="bundle-preview full-width" aria-live="polite">
+              {bundleDomain.trim() ? (
+                <strong>
+                  Bu seçimle {(bundleLabeled + bundleUnlabeled).toLocaleString("tr-TR")} katkı demetlenecek
+                  {bundleUnlabeled > 0 && ` (${bundleUnlabeled.toLocaleString("tr-TR")} tanesi konusuz)`}.
+                </strong>
+              ) : (
+                <strong>Konu yazın ya da aşağıdan seçin; kaç katkının demetleneceği burada görünür.</strong>
+              )}
+              {bundleOtherDomains.length > 0 && (
+                <div className="bundle-domain-chips">
+                  <span>Bu tipte başka konularda bekleyenler:</span>
+                  {bundleOtherDomains.map((entry) => (
+                    <button key={entry.domain} className="chip-button" type="button" onClick={() => setBundleDomain(entry.domain)}>
+                      {entry.domain} ({entry.count.toLocaleString("tr-TR")})
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <p className="muted-copy full-width">
-              Seçilen tipteki, bu alan etiketli (ya da etiketsiz) bekleyen katkılar tek kaynağa yazılır ve
-              normal ingest kapılarından geçer. Katkıcı kimliği dosyaya yazılmaz.
+              Katkılar tek kaynağa yazılır ve normal içe alma kontrollerinden geçer. Katkıcı kimliği dosyaya yazılmaz.
+              Demeti yapan hesap (admin hariç) bu kaynağın örneklerini inceleyemez; incelemeyi başka bir inceleyici yapar.
             </p>
           </div>
           <div className="dialog-actions">
             <button className="text-button" type="button" onClick={() => bundleDialog.current?.close()}>İptal</button>
-            <button className="primary-button" type="submit" disabled={saving}>Demetle ve kuyruğa al</button>
+            <button className="primary-button" type="submit" disabled={saving || bundleLabeled + bundleUnlabeled === 0}>Demetle ve kuyruğa al</button>
           </div>
         </form>
       </dialog>

@@ -132,11 +132,15 @@ const viewHelpContent: Partial<Record<ActiveView, { purpose: string; tips: ViewT
   contribute: {
     purpose: "Katkı kuyruğu: görev tipine göre gönderdiğiniz katkılar burada havuzda birikir, kaynağa demetlenir ve normal kalite kapılarından geçer.",
     tips: [
-      { text: "Görev tipini seçin, metninizi yazın ve kullanım şartını onaylayıp gönderin; katkınız listenizde birikir.", roles: ["contributor", "admin"] },
+      { text: "Görev tipini seçin; tipin ne olduğu hemen altında yazar. Kutulardaki soluk metinler örnektir, her alanın yanındaki (?) düğmesi o alanın ne istediğini açıklar.", roles: ["contributor", "admin"] },
+      { text: "Soru-cevap: bir soru ve sizin doğru cevabınız. Serbest metin: kendi yazdığınız düz metin. Cevap düzeltme: bir yapay zekânın cevabını ve sizin düzelttiğiniz hâlini yan yana yazarsınız.", roles: ["contributor", "admin"] },
+      { text: "Alan (konu) isteğe bağlıdır; emin değilseniz boş bırakın. Metin kişisel bilgi (ad-soyad, telefon, e-posta, kimlik no) içermesin; içerirse kaynak karantinaya düşer.", roles: ["contributor", "admin"] },
+      { text: "Kutuları doldurup kullanım şartını onaylayın ve “Katkıyı gönder”e basın; katkınız aşağıdaki listede “Havuzda bekliyor” olarak görünür.", roles: ["contributor", "admin"] },
       { text: "Demetlenmemiş katkınızı geri çekebilirsiniz; demetlenen katkı değişmez kaynağın parçasıdır.", roles: ["contributor", "admin"] },
       { text: "Yalnız kendi ürettiğiniz metni gönderin; başka yerden kopyalanan içerik hak/lisans kapısına takılır.", roles: ["contributor"] },
-      { text: "“Kaynağa demetle” bekleyen havuzu tek kaynağa yazar; her görev tipi kendi içerik amacına demetlenir (demet penceresi amacı gösterir).", roles: ["admin", "data_manager"] },
-      { text: "Demetlenen kaynak PII, tekrar ve örneklem incelemesinden geçer; katkıcılar kendi metnini inceleyemez.", roles: ["admin", "data_manager"] },
+      { text: "“Kaynağa demetle” seçilen tipteki bekleyen katkıları tek kaynağa yazar; her görev tipi kendi içerik amacına demetlenir (pencere amacı gösterir).", roles: ["admin", "data_manager"] },
+      { text: "Pencerede konu (alan) yazınca kaç katkının demetleneceği görünür; o konuyla etiketli ve konusuz katkılar girer, başka konudakiler için ayrı demet yapın.", roles: ["admin", "data_manager"] },
+      { text: "Demetlenen kaynak kişisel veri, tekrar ve örneklem kontrollerinden geçer; ilerlemeyi İşler ekranından izleyin. Demeti yapan hesap (admin hariç) örnekleri inceleyemez.", roles: ["admin", "data_manager"] },
     ],
   },
 };

@@ -92,7 +92,7 @@ func TestContributionValidationRejectsBadEditPairsAndOrigins(t *testing.T) {
 	}{
 		"missing original response": {
 			mutate: func(input *domain.SubmitContributionInput) { delete(input.Payload, "original_response") },
-			reason: "payload.original_response zorunludur",
+			reason: "Orijinal cevap zorunludur",
 		},
 		"unknown payload key is named": {
 			mutate: func(input *domain.SubmitContributionInput) { input.Payload["score"] = "5" },
@@ -102,7 +102,7 @@ func TestContributionValidationRejectsBadEditPairsAndOrigins(t *testing.T) {
 			mutate: func(input *domain.SubmitContributionInput) {
 				input.Payload["original_response"] = "Boşlukta   yaklaşık\n299.792 km/s'dir."
 			},
-			reason: "payload.original_response metinle aynı",
+			reason: "Orijinal cevap ile Düzeltilmiş cevap aynı",
 		},
 		"edit pair without prompt": {
 			mutate: func(input *domain.SubmitContributionInput) { input.Prompt = "  " },
@@ -112,7 +112,7 @@ func TestContributionValidationRejectsBadEditPairsAndOrigins(t *testing.T) {
 			mutate: func(input *domain.SubmitContributionInput) {
 				input.Payload["original_response"] = strings.Repeat("ç", 100001)
 			},
-			reason: "payload.original_response 100000 karakteri aşamaz",
+			reason: "Orijinal cevap 100000 karakteri aşamaz",
 		},
 		"payload on a type that declares none": {
 			mutate: func(input *domain.SubmitContributionInput) {

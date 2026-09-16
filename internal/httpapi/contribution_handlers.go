@@ -100,7 +100,7 @@ func validateContributionPayload(input *domain.SubmitContributionInput, taskType
 		}
 		value := strings.TrimSpace(input.Payload[key])
 		if utf8.RuneCountInString(value) > field.MaxChars {
-			reasons = append(reasons, fmt.Sprintf("payload.%s %d karakteri aşamaz.", key, field.MaxChars))
+			reasons = append(reasons, fmt.Sprintf("%s %d karakteri aşamaz.", payloadFieldName(key, field), field.MaxChars))
 		}
 		if value != "" {
 			normalized[key] = value
@@ -113,20 +113,34 @@ func validateContributionPayload(input *domain.SubmitContributionInput, taskType
 	}
 	sort.Strings(declaredKeys)
 	for _, key := range declaredKeys {
-		if taskType.Payload[key].Required && normalized[key] == "" {
-			reasons = append(reasons, fmt.Sprintf("payload.%s zorunludur.", key))
+		if field := taskType.Payload[key]; field.Required && normalized[key] == "" {
+			reasons = append(reasons, fmt.Sprintf("%s zorunludur.", payloadFieldName(key, field)))
 		}
 	}
 
 	if key := taskType.DistinctFromBody; key != "" && normalized[key] != "" &&
 		collapseWhitespace(normalized[key]) == collapseWhitespace(input.Body) {
+		bodyName := taskType.BodyLabel
+		if bodyName == "" {
+			bodyName = "Metin"
+		}
 		reasons = append(reasons, fmt.Sprintf(
-			"payload.%s metinle aynı; değişiklik yoksa bu katkı gönderilmez.", key,
+			"%s ile %s aynı; değişiklik yoksa bu katkı gönderilmez.",
+			payloadFieldName(key, taskType.Payload[key]), bodyName,
 		))
 	}
 
 	input.Payload = normalized
 	return reasons
+}
+
+// payloadFieldName, mesajlarda kullanıcının formda gördüğü alan adıdır; etiketi
+// olmayan alan teknik anahtarıyla anılır.
+func payloadFieldName(key string, field domain.ContributionPayloadField) string {
+	if field.Label != "" {
+		return field.Label
+	}
+	return "payload." + key
 }
 
 // validateContributionOrigin, kökeni sources.data_origin sözlüğüyle doğrular.

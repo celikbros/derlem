@@ -164,9 +164,9 @@ def test_review_text_shows_both_sides_of_an_edit_pair_labelled() -> None:
     assert sections[3] == (
         "[Kayıt bilgisi]\n"
         "görev tipi: response_edit_pair\n"
-        "data_origin: hybrid\n"
-        "edit_note: Birim düzeltildi.\n"
-        "model_id: model-x"
+        "köken: hybrid\n"
+        "düzeltme notu: Birim düzeltildi.\n"
+        "model: model-x"
     )
 
 

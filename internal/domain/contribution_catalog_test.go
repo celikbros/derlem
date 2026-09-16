@@ -84,9 +84,22 @@ func TestContributionCatalogCoversEveryRegistryEntry(t *testing.T) {
 	}
 }
 
+// Düz metin satırı ({"id","text"}) payload taşıyamaz: böyle bir tipe alan
+// eklemek, değeri demette sessizce kaybetmek olurdu (TASK-004 sınıfı).
+func TestPlainTextTypesDeclareNoPayload(t *testing.T) {
+	for name, entry := range ContributionTaskTypes {
+		if entry.BundleEmission == BundleEmissionPlainText && len(entry.Payload) > 0 {
+			t.Errorf("%s: a plain_text bundle line cannot carry payload fields %v; emit a canonical record instead", name, entry.Payload)
+		}
+	}
+}
+
 // Formun kendini anlatması kayıt defterine bağlıdır: yeni tip ya da alan
 // açıklamasız eklenemez (TASK-009).
 func TestContributionCatalogExplainsEveryField(t *testing.T) {
+	if strings.TrimSpace(ContributionTaskTypeCatalog().DataOriginGuide) == "" {
+		t.Error("the origin question needs a guide: it asks who wrote the words, not where the knowledge came from")
+	}
 	for _, taskType := range ContributionTaskTypeCatalog().TaskTypes {
 		if strings.TrimSpace(taskType.Description) == "" {
 			t.Errorf("%s: a type needs a description shown under the type select", taskType.Name)

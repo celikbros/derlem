@@ -70,6 +70,28 @@ Measured problems behind that:
    managers, the preview and the self-review rule (admin excepted, as in
    `ClaimForReview`).
 
+7. **Origin vs. knowledge source** (owner, 2026-09-16: *"knowledge can come from a
+   book, a film, the radio, a friend"*; approved (a) + (b)).
+   - (a) The origin question asks **who wrote the words**, not where the knowledge
+     came from. `ContributionDataOriginGuide` (catalog `data_origin_guide`) opens the
+     origin help and says so: knowledge from a book written in your own words is
+     *Kendim yazdım*; verbatim copying from a book, film or site does not belong here
+     (the attestation says the contributor produced the text). The *human* option's
+     hint says the same.
+   - (b) New optional payload field **`knowledge_source`** (*Bilgi kaynağı*, ≤ 500
+     characters) on `qa_pair` and `response_edit_pair`. It travels in the canonical
+     record's `metadata` (shared Go↔Python fixture regenerated and asserted on both
+     sides, including through `build_release_export`). The review text labels
+     metadata keys in Turkish (`bilgi kaynağı`, `köken`, `model`, `düzeltme notu`;
+     unknown keys stay as they are).
+   - **Not on `free_text`:** its bundle line is plain `{"id","text"}` and cannot carry
+     a payload — the value would be lost silently (the TASK-004 class).
+     `TestPlainTextTypesDeclareNoPayload` now forbids payload fields on plain-text
+     types. Control run: adding `knowledge_source` to `free_text` in a temporary
+     worktree turns it red.
+8. **Font.** The global `textarea` rule is monospace (raw document editing); the
+   contribution form's boxes now use the body font.
+
 ## Out of scope
 
 - A fixed domain vocabulary (a data-policy decision for the owner).
@@ -87,6 +109,13 @@ Measured problems behind that:
 - web: `npm run typecheck` and `eslint` on the changed files clean
 - `npm run build` **not** run locally: the owner's `next dev` was running on 18400 and
   shares `.next`; CI builds
+
+First part committed as `516e114`, CI green.
+
+**Second part (items 7–8), 2026-09-16:** `gofmt` clean; both golden files regenerated
+(`web/lib/contribution-task-types.json`, `data_samples/example_contribution_bundles.jsonl`);
+`go test ./... -count=1` on the scratch database — every package `ok`; worker suite
+261 passed, 1 skipped (Windows symlink case); web typecheck and eslint clean.
 
 **Owner check pending.** The web dev server hot-reloads, so the hints are visible at
 once. The new validation messages are Go-side: the API must be restarted to show them.

@@ -46,9 +46,11 @@ def test_go_bundle_fixture_reads_as_review_text_without_risk_flags() -> None:
 def test_go_bundle_fixture_carries_origin_and_edit_note_in_metadata() -> None:
     records = [json.loads(line) for line in _lines()]
 
+    assert records[0]["metadata"] == {"data_origin": "human", "knowledge_source": "Fizik 10 ders kitabı, s. 45"}
     assert records[1]["metadata"] == {"data_origin": "hybrid", "model_id": "model-x"}
     assert "domain" not in records[1]
     assert records[2]["metadata"]["edit_note"] == "Fiziksel olarak yanlış olan cevap düzeltildi."
+    assert records[2]["metadata"]["knowledge_source"] == "Bilim belgeseli"
     assert all("created_by" not in record for record in records)
 
 
@@ -94,6 +96,7 @@ def test_go_bundle_edit_pair_passes_the_preference_export_gate(tmp_path: Path) -
     assert sample["preference"]["chosen"][0]["content"] == "Hayır; ses yayılmak için bir ortam ister."
     assert sample["preference"]["rejected"][0]["content"] == "Evet, ses her yerde yayılır."
     assert sample["metadata"]["edit_note"] == "Fiziksel olarak yanlış olan cevap düzeltildi."
+    assert sample["metadata"]["knowledge_source"] == "Bilim belgeseli"
 
 
 def test_go_bundle_qa_pairs_pass_the_instruction_export_gate(tmp_path: Path) -> None:

@@ -13,7 +13,16 @@
       "body_label": "Cevap",
       "body_hint": "Sorunun ideal cevabı: doğru, açık ve soruyu tam karşılayan. Başka yerden kopyalamayın, kendi cümlelerinizle yazın.",
       "body_placeholder": "örn. Fotosentez, bitkilerin güneş ışığını kullanarak su ve karbondioksitten besin ve oksijen üretmesidir.",
-      "payload": [],
+      "payload": [
+        {
+          "key": "knowledge_source",
+          "label": "Bilgi kaynağı",
+          "hint": "Bu bilgiyi nereden öğrendiniz? Kitap adı ve sayfası, belgesel, web sitesi gibi. İnceleyici doğruluğu kontrol ederken bakar. Kişi adı yazmayın. Kaynaktaki metni aynen kopyalamayın; kendi cümlelerinizle yazın.",
+          "placeholder": "örn. Fizik 10 ders kitabı, s. 45",
+          "required": false,
+          "max_chars": 500
+        }
+      ],
       "distinct_from_body": "",
       "origin_hint": "",
       "default_data_origin": ""
@@ -65,6 +74,14 @@
           "placeholder": "örn. Bilgi yanlıştı; ses boşlukta yayılmaz.",
           "required": false,
           "max_chars": 2000
+        },
+        {
+          "key": "knowledge_source",
+          "label": "Bilgi kaynağı",
+          "hint": "Bu bilgiyi nereden öğrendiniz? Kitap adı ve sayfası, belgesel, web sitesi gibi. İnceleyici doğruluğu kontrol ederken bakar. Kişi adı yazmayın. Kaynaktaki metni aynen kopyalamayın; kendi cümlelerinizle yazın.",
+          "placeholder": "örn. Fizik 10 ders kitabı, s. 45",
+          "required": false,
+          "max_chars": 500
         }
       ],
       "distinct_from_body": "original_response",
@@ -77,7 +94,7 @@
       "value": "human",
       "label": "Kendim yazdım",
       "requires_model_id": false,
-      "hint": "Metnin tamamını siz yazdınız."
+      "hint": "Kelimeleri siz yazdınız; bilgiyi bir kitaptan ya da birinden öğrenmiş olsanız bile."
     },
     {
       "value": "hybrid",
@@ -97,5 +114,6 @@
       "requires_model_id": false,
       "hint": "Metnin nasıl üretildiğini bilmiyorsunuz."
     }
-  ]
+  ],
+  "data_origin_guide": "Köken, bilgiyi nereden öğrendiğinizi değil, bu kelimeleri kimin yazdığını sorar. Bir kitaptan, filmden ya da birinden öğrendiğinizi kendi cümlelerinizle yazdıysanız \"Kendim yazdım\" seçin; bilginin nereden geldiğini \"Bilgi kaynağı\" alanına yazın. Bir kitaptan, filmden ya da siteden metin aynen kopyalanmaz: onay kutusu metni sizin ürettiğinizi beyan eder."
 }

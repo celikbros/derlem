@@ -47,6 +47,8 @@ export type ContributionDataOriginSpec = {
 
 export const contributionTaskTypes: ContributionTaskTypeSpec[] = catalog.task_types;
 export const contributionDataOrigins: ContributionDataOriginSpec[] = catalog.data_origins;
+/** Köken sorusunun ne sorduğu: bilginin nereden öğrenildiği değil, kelimeleri kimin yazdığı. */
+export const contributionDataOriginGuide: string = catalog.data_origin_guide;
 
 export function taskTypeSpec(name: string): ContributionTaskTypeSpec | undefined {
   return contributionTaskTypes.find((spec) => spec.name === name);

@@ -83,6 +83,9 @@ var ContributionTaskTypes = map[string]ContributionTaskType{
 	"qa_pair": {
 		ContentPurpose: "instruction",
 		PromptRequired: true,
+		Payload: map[string]ContributionPayloadField{
+			"knowledge_source": knowledgeSourceField(1),
+		},
 		BundleEmission: BundleEmissionConversation,
 		Label:          "Soru-cevap çifti",
 		PromptLabel:    "Soru",
@@ -129,6 +132,7 @@ var ContributionTaskTypes = map[string]ContributionTaskType{
 					"Boş bırakabilirsiniz.",
 				Placeholder: "örn. Bilgi yanlıştı; ses boşlukta yayılmaz.",
 			},
+			"knowledge_source": knowledgeSourceField(3),
 		},
 		DistinctFromBody: "original_response",
 		BundleEmission:   BundleEmissionPreference,
@@ -149,6 +153,27 @@ var ContributionTaskTypes = map[string]ContributionTaskType{
 		DefaultDataOrigin: "hybrid",
 	},
 }
+
+// knowledgeSourceField, bilginin nereden öğrenildiği (kitap, belgesel, site).
+// İnceleyici doğruluğu kontrol ederken kullanır; kanonik kaydın metadata'sında
+// taşınır. Düz metin satırı ({"id","text"}) payload taşıyamadığı için düz metin
+// tiplerine eklenmez (TestPlainTextTypesDeclareNoPayload).
+func knowledgeSourceField(order int) ContributionPayloadField {
+	return ContributionPayloadField{
+		MaxChars: 500, Label: "Bilgi kaynağı", Order: order,
+		Hint: "Bu bilgiyi nereden öğrendiniz? Kitap adı ve sayfası, belgesel, web sitesi gibi. " +
+			"İnceleyici doğruluğu kontrol ederken bakar. Kişi adı yazmayın. Kaynaktaki metni " +
+			"aynen kopyalamayın; kendi cümlelerinizle yazın.",
+		Placeholder: "örn. Fizik 10 ders kitabı, s. 45",
+	}
+}
+
+// ContributionDataOriginGuide, köken sorusunun ne sorduğu; formda köken
+// açıklamasının başında görünür.
+const ContributionDataOriginGuide = "Köken, bilgiyi nereden öğrendiğinizi değil, bu kelimeleri kimin yazdığını sorar. " +
+	"Bir kitaptan, filmden ya da birinden öğrendiğinizi kendi cümlelerinizle yazdıysanız \"Kendim yazdım\" seçin; " +
+	"bilginin nereden geldiğini \"Bilgi kaynağı\" alanına yazın. Bir kitaptan, filmden ya da siteden metin " +
+	"aynen kopyalanmaz: onay kutusu metni sizin ürettiğinizi beyan eder."
 
 // ContributionDataOrigins, katkının kökeni; sources.data_origin ile aynı sözlük
 // (000024). model ve hybrid, model_id ister.
@@ -172,7 +197,7 @@ type ContributionDataOriginOption struct {
 // ContributionDataOrigins ile aynı olmak zorundadır (katalog testi zorlar).
 var ContributionDataOriginOptions = []ContributionDataOriginOption{
 	{Value: "human", Label: "Kendim yazdım",
-		Hint: "Metnin tamamını siz yazdınız."},
+		Hint: "Kelimeleri siz yazdınız; bilgiyi bir kitaptan ya da birinden öğrenmiş olsanız bile."},
 	{Value: "hybrid", Label: "Model çıktısını düzenledim", RequiresModelID: true,
 		Hint: "Bir yapay zekânın çıktısını alıp üzerinde değişiklik yaptınız."},
 	{Value: "model", Label: "Model çıktısı", RequiresModelID: true,
@@ -185,8 +210,9 @@ var ContributionDataOriginOptions = []ContributionDataOriginOption{
 // listesini elle kopyalamaz; bu yapı web/lib/contribution-task-types.json olarak
 // yazılır ve TestContributionCatalogMatchesWebFixture onu bayt bayt karşılaştırır.
 type ContributionCatalog struct {
-	TaskTypes   []ContributionCatalogTaskType  `json:"task_types"`
-	DataOrigins []ContributionDataOriginOption `json:"data_origins"`
+	TaskTypes       []ContributionCatalogTaskType  `json:"task_types"`
+	DataOrigins     []ContributionDataOriginOption `json:"data_origins"`
+	DataOriginGuide string                         `json:"data_origin_guide"`
 }
 
 type ContributionCatalogTaskType struct {
@@ -222,8 +248,9 @@ type ContributionCatalogField struct {
 // göre).
 func ContributionTaskTypeCatalog() ContributionCatalog {
 	catalog := ContributionCatalog{
-		TaskTypes:   make([]ContributionCatalogTaskType, 0, len(ContributionTaskTypes)),
-		DataOrigins: append([]ContributionDataOriginOption(nil), ContributionDataOriginOptions...),
+		TaskTypes:       make([]ContributionCatalogTaskType, 0, len(ContributionTaskTypes)),
+		DataOrigins:     append([]ContributionDataOriginOption(nil), ContributionDataOriginOptions...),
+		DataOriginGuide: ContributionDataOriginGuide,
 	}
 	for name, entry := range ContributionTaskTypes {
 		fields := make([]ContributionCatalogField, 0, len(entry.Payload))

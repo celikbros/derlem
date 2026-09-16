@@ -5,6 +5,7 @@ import { FormEvent, ReactNode, useCallback, useEffect, useId, useRef, useState }
 
 import { messageFrom, requestJSON } from "@/lib/client-api";
 import {
+  contributionDataOriginGuide,
   contributionDataOrigins,
   contributionTaskTypes,
   dataOriginSpec,
@@ -144,6 +145,7 @@ export function ContributionsPanel({ user, onNotice, onBundled }: {
   const distinctField = spec?.payload.find((field) => field.key === spec.distinct_from_body);
   const otherFields = spec?.payload.filter((field) => field.key !== spec.distinct_from_body) ?? [];
   const originHint = [
+    contributionDataOriginGuide,
     spec?.origin_hint,
     ...contributionDataOrigins.map((option) => `${option.label}: ${option.hint}`),
   ].filter(Boolean).join("\n");

@@ -36,6 +36,14 @@ _REVIEW_ROLE_LABELS = {
     "tool": "Araç",
     "other": "Diğer",
 }
+# Kayit bilgisindeki bilinen metadata anahtarlarinin inceleyiciye gorunen adi;
+# bilinmeyen anahtar oldugu gibi gosterilir (yalniz gorunum, veri degismez).
+_REVIEW_METADATA_LABELS = {
+    "data_origin": "köken",
+    "model_id": "model",
+    "edit_note": "düzeltme notu",
+    "knowledge_source": "bilgi kaynağı",
+}
 _REVIEW_BRANCH_LABELS = (
     ("chosen", "Seçilen yanıt — chosen"),
     ("rejected", "Reddedilen yanıt — rejected"),
@@ -340,7 +348,8 @@ def review_text_from_line(line: str) -> str | None:
     if isinstance(metadata, dict):
         for key in sorted(metadata):
             item = metadata[key]
-            info.append(f"{key}: {item if isinstance(item, str) else json.dumps(item, ensure_ascii=False)}")
+            label = _REVIEW_METADATA_LABELS.get(key, key)
+            info.append(f"{label}: {item if isinstance(item, str) else json.dumps(item, ensure_ascii=False)}")
     if info:
         sections.append("[Kayıt bilgisi]\n" + "\n".join(info))
     return "\n\n".join(sections)

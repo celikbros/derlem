@@ -4279,6 +4279,14 @@ dialog::backdrop {
   margin: 10px 0 12px;
 }
 
+/* Global textarea kuralı ham belge düzenleme için eş aralıklı yazı tipi kullanır;
+   katkı formu düzyazıdır (TASK-009). */
+.contribution-form textarea {
+  font-family: inherit;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
 .terms-check {
   /* Global `label { display: grid }` kutu ile metni alt alta diziyordu; grid
      uzerinde flex-direction no-op oldugu icin !important de ise yaramiyordu. */

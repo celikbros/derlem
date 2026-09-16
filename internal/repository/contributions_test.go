@@ -22,7 +22,7 @@ func goldenBundleItems() (qaPairs, editPairs []bundleItem) {
 		{
 			ID: "00000000-0000-4000-8000-000000000001", Domain: "fizik",
 			Prompt: "Işık hızı nedir?", Body: "Boşlukta yaklaşık 299.792 km/s'dir.",
-			Payload: map[string]string{}, DataOrigin: "human",
+			Payload: map[string]string{"knowledge_source": "Fizik 10 ders kitabı, s. 45"}, DataOrigin: "human",
 		},
 		{
 			ID: "00000000-0000-4000-8000-000000000002", Domain: "",
@@ -37,6 +37,7 @@ func goldenBundleItems() (qaPairs, editPairs []bundleItem) {
 			Payload: map[string]string{
 				"original_response": "Evet, ses her yerde yayılır.",
 				"edit_note":         "Fiziksel olarak yanlış olan cevap düzeltildi.",
+				"knowledge_source":  "Bilim belgeseli",
 			},
 			DataOrigin: "human",
 		},
@@ -132,6 +133,9 @@ func TestBuildContributionJSONLEmitsCanonicalQAPairs(t *testing.T) {
 		assistant["role"] != "assistant" || assistant["content"] != "Boşlukta yaklaşık 299.792 km/s'dir." {
 		t.Fatalf("question/answer not carried as separate messages: %v", messages)
 	}
+	if source := first["metadata"].(map[string]any)["knowledge_source"]; source != "Fizik 10 ders kitabı, s. 45" {
+		t.Fatalf("knowledge source must travel in metadata, got %v", source)
+	}
 
 	second := records[1]
 	if _, present := second["domain"]; present {
@@ -168,7 +172,8 @@ func TestBuildContributionJSONLEmitsEditPairAsPreference(t *testing.T) {
 		t.Fatalf("rejected must be the original answer, got %v", rejected)
 	}
 	metadata := record["metadata"].(map[string]any)
-	if metadata["edit_note"] != "Fiziksel olarak yanlış olan cevap düzeltildi." {
+	if metadata["edit_note"] != "Fiziksel olarak yanlış olan cevap düzeltildi." ||
+		metadata["knowledge_source"] != "Bilim belgeseli" {
 		t.Fatalf("remaining payload keys must travel in metadata, got %v", metadata)
 	}
 	if _, present := metadata["original_response"]; present {

@@ -61,6 +61,25 @@ Modeller **yalnizca dondurulmus bir surumden** egitilir; egitilen modelin kunyes
 o surumun SHA'si yazilir. Bir model "hangi veriden egitildi" sorusuna path ya da
 klasor adiyla degil, bu SHA ile cevap verir.
 
+## Turev, Girdisinden Daha Temiz Olamaz (kurucu karari, 2026-09-17)
+
+Turetilmis bir kaynagin hak durumu, girdisinin hak durumundan daha iyi olamaz.
+Girdi `unknown` ise turev de `unknown`'dir; temizlik (PII ayiklama, tekrar alma,
+kalite suzgeci) metnin hakkini degistirmez. Hak durumu yalniz kaynak bazli hak
+arastirmasiyla yukseltilir, turetme islemiyle degil.
+
+## Sinav Seti Olmadan Pretrain Surumu Dondurulmaz (kurucu karari, 2026-09-17)
+
+`eval`/`holdout` amacli en az bir kaynak kayitli olmadan hicbir `pretrain` surumu
+dondurulmaz. Gerekce: bu kaynaklar yokken dekontaminasyon kapilari
+`not_applicable` doner; surum donar ama sinav kirliligi kaniti uretilemez ve o
+surumle egitilen modelin karnesi dayanaksiz kalir. Sinav dilimini tuketici taraf
+(afacan) dosya olarak verir; Derlem onu `eval`/`holdout` amaciyla kaydeder. Bu
+kaynaklar amac alani geregi bir `pretrain` surumune dahil edilemez.
+
+Not: bu kural bugun surec kuralidir; kodda sert kapi degildir (`QueueFreeze`
+sinav kaynagi yoklugunu engellemez). Sert kapiya cevrilmesi ayri bir istir.
+
 ## Release Dondurma Kurali
 
 Bir corpus release'i donduruldugunda sunlar degistirilmez:

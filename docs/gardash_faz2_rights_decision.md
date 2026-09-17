@@ -1,5 +1,25 @@
 # Gardas/Faz 2 Temiz Adayı — Hak/Lisans Kararı ve Kanıt Kaydı
 
+> **KARAR GERİ ALINDI (kurucu kararı, 2026-09-17): hak durumu `unknown`.**
+> Aşağıdaki `cleared` kararı artık geçerli değildir. İki gerekçe:
+>
+> 1. **Türev, girdisinden daha temiz olamaz.** Bu kaynağın girdisi
+>    `gardash_faz2_tr_dedup_20260621`'in hak durumu `unknown`'dır; ondan üretilen
+>    temiz adayın `cleared` olması tutarsızdı.
+> 2. **Kararın dayandığı köken beyanı sarsıldı.** Aşağıdaki değerlendirme "kendi
+>    crawl'ladığımız Türkçe sitelerden geldi" beyanına dayanıyordu. 2026-09-17'de
+>    Derlem'e devredilen ham kaynak envanteri yedi girdi gösteriyor: `celik_gold`
+>    (13,0 GB), `wiki_oscar` (12,8 GB), `ttk`, `academic`, `tdk`, `trt`,
+>    `tr_corpus` ([ham_arsiv_faz2_kaynaklari.md](ham_arsiv_faz2_kaynaklari.md)).
+>    `wiki_oscar` adı kendi taramamıza değil hazır derlemelere işaret ediyor;
+>    içeriğin gerçek kökeni **doğrulanmadı** ve
+>    [TASK-011](gorevler/TASK-011-ham-kaynak-hak-arastirmasi.md) kapsamında
+>    kaynak kaynak araştırılacak.
+>
+> `unknown` bir kaynak sürüme giremez; bu güvenli varsayılandır. Hak durumu ancak
+> TASK-011'in kaynak bazlı sonucuyla yeniden yükseltilebilir. Aşağıdaki metin
+> tarihsel kayıt olarak korunuyor.
+
 > **DURUM (2026-07-07 revizyonu):** Bu kaynak, sınıf bazında karar veren
 > [Genel Web Derleme Hak Politikası](web_derleme_politikasi.md) kapsamındadır
 > (köken beyanı: "kendi crawl'ladığımız Türkçe sitelerden geldi").

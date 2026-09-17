@@ -11,6 +11,10 @@
 (`OneDrive\aaaaaaa yedek\`) ve yerel `C:\CELIKBROS PROJECTS\gardash\` klasörü. Faz-2
 derlemini üreten yedi ham kaynağın **tek kopyası** o yedekteydi; raf oturumu kurtardı
 ve `C:\CELIKBROS PROJECTS\onedrive-kurtarma-2026-09-17\ham-derlem\` altına koydu.
+**O kurtarma klasörü 2026-09-17'de silindi; içeriği artık yalnız `var/raw-derlem/`
+altında.** Silmeden önce model rafı bizim kopyalarımızı bağımsız olarak ölçtü:
+`ham-derlem` 9/9 OK, 422 nesnenin 422'sinde SHA = dosya adı, kazıyıcı kodunda
+157/157 OK ve `diff -r` boş.
 Veri atölyesi Derlem olduğu için kurucu kararıyla arşiv buraya alındı.
 
 Silinen klasörle birlikte `gardash_tr_dedup.jsonl` (13,8 GB, kaynak etiketli sürüm,

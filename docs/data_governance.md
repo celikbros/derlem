@@ -41,6 +41,26 @@ Eval verisi egitimde kullanilmaz. Eval havuzuna ayrilan kayitlar kapali tutulur,
 
 Buyuk corpus release oncesinde eval/holdout sizintisi icin overlap kontrolu yapilir. Eval kaynaklari checksum, n-gram veya MinHash benzeri yontemlerle training corpus'tan ayrik tutulur. Eval havuzundaki ornek metinler public raporlara yazilmaz.
 
+## Hicbir Metin Yerinde Temizlenmez (kurucu karari, 2026-09-17)
+
+Temizlik, filtreleme ve normalizasyon **hicbir zaman** var olan bir dosyanin ya da
+nesnenin uzerine yazmaz. Her temizlik adimi:
+
+1. **Yeni nesne** uretir (icerik adresli depoda ayri bir dosya),
+2. **Yeni SHA256** tasir (kimlik path degil, icerik hash'idir),
+3. **Yeni surum adi** alir (ornek: `..._clean_candidate`, `..._v2`).
+
+Girdi oldugu gibi kalir; boylece her turev, girdisinin hash'inden geriye dogru
+izlenebilir ve bir temizlik karari yanlis cikarsa geri donulecek bir sey vardir.
+Uygulamada bunu zorlayan noktalar: temiz aday ureticisi girdinin uzerine yazmayi
+reddeder (`derive_clean_candidate`, test: `..._refuses_to_overwrite_input`), depo
+nesneleri degismezdir (immutable) ve dondurulmus surum manifesti geriye donuk
+degistirilemez.
+
+Modeller **yalnizca dondurulmus bir surumden** egitilir; egitilen modelin kunyesine
+o surumun SHA'si yazilir. Bir model "hangi veriden egitildi" sorusuna path ya da
+klasor adiyla degil, bu SHA ile cevap verir.
+
 ## Release Dondurma Kurali
 
 Bir corpus release'i donduruldugunda sunlar degistirilmez:

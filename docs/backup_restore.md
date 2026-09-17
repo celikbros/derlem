@@ -55,7 +55,22 @@ Ne yapar:
    doğrulama kapsamı kendiliğinden genişler.
 
 Not: `var/derived` yedeğe alınmaz; temiz aday deterministik olarak yeniden
-üretilebilir ve kendisi zaten object store'da bir nesnedir.
+üretilebilir ve kendisi zaten object store'da bir nesnedir. (2026-09-17: oradaki
+12,85 GB'lık temiz aday kopyası silindi — SHA'sı `ebe29279…0d989` nesnesiyle birebir
+aynıydı, ölçüldü. Üretim manifesti yanında kaldı.)
+
+### Ham arşiv (`var/raw-derlem`) bilinçli olarak yedek kapsamı dışında
+
+Faz-2'nin yedi ham kaynağı (24,6 GB) 2026-09-17'de Derlem'e alındı
+(bkz. [ham_arsiv_faz2_kaynaklari.md](ham_arsiv_faz2_kaynaklari.md)). **Kurucu kararı
+(2026-09-17): bu arşivin bulut yedeği olmayacak, tek yerel kopya olarak duracak.**
+Gerekçe: ham verinin kaybı telafi edilebilir — Faz-2 metni (`.lf.txt`,
+`9826d58e…aa07b5`) ve temiz aday (`ebe29279…0d989` ) zaten object store'da ve
+yedekte. Risk bilinerek kabul edilmiştir.
+
+Sonuç olarak `derlem_backup.py`'nin kapsamı değişmedi: dump + `objects/` aynası +
+`var/reports`. `var/raw-derlem` kapsam dışıdır ve yedek betiğine eklenmemelidir.
+Arşiv diski bozulursa ham kaynaklar gider; yeniden üretim için bkz. aynı belge.
 
 ## Restore tatbikatı
 
@@ -80,10 +95,20 @@ Ne doğrular (herhangi biri tutmazsa çıkış kodu 1):
 5. Rapor `manifests/restore_drill_<zaman>.json` olarak yazılır; tatbikat
    veritabanı silinir (`--keep` ile korunabilir).
 
-### Bilinen kayıp nesneler (4. maddenin ayarı)
+### Bilinen kayıp nesneler (4. maddenin ayarı) — liste 2026-09-17'de kapandı
+
+> **Kapandı (2026-09-17).** 422 nesnenin tamamı bulundu ve depoya geri kondu; liste
+> artık boş, davranış yeniden katı (her eksik nesne sorundur). Gardaş model rafı,
+> kurucunun silmek üzere olduğu OneDrive yedeğinde nesneleri buldu
+> (mektup: `gardas-modeller/mektuplar/2026-09-17-raf-derlem-kayip-nesneler.md`);
+> Derlem oturumu kopyaladı ve **yazdıktan sonra diskten okuyup** doğruladı:
+> 422/422 dosyada SHA256 = dosya adı. `storage_objects` satırları zaten yerindeydi,
+> yani eksik olan yalnız dosyalardı. Ders: "kalıcı olarak kayıp" bir karardır, bir
+> ölçüm değil; başka bir kopyanın var olup olmadığı ayrıca aranmalıdır. Aşağıdaki
+> bölüm listenin neden açıldığını ve nasıl çalıştığını anlatır; mekanizma duruyor.
 
 2026-07-16 kaybından geriye kalan 422 nesne (394 KB, tamamı smoke artığı) katalogda
-kayıtlı ama hiçbir yerde yok. Zincir kontrolü bunları haklı olarak işaretliyordu ve
+kayıtlıydı ama hiçbir yerde yoktu. Zincir kontrolü bunları haklı olarak işaretliyordu ve
 tatbikat **kalıcı olarak FAIL** dönüyordu — yedeğin kalitesinden bağımsız olarak.
 Sürekli kırmızı yanan bir alarm, bir gün gerçek bir arızayı gizler.
 

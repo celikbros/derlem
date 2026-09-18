@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from array import array
 from collections import Counter
 from contextlib import ExitStack
 from dataclasses import asdict, dataclass
@@ -11,7 +12,7 @@ import os
 from pathlib import Path
 import re
 import tempfile
-from typing import Any
+from typing import Any, BinaryIO
 
 import psycopg
 from psycopg.rows import dict_row
@@ -25,10 +26,35 @@ from derlem_worker.quality_filters import (
     quality_rejection_reasons,
 )
 from derlem_worker.sampling import _bounded_lines, _document_from_line
+from derlem_worker.similarity import (
+    DEFAULT_MAX_CANDIDATES,
+    RELEASE_NEAR_DUP_BAND_BITS,
+    RELEASE_NEAR_DUP_BAND_COUNT,
+    RELEASE_NEAR_DUP_THRESHOLD,
+    SIMHASH_VERSION,
+    document_simhash,
+)
 
 
 CLEAN_CANDIDATE_VERSION = "clean-candidate-v1"
 CLEAN_CANDIDATE_V2_VERSION = "clean-candidate-v2"
+# v3 (2026-09-18): ayni gecise held-out bolmesi ve yakin kopya atma eklendi;
+# atma raporu her atilan satir icin SHA256, gerekce, karakter sayisi ve onizleme
+# tasir (raf mektubu 2026-09-17, kurucu onayi 2026-09-18).
+CLEAN_CANDIDATE_V3_VERSION = "clean-candidate-v3"
+
+# Held-out kurali (afacan/docs/HELD_OUT_KURALI.md, v1): belge = satirin sondaki
+# LF haric ham baytlari; sha256'nin ilk 8 hex hanesi 2500'e tam bolunuyorsa
+# held-out. Konumdan ve yeniden uretimden bagimsizdir; bugunku adayda 2.275 belge
+# secer (raf ve Derlem bagimsiz olctu, 2026-09-18).
+HELD_OUT_RULE_NONE = "none"
+HELD_OUT_RULE_AFACAN_V1 = "afacan-held-out-v1"
+HELD_OUT_MODULUS = 2500
+SUPPORTED_HELD_OUT_RULES = frozenset({HELD_OUT_RULE_NONE, HELD_OUT_RULE_AFACAN_V1})
+
+REJECTIONS_RECORD_V1 = "clean-candidate-rejections-v1"
+REJECTIONS_RECORD_V2 = "clean-candidate-rejections-v2"
+REJECTION_PREVIEW_CHARS = 200
 
 
 @dataclass(frozen=True)
@@ -60,6 +86,121 @@ class CleanCandidateReport:
     quality_rejections_byte_size: int
     output_sha256: str
     output_byte_size: int
+    # v3 alanlari; eski surumlerde None / 0.
+    rejections_record_version: str | None = None
+    held_out_rule: str | None = None
+    held_out_path: str | None = None
+    held_out_lines: int = 0
+    held_out_byte_size: int = 0
+    held_out_sha256: str | None = None
+    near_dedup_method: str | None = None
+    near_dedup_hamming_threshold: int | None = None
+    removed_near_duplicate_lines: int = 0
+    simhash_indexed_lines: int = 0
+    near_dedup_candidate_overflow_lines: int = 0
+
+
+def is_held_out(line_bytes: bytes, rule: str) -> bool:
+    if rule == HELD_OUT_RULE_NONE:
+        return False
+    if rule != HELD_OUT_RULE_AFACAN_V1:
+        raise ValueError(f"Unsupported held-out rule: {rule!r}")
+    digest = hashlib.sha256(line_bytes).hexdigest()
+    return int(digest[:8], 16) % HELD_OUT_MODULUS == 0
+
+
+class _NearDuplicateIndex:
+    """Surum yakin-kopya politikasiyla ayni yontem (SimHash 64, Hamming <= 3,
+    4 x 16 bit bant), bellekte: imzalar array('Q'), kovalar array('I')."""
+
+    def __init__(
+        self,
+        *,
+        hamming_threshold: int = RELEASE_NEAR_DUP_THRESHOLD,
+        band_count: int = RELEASE_NEAR_DUP_BAND_COUNT,
+        band_bits: int = RELEASE_NEAR_DUP_BAND_BITS,
+        max_candidates_per_bucket: int = DEFAULT_MAX_CANDIDATES,
+    ) -> None:
+        self.hamming_threshold = hamming_threshold
+        self.band_count = band_count
+        self.band_bits = band_bits
+        self.band_mask = (1 << band_bits) - 1
+        self.max_candidates_per_bucket = max_candidates_per_bucket
+        self.signatures = array("Q")
+        self.ordinals = array("I")
+        self.buckets: dict[int, array] = {}
+        self.overflow_lines = 0
+
+    def __len__(self) -> int:
+        return len(self.signatures)
+
+    def find_partner(self, signature: int) -> int | None:
+        """Hamming esigi icinde daha once gorulmus bir belgenin ordinal'i, yoksa None."""
+        overflow = False
+        for band in range(self.band_count):
+            key = (band << self.band_bits) | ((signature >> (band * self.band_bits)) & self.band_mask)
+            members = self.buckets.get(key)
+            if not members:
+                continue
+            if len(members) > self.max_candidates_per_bucket:
+                overflow = True
+                members = members[-self.max_candidates_per_bucket:]
+            for index in members:
+                if (self.signatures[index] ^ signature).bit_count() <= self.hamming_threshold:
+                    return self.ordinals[index]
+        if overflow:
+            self.overflow_lines += 1
+        return None
+
+    def add(self, signature: int, ordinal: int) -> None:
+        index = len(self.signatures)
+        self.signatures.append(signature)
+        self.ordinals.append(ordinal)
+        for band in range(self.band_count):
+            key = (band << self.band_bits) | ((signature >> (band * self.band_bits)) & self.band_mask)
+            bucket = self.buckets.get(key)
+            if bucket is None:
+                bucket = self.buckets[key] = array("I")
+            bucket.append(index)
+
+
+class _AtomicOutput:
+    """Hedefin yanina gecici dosya; basarida yerine gecer, hatada silinir.
+    SHA256 ve boyut yazarken toplanir."""
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self.hasher = hashlib.sha256()
+        self.byte_size = 0
+        self.descriptor, temp_name = tempfile.mkstemp(prefix=f"{path.name}.", suffix=".tmp", dir=path.parent)
+        self.temp_path = Path(temp_name)
+        self.handle: BinaryIO | None = None
+
+    def open(self, stack: ExitStack) -> None:
+        self.handle = stack.enter_context(os.fdopen(self.descriptor, "wb"))
+        self.descriptor = -1
+
+    def write(self, payload: bytes) -> None:
+        assert self.handle is not None
+        self.handle.write(payload)
+        self.hasher.update(payload)
+        self.byte_size += len(payload)
+
+    def sync(self) -> None:
+        assert self.handle is not None
+        self.handle.flush()
+        os.fsync(self.handle.fileno())
+
+    def commit(self) -> None:
+        self.temp_path.replace(self.path)
+
+    def cleanup(self) -> None:
+        self.temp_path.unlink(missing_ok=True)
+        if self.descriptor >= 0:
+            try:
+                os.close(self.descriptor)
+            except OSError:
+                pass
 
 
 def main() -> None:
@@ -71,7 +212,7 @@ def main() -> None:
     parser.add_argument(
         "--quality-rejections-path",
         type=Path,
-        help="Optional JSONL audit path containing only rejected ordinals and reason codes",
+        help="Optional JSONL audit path for removed lines (reason codes; v3 adds sha256, char count, preview)",
     )
     parser.add_argument("--max-document-bytes", type=int)
     parser.add_argument("--limit-lines", type=int, help="Development-only limit; do not use for final candidates")
@@ -81,6 +222,18 @@ def main() -> None:
         default=QUALITY_POLICY_NONE,
         help="Optional versioned hard-rejection policy; defaults to the v1 behavior",
     )
+    parser.add_argument(
+        "--held-out-rule",
+        choices=sorted(SUPPORTED_HELD_OUT_RULES),
+        default=HELD_OUT_RULE_NONE,
+        help="Split lines matching the rule into a separate held-out file (v3)",
+    )
+    parser.add_argument("--held-out-path", type=Path, help="Held-out output path (default: <output>_heldout.txt)")
+    parser.add_argument(
+        "--near-dedup",
+        action="store_true",
+        help=f"Drop near-duplicates (SimHash, Hamming <= {RELEASE_NEAR_DUP_THRESHOLD}) in the same pass (v3)",
+    )
     parser.add_argument("--force", action="store_true", help="Overwrite existing output/manifest paths")
     args = parser.parse_args()
 
@@ -88,37 +241,33 @@ def main() -> None:
         parser.error("Exactly one of --source-id or --input-path is required")
     if args.limit_lines is not None and args.limit_lines <= 0:
         parser.error("--limit-lines must be positive")
+    if args.held_out_path and args.held_out_rule == HELD_OUT_RULE_NONE:
+        parser.error("--held-out-path requires --held-out-rule")
 
     config = load_config()
     max_document_bytes = args.max_document_bytes or config.max_document_bytes
     if max_document_bytes <= 0:
         parser.error("--max-document-bytes must be positive")
 
+    v3 = args.held_out_rule != HELD_OUT_RULE_NONE or args.near_dedup
     source: dict[str, Any] | None = None
     if args.source_id:
         source = load_source(config.database_url, config.storage_root, args.source_id)
         input_path = Path(str(source["object_path"]))
         output_path = resolve_output_path(
-            args.output_dir,
-            args.output_path,
-            source,
-            args.limit_lines,
-            quality_policy=args.quality_policy,
+            args.output_dir, args.output_path, source, args.limit_lines,
+            quality_policy=args.quality_policy, v3=v3,
         )
     else:
         input_path = args.input_path.resolve(strict=True)
         output_path = resolve_output_path(
-            args.output_dir,
-            args.output_path,
-            None,
-            args.limit_lines,
-            input_path=input_path,
-            quality_policy=args.quality_policy,
+            args.output_dir, args.output_path, None, args.limit_lines,
+            input_path=input_path, quality_policy=args.quality_policy, v3=v3,
         )
 
     manifest_path = output_path.with_suffix(output_path.suffix + ".manifest.json")
     quality_rejections_path: Path | None = None
-    if args.quality_policy != QUALITY_POLICY_NONE:
+    if args.quality_policy != QUALITY_POLICY_NONE or v3:
         quality_rejections_path = (
             args.quality_rejections_path.resolve()
             if args.quality_rejections_path
@@ -128,10 +277,12 @@ def main() -> None:
         parser.error("--quality-rejections-path requires a non-default --quality-policy")
     if quality_rejections_path == manifest_path:
         parser.error("--quality-rejections-path must be distinct from the manifest path")
-    ensure_writable_target(output_path, args.force)
-    ensure_writable_target(manifest_path, args.force)
-    if quality_rejections_path is not None:
-        ensure_writable_target(quality_rejections_path, args.force)
+    held_out_path: Path | None = None
+    if args.held_out_rule != HELD_OUT_RULE_NONE:
+        held_out_path = args.held_out_path.resolve() if args.held_out_path else default_held_out_path(output_path)
+    for target in (output_path, manifest_path, quality_rejections_path, held_out_path):
+        if target is not None:
+            ensure_writable_target(target, args.force)
 
     report = derive_clean_candidate(
         input_path,
@@ -141,6 +292,9 @@ def main() -> None:
         limit_lines=args.limit_lines,
         quality_policy=args.quality_policy,
         quality_rejections_path=quality_rejections_path,
+        held_out_rule=args.held_out_rule,
+        held_out_path=held_out_path,
+        near_dedup=args.near_dedup,
     )
     write_json_atomic(manifest_path, asdict(report))
     print(json.dumps({"output": str(output_path), "manifest": str(manifest_path), "report": asdict(report)}, ensure_ascii=False, indent=2))
@@ -175,6 +329,36 @@ def load_source(database_url: str, storage_root: Path, source_id: str) -> dict[s
     return source
 
 
+def default_held_out_path(output_path: Path) -> Path:
+    return output_path.with_name(f"{output_path.stem}_heldout{output_path.suffix}")
+
+
+def _rejection_record(
+    *,
+    ordinal: int,
+    reasons: tuple[str, ...],
+    full: bool,
+    line_bytes: bytes = b"",
+    text: str = "",
+    duplicate_of: int | None = None,
+) -> bytes:
+    if not full:
+        record: dict[str, Any] = {"source_ordinal": ordinal, "reasons": list(reasons)}
+        return json.dumps(record, ensure_ascii=True, separators=(",", ":"), sort_keys=True).encode("utf-8") + b"\n"
+    # v2 kaydi: rafin istedigi alanlar. Onizleme kisisel veri tasimaz: PII
+    # ayiklamasi bu noktadan once calisir ve PII'li satir buraya hic gelmez.
+    record = {
+        "source_ordinal": ordinal,
+        "sha256": hashlib.sha256(line_bytes).hexdigest(),
+        "reasons": list(reasons),
+        "char_count": len(text),
+        "preview": text[:REJECTION_PREVIEW_CHARS],
+    }
+    if duplicate_of is not None:
+        record["duplicate_of"] = duplicate_of
+    return json.dumps(record, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8") + b"\n"
+
+
 def derive_clean_candidate(
     input_path: Path,
     output_path: Path,
@@ -184,61 +368,62 @@ def derive_clean_candidate(
     limit_lines: int | None = None,
     quality_policy: str = QUALITY_POLICY_NONE,
     quality_rejections_path: Path | None = None,
+    held_out_rule: str = HELD_OUT_RULE_NONE,
+    held_out_path: Path | None = None,
+    near_dedup: bool = False,
 ) -> CleanCandidateReport:
     if quality_policy not in SUPPORTED_QUALITY_POLICIES:
         raise ValueError(f"Unsupported quality policy: {quality_policy}")
+    if held_out_rule not in SUPPORTED_HELD_OUT_RULES:
+        raise ValueError(f"Unsupported held-out rule: {held_out_rule}")
+    v3 = held_out_rule != HELD_OUT_RULE_NONE or near_dedup
     input_path = input_path.resolve(strict=True)
     output_path = output_path.resolve()
     if input_path == output_path:
         raise RuntimeError("Output path must not be the same as input path")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if quality_rejections_path is not None:
-        if quality_policy == QUALITY_POLICY_NONE:
+        if quality_policy == QUALITY_POLICY_NONE and not v3:
             raise ValueError("A quality rejections path requires a non-default quality policy")
         quality_rejections_path = quality_rejections_path.resolve()
         if quality_rejections_path in {input_path, output_path}:
             raise RuntimeError("Quality rejections path must be distinct from input and output")
         quality_rejections_path.parent.mkdir(parents=True, exist_ok=True)
+    if held_out_rule != HELD_OUT_RULE_NONE:
+        held_out_path = (held_out_path or default_held_out_path(output_path)).resolve()
+        if held_out_path in {input_path, output_path, quality_rejections_path}:
+            raise RuntimeError("Held-out path must be distinct from input, output and rejections")
+        held_out_path.parent.mkdir(parents=True, exist_ok=True)
+    elif held_out_path is not None:
+        raise ValueError("A held-out path requires a held-out rule")
 
-    seen_fingerprints: set[str] = set()
+    # Tekillestirme kaydi iki akis (egitim adayi ve held-out) icin ortaktir:
+    # held-out bir satirin birebir/normalize kopyasi egitime gidemez.
+    seen_fingerprints: dict[bytes, int] = {}
+    near_index = _NearDuplicateIndex() if near_dedup else None
     pii_findings = {key: 0 for key in PII_KEYS}
     pii_line_counts = {key: 0 for key in PII_KEYS}
     total_lines = 0
     written_lines = 0
+    held_out_lines = 0
     removed_pii_lines = 0
     removed_duplicate_lines = 0
+    removed_near_duplicate_lines = 0
     removed_oversized_lines = 0
     removed_quality_lines = 0
     skipped_blank_lines = 0
     indexed_fingerprints = 0
     kept_short_or_unfingerprinted_lines = 0
-    hasher = hashlib.sha256()
-    output_byte_size = 0
-    quality_rejections_hasher = hashlib.sha256()
-    quality_rejections_byte_size = 0
     quality_reason_document_counts: Counter[str] = Counter()
 
-    file_descriptor, temp_name = tempfile.mkstemp(prefix=f"{output_path.name}.", suffix=".tmp", dir=output_path.parent)
-    temp_path = Path(temp_name)
-    quality_rejections_descriptor = -1
-    quality_rejections_temp_path: Path | None = None
-    if quality_rejections_path is not None:
-        quality_rejections_descriptor, quality_rejections_temp_name = tempfile.mkstemp(
-            prefix=f"{quality_rejections_path.name}.",
-            suffix=".tmp",
-            dir=quality_rejections_path.parent,
-        )
-        quality_rejections_temp_path = Path(quality_rejections_temp_name)
+    output = _AtomicOutput(output_path)
+    rejections = _AtomicOutput(quality_rejections_path) if quality_rejections_path is not None else None
+    held_out = _AtomicOutput(held_out_path) if held_out_path is not None else None
+    outputs = [item for item in (output, rejections, held_out) if item is not None]
     try:
         with ExitStack() as stack:
-            destination = stack.enter_context(os.fdopen(file_descriptor, "wb"))
-            file_descriptor = -1
-            quality_rejections_destination = None
-            if quality_rejections_descriptor >= 0:
-                quality_rejections_destination = stack.enter_context(
-                    os.fdopen(quality_rejections_descriptor, "wb")
-                )
-                quality_rejections_descriptor = -1
+            for item in outputs:
+                item.open(stack)
             for ordinal, raw_line, oversized in _bounded_lines(input_path, max_document_bytes):
                 if limit_lines is not None and ordinal > limit_lines:
                     break
@@ -266,27 +451,16 @@ def derive_clean_candidate(
                     removed_pii_lines += 1
                     continue
 
+                line_bytes = raw_line.encode("utf-8")
                 text, _ = _document_from_line(stripped)
                 quality_reasons = quality_rejection_reasons(text, quality_policy)
                 if quality_reasons:
                     removed_quality_lines += 1
                     quality_reason_document_counts.update(quality_reasons)
-                    if quality_rejections_destination is not None:
-                        rejection_record = (
-                            json.dumps(
-                                {
-                                    "source_ordinal": ordinal,
-                                    "reasons": list(quality_reasons),
-                                },
-                                ensure_ascii=True,
-                                separators=(",", ":"),
-                                sort_keys=True,
-                            ).encode("utf-8")
-                            + b"\n"
-                        )
-                        quality_rejections_destination.write(rejection_record)
-                        quality_rejections_hasher.update(rejection_record)
-                        quality_rejections_byte_size += len(rejection_record)
+                    if rejections is not None:
+                        rejections.write(_rejection_record(
+                            ordinal=ordinal, reasons=quality_reasons, full=v3, line_bytes=line_bytes, text=text,
+                        ))
                     continue
 
                 fingerprint = document_fingerprint(text) if text else None
@@ -294,54 +468,59 @@ def derive_clean_candidate(
                     kept_short_or_unfingerprinted_lines += 1
                 else:
                     normalized_sha256, _ = fingerprint
-                    if normalized_sha256 in seen_fingerprints:
+                    key = bytes.fromhex(normalized_sha256)
+                    earlier = seen_fingerprints.get(key)
+                    if earlier is not None:
                         removed_duplicate_lines += 1
+                        if rejections is not None and v3:
+                            rejections.write(_rejection_record(
+                                ordinal=ordinal, reasons=("normalized_duplicate",), full=True,
+                                line_bytes=line_bytes, text=text, duplicate_of=earlier,
+                            ))
                         continue
-                    seen_fingerprints.add(normalized_sha256)
+                    seen_fingerprints[key] = ordinal
                     indexed_fingerprints += 1
 
-                encoded = raw_line.encode("utf-8") + b"\n"
-                destination.write(encoded)
-                hasher.update(encoded)
-                output_byte_size += len(encoded)
-                written_lines += 1
+                if near_index is not None:
+                    signature = document_simhash(text) if text else None
+                    if signature is not None:
+                        partner = near_index.find_partner(signature)
+                        if partner is not None:
+                            removed_near_duplicate_lines += 1
+                            if rejections is not None:
+                                rejections.write(_rejection_record(
+                                    ordinal=ordinal, reasons=("near_duplicate",), full=True,
+                                    line_bytes=line_bytes, text=text, duplicate_of=partner,
+                                ))
+                            continue
+                        near_index.add(signature, ordinal)
 
-            destination.flush()
-            os.fsync(destination.fileno())
-            if quality_rejections_destination is not None:
-                quality_rejections_destination.flush()
-                os.fsync(quality_rejections_destination.fileno())
-        temp_path.replace(output_path)
-        if (
-            quality_rejections_temp_path is not None
-            and quality_rejections_path is not None
-        ):
-            quality_rejections_temp_path.replace(quality_rejections_path)
+                encoded = line_bytes + b"\n"
+                if held_out is not None and is_held_out(line_bytes, held_out_rule):
+                    held_out.write(encoded)
+                    held_out_lines += 1
+                else:
+                    output.write(encoded)
+                    written_lines += 1
+
+            for item in outputs:
+                item.sync()
+        for item in outputs:
+            item.commit()
     finally:
-        temp_path.unlink(missing_ok=True)
-        if quality_rejections_temp_path is not None:
-            quality_rejections_temp_path.unlink(missing_ok=True)
-        if file_descriptor >= 0:
-            try:
-                os.close(file_descriptor)
-            except OSError:
-                pass
-        if quality_rejections_descriptor >= 0:
-            try:
-                os.close(quality_rejections_descriptor)
-            except OSError:
-                pass
+        for item in outputs:
+            item.cleanup()
 
     source_id = str(source["id"]) if source else None
+    if v3:
+        algorithm_version = CLEAN_CANDIDATE_V3_VERSION
+    elif quality_policy != QUALITY_POLICY_NONE:
+        algorithm_version = CLEAN_CANDIDATE_V2_VERSION
+    else:
+        algorithm_version = CLEAN_CANDIDATE_VERSION
     return CleanCandidateReport(
-        algorithm_version=(
-            CLEAN_CANDIDATE_VERSION
-            if quality_policy == QUALITY_POLICY_NONE
-            else CLEAN_CANDIDATE_V2_VERSION
-        ),
-        quality_filter_version=(
-            None if quality_policy == QUALITY_POLICY_NONE else quality_policy
-        ),
+        algorithm_version=algorithm_version,
+        quality_filter_version=(None if quality_policy == QUALITY_POLICY_NONE else quality_policy),
         fingerprint_version=FINGERPRINT_VERSION,
         generated_at=datetime.now(UTC).isoformat(),
         source_id=source_id,
@@ -349,11 +528,7 @@ def derive_clean_candidate(
         source_sha256=str(source["object_sha256"]) if source else None,
         input_path=str(input_path),
         output_path=str(output_path),
-        quality_rejections_path=(
-            str(quality_rejections_path)
-            if quality_rejections_path is not None
-            else None
-        ),
+        quality_rejections_path=(str(quality_rejections_path) if quality_rejections_path is not None else None),
         max_document_bytes=max_document_bytes,
         total_lines=total_lines,
         written_lines=written_lines,
@@ -367,14 +542,23 @@ def derive_clean_candidate(
         pii_findings=pii_findings,
         pii_line_counts=pii_line_counts,
         quality_reason_document_counts=dict(sorted(quality_reason_document_counts.items())),
-        quality_rejections_sha256=(
-            quality_rejections_hasher.hexdigest()
-            if quality_rejections_path is not None
-            else None
+        quality_rejections_sha256=(rejections.hasher.hexdigest() if rejections is not None else None),
+        quality_rejections_byte_size=(rejections.byte_size if rejections is not None else 0),
+        output_sha256=output.hasher.hexdigest(),
+        output_byte_size=output.byte_size,
+        rejections_record_version=(
+            None if rejections is None else (REJECTIONS_RECORD_V2 if v3 else REJECTIONS_RECORD_V1)
         ),
-        quality_rejections_byte_size=quality_rejections_byte_size,
-        output_sha256=hasher.hexdigest(),
-        output_byte_size=output_byte_size,
+        held_out_rule=(None if held_out_rule == HELD_OUT_RULE_NONE else held_out_rule),
+        held_out_path=(str(held_out_path) if held_out is not None else None),
+        held_out_lines=held_out_lines,
+        held_out_byte_size=(held_out.byte_size if held_out is not None else 0),
+        held_out_sha256=(held_out.hasher.hexdigest() if held_out is not None else None),
+        near_dedup_method=(SIMHASH_VERSION if near_index is not None else None),
+        near_dedup_hamming_threshold=(near_index.hamming_threshold if near_index is not None else None),
+        removed_near_duplicate_lines=removed_near_duplicate_lines,
+        simhash_indexed_lines=(len(near_index) if near_index is not None else 0),
+        near_dedup_candidate_overflow_lines=(near_index.overflow_lines if near_index is not None else 0),
     )
 
 
@@ -386,6 +570,7 @@ def resolve_output_path(
     *,
     input_path: Path | None = None,
     quality_policy: str = QUALITY_POLICY_NONE,
+    v3: bool = False,
 ) -> Path:
     if output_path:
         return output_path.resolve()
@@ -395,7 +580,9 @@ def resolve_output_path(
     else:
         assert input_path is not None
         stem = f"{slugify(input_path.stem)}_clean_candidate"
-    if quality_policy != QUALITY_POLICY_NONE:
+    if v3:
+        stem = f"{stem}_v3"
+    elif quality_policy != QUALITY_POLICY_NONE:
         stem = f"{stem}_v2"
     if limit_lines is not None:
         stem = f"{stem}_first_{limit_lines}"

@@ -5,6 +5,7 @@ import pytest
 from derlem_worker.quality_filters import (
     QUALITY_POLICY_NONE,
     QUALITY_POLICY_TR_WEB_V1,
+    QUALITY_POLICY_TR_WEB_V2,
     SUPPORTED_QUALITY_POLICIES,
     quality_rejection_reasons,
 )
@@ -22,6 +23,7 @@ def test_supported_policies_and_none_policy() -> None:
         {
             QUALITY_POLICY_NONE,
             QUALITY_POLICY_TR_WEB_V1,
+            QUALITY_POLICY_TR_WEB_V2,
         }
     )
     assert quality_rejection_reasons("#etiket " * 100, QUALITY_POLICY_NONE) == ()
@@ -226,3 +228,42 @@ def test_multilingual_text_without_mixed_tokens_or_soft_hyphens_is_not_rejected(
     )
 
     assert quality_rejection_reasons(text, QUALITY_POLICY_TR_WEB_V1) == ()
+
+
+# tr-web-v2: v1 + iki kesin kural. 100k dilim olcumunde (2026-09-17) U+FFFD iceren
+# satir %0,231, Vikipedi isaretleme kalintisi %0,353 cikti; v1 bunlari gormuyordu
+# cunku kurallari 500+ sozcuk istiyor. Yeni kurallar uzunluktan bagimsizdir.
+
+
+def test_v2_rejects_encoding_corruption_regardless_of_length() -> None:
+    corrupted = "R�yada dua g�rmek hay�rl� �eylerin habercisidir."
+
+    assert quality_rejection_reasons(corrupted, QUALITY_POLICY_TR_WEB_V2) == ("encoding_corruption",)
+    # v1 degismedi: ayni satiri kabul eder (kontrol).
+    assert quality_rejection_reasons(corrupted, QUALITY_POLICY_TR_WEB_V1) == ()
+
+
+def test_v2_rejects_wiki_markup_residue() -> None:
+    table_row = '| align="left" | 2002-03 | align="left" | Detroit | 17 || 0 || 19.0 || .438'
+    template = "{{Bilgi kutusu|ad=Örnek}} Bu madde bir [[şablon]] taşıyor."
+    double_bar = "Takım A || 12 || 3 || Takım B || 9"
+
+    for text in (table_row, template, double_bar):
+        assert quality_rejection_reasons(text, QUALITY_POLICY_TR_WEB_V2) == ("wiki_markup_residue",)
+        assert quality_rejection_reasons(text, QUALITY_POLICY_TR_WEB_V1) == ()
+
+
+def test_v2_keeps_ordinary_text_and_single_bar() -> None:
+    prose = "Ses boşlukta yayılmaz; yayılmak için hava ya da su gibi bir ortam ister. Bu | tek çubuk zararsız."
+
+    assert quality_rejection_reasons(prose, QUALITY_POLICY_TR_WEB_V2) == ()
+
+
+def test_v2_includes_v1_reasons_and_orders_new_reasons_first() -> None:
+    spam = _padded_text(["#etiket"] * 60, 600) + " �"
+
+    reasons = quality_rejection_reasons(spam, QUALITY_POLICY_TR_WEB_V2)
+
+    assert reasons[0] == "encoding_corruption"
+    assert "hashtag_stuffing" in reasons
+    assert quality_rejection_reasons(spam.replace("�", ""), QUALITY_POLICY_TR_WEB_V1) == ("hashtag_stuffing",)

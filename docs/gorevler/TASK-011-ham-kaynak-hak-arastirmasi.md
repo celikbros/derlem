@@ -42,6 +42,24 @@ Inputs: the scraper code in `var/raw-derlem/celik_ai-kod/` (the only record of h
 the corpora were collected), the shelf letter, and
 [gardash_faz2_rights_decision.md](../gardash_faz2_rights_decision.md).
 
+## Evidence found so far (2026-09-18, from the archived collector code)
+
+`var/raw-derlem/celik_ai-kod/CELIK_AI/corpus_builder/sources.json` and the scrapers
+declare the origins (not yet verified against the actual files):
+
+| Source | Declared origin | Method |
+|---|---|---|
+| `wiki_oscar` (likely) | Hugging Face `allenai/c4` (mC4) and `wikimedia/wikipedia` | dataset download — **not own crawl** |
+| `tdk` | `sozluk.gov.tr` | official JSON API |
+| `ttk` | `belleten.gov.tr` | full-text scrape |
+| `academic` | DergiPark | OAI-PMH abstracts |
+| `trt` | `trthaber.com` | RSS |
+| `celik_gold`, `tr_corpus` | no collector found | unknown |
+
+So the premise of the 2026-07-07 `cleared` decision ("our own crawl of Turkish sites")
+does not hold for the largest input. Next step: match each raw file to a collector by
+content (field names, URL patterns) and read each publisher's terms.
+
 ## Out of scope
 
 - Re-collecting or replacing any corpus.

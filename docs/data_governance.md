@@ -73,9 +73,19 @@ arastirmasiyla yukseltilir, turetme islemiyle degil.
 `eval`/`holdout` amacli en az bir kaynak kayitli olmadan hicbir `pretrain` surumu
 dondurulmaz. Gerekce: bu kaynaklar yokken dekontaminasyon kapilari
 `not_applicable` doner; surum donar ama sinav kirliligi kaniti uretilemez ve o
-surumle egitilen modelin karnesi dayanaksiz kalir. Sinav dilimini tuketici taraf
-(afacan) dosya olarak verir; Derlem onu `eval`/`holdout` amaciyla kaydeder. Bu
-kaynaklar amac alani geregi bir `pretrain` surumune dahil edilemez.
+surumle egitilen modelin karnesi dayanaksiz kalir. Bu kaynaklar amac alani geregi
+bir `pretrain` surumune dahil edilemez.
+
+**Held-out nasil secilir (kurucu karari, 2026-09-18; kural afacan'in,
+`afacan-held-out-v1`):** dosya beklenmez, kural uygulanir. Belge = satirin sondaki LF
+haric ham baytlari; `int(sha256(baytlar)[:8], 16) % 2500 == 0` ise held-out. Konumdan
+ve yeniden uretimden bagimsizdir: ayni belge her surumde ayni tarafa duser. Derlem bu
+bolmeyi temiz aday uretiminde, kalite suzgecinden sonra ve ortak tekillestirmeyle
+yapar ([temiz_aday_v3.md](temiz_aday_v3.md)); held-out ayri bir `holdout` kaynagi
+olarak kaydedilir. Birebir kirlilik kapisinin 0 vermesi yapi geregidir; bu, dis bir
+sinav setine karsi kirlilik olmadigi anlamina gelmez, kendi bolmemizin dogru
+yapildigini kanitlar. Gorev sinavlari (ornegin "karar" dersi) ayri `eval` kaynaklari
+olarak gelir.
 
 Not: bu kural bugun surec kuralidir; kodda sert kapi degildir (`QueueFreeze`
 sinav kaynagi yoklugunu engellemez). Sert kapiya cevrilmesi ayri bir istir.

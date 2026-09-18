@@ -8,12 +8,19 @@ import zlib
 
 QUALITY_POLICY_NONE = "none"
 QUALITY_POLICY_TR_WEB_V1 = "tr-web-v1"
+# tr-web-v2 = tr-web-v1 + iki kesin kural (2026-09-18, 100k dilim olcumu sonrasi):
+# geri getirilemez kodlama bozulmasi (U+FFFD) ve Vikipedi isaretleme kalintisi.
+# Ikisi de belge uzunlugundan bagimsiz uygulanir; v1 kurallari 500+ sozcuk ister.
+QUALITY_POLICY_TR_WEB_V2 = "tr-web-v2"
 SUPPORTED_QUALITY_POLICIES = frozenset(
     {
         QUALITY_POLICY_NONE,
         QUALITY_POLICY_TR_WEB_V1,
+        QUALITY_POLICY_TR_WEB_V2,
     }
 )
+
+_WIKI_MARKUP_RE = re.compile(r'align="|\{\{|\}\}|\[\[|\]\]')
 
 _WORD_RE = re.compile(r"[^\W_]+(?:['’][^\W_]+)?", re.UNICODE)
 _HASHTAG_RE = re.compile(r"(?<!\w)#[^\W_]+", re.UNICODE)
@@ -160,6 +167,8 @@ _ADULT_SERVICE_RE = None
 _SEXUAL_PHARMA_RE = None
 
 _REASON_ORDER = (
+    "encoding_corruption",
+    "wiki_markup_residue",
     "extreme_repetition",
     "hashtag_stuffing",
     "mixed_script_artifact",
@@ -185,9 +194,22 @@ _EMPTY_LEXICON_STATS = _LexiconStats(hits=0, distinct=0)
 def quality_rejection_reasons(text: str, policy: str) -> tuple[str, ...]:
     if policy == QUALITY_POLICY_NONE:
         return ()
-    if policy != QUALITY_POLICY_TR_WEB_V1:
-        raise ValueError(f"Unsupported quality policy: {policy!r}")
-    return _tr_web_v1_rejection_reasons(text)
+    if policy == QUALITY_POLICY_TR_WEB_V1:
+        return _tr_web_v1_rejection_reasons(text)
+    if policy == QUALITY_POLICY_TR_WEB_V2:
+        return _tr_web_v2_rejection_reasons(text)
+    raise ValueError(f"Unsupported quality policy: {policy!r}")
+
+
+def _tr_web_v2_rejection_reasons(text: str) -> tuple[str, ...]:
+    matched: set[str] = set(_tr_web_v1_rejection_reasons(text))
+    # U+FFFD: kaynak kodlamasi cozulurken kaybolmus harf. Onarilamaz; belge atilir.
+    if "�" in text:
+        matched.add("encoding_corruption")
+    # MediaWiki tablo/sablon/baglanti isaretlemesi metin degildir.
+    if _WIKI_MARKUP_RE.search(text) or text.count("||") >= 2:
+        matched.add("wiki_markup_residue")
+    return tuple(reason for reason in _REASON_ORDER if reason in matched)
 
 
 def _tr_web_v1_rejection_reasons(text: str) -> tuple[str, ...]:

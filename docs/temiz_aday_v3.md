@@ -99,6 +99,32 @@ Tüm korpus için süre kestirimi ~25 dk.
 
 Ölçüm dosyaları: `var/olcum-2026-09-17/ornekler-dil-fasttext.md`, `…-lingua.md`.
 
+## Tam üretim (2026-09-18 → 19, ~3,4 saat)
+
+Girdi: ana kaynak `gardash_faz2_tr_dedup_20260621` (`9826d58e…aa07b5`, 6.027.968 satır).
+
+| Sonuç | Satır | Bayt | SHA256 |
+|---|---|---|---|
+| **Eğitim adayı** (`…_clean_candidate_v3.txt`) | 5.827.650 | 11.896.793.726 | `83dcac7721b7e22c9c1ea46c90e5c3c61f768c9503a85b4f663116b73d3c0059` |
+| **Held-out** (`…_v3_heldout.txt`) | 2.239 | 4.630.115 | `4a8595db05d8dc9febefaa2b35f5f9f340a5d9573d445c4125a78b7e28952c45` |
+| Atma raporu (`…_v3.txt.rejections.jsonl`) | 93.223 kayıt (kişisel veri satırları rapora girmez) | 36.329.616 | `2becaf9d0f1fc9a8ce48a0ea6cc4a78b83b21eac22ce2e1754fbfb5548fdd778` |
+| Dil listesi (girdi) | 1.501 kayıt | 228.040 | `cdea5548a39340d3b8c34acbef305b54f1bcf74f3a6e0176728c20c9a4f4de86` |
+
+Atılanlar: kişisel veri 104.853 · kalite (`tr-web-v2`) 55.677 · yakın kopya (Hamming ≤ 3)
+**35.833** · dil (fastText) 1.492 (listedeki 1.501'in 9'u daha önce başka gerekçeyle
+atılmıştı) · normalize tekrar 221 · aşırı büyük 3. Toplam birebir tutar. Kova taşması 0;
+imzası çıkarılan satır 5.807.621.
+
+Kalite gerekçeleri: işaretleme kalıntısı 21.984 · kodlama bozulması 12.751 · gezinme
+kalıbı 12.513 · ticari doldurma 7.989 · arkadaşlık spam'i 6.793 · tekrarlanan bölüm 3.772 ·
+yetişkin hizmet 2.516 · aşırı tekrar 2.176 · hashtag 1.120 · cinsel ilaç 533 · optik 198 ·
+karışık alfabe 7 (bir satır birden çok gerekçe taşıyabilir).
+
+Yakın kopya oranı (%0,59) dilim ölçümünün (%0,013) 45 katı: dilim içi ölçüm, korpus
+oranını olduğundan düşük gösterir (bir kopya ancak iki üyesi de dilime düşerse sayılır);
+belgede bu uyarı yazılıydı. Held-out 2.239 satır: v1 adayındaki 2.275'in 36'sı kalite,
+yakın kopya ya da dil kuralına takıldı — kural gereği eğitime sızmadılar, dilim küçüldü.
+
 ## Üretim komutu
 
 ```powershell

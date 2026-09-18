@@ -56,9 +56,11 @@ rejection report the shelf can audit for false positives.
 
 ## Open
 
-1. **Production run** on `gardash_faz2_tr_dedup_20260621` (13.57 GB, 6,027,968 lines):
-   ~4 h estimate, dominated by SimHash. Owner picks the time. Note: the input is the
-   *parent* (`9826d58e…`), not the v1 candidate — PII removal reruns as part of the pass.
+1. ~~Production run~~ **done 2026-09-19** (~3.4 h): 5,827,650 lines / 11,896,793,726 bytes
+   candidate (`83dcac77…c0059`), 2,239 lines / 4,630,115 bytes held-out (`4a8595db…952c45`),
+   93,223-record rejection report; removed: PII 104,853, quality 55,677, near-dup 35,833,
+   language 1,492, normalized-dup 221, oversized 3; overflow 0. Numbers in
+   [temiz_aday_v3.md](../temiz_aday_v3.md).
 2. Register both outputs as sources through the API (owner starts API + worker):
    `pretrain` candidate (`derived_from` parent) and `holdout`; rights `unknown`.
 3. Then sampling → 200-sample review (owner, two sessions) → draft release → freeze

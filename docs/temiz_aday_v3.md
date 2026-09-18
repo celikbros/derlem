@@ -13,17 +13,19 @@ her biri kendi SHA256'sı ve manifestiyle. v1/v2 üretimleri değişmez.
 2. **Boş** satır → atlanır.
 3. **Kişisel veri** (TCKN, IBAN, e-posta, telefon, kart) → atılır. Bu adım her şeyden
    önce çalışır; sonraki adımların raporuna kişisel veri taşıyan satır **hiç gelmez**.
-4. **Kalite süzgeci** (`--quality-policy tr-web-v2`) → atılır, rapora yazılır.
-5. **Normalize tekrar** (`normalized-document-sha256-v1`) → ikinci görülen atılır,
+4. **Atılacak-satır listesi** (`--drop-list`; dil kararı, dışarıda hesaplanır) → atılır,
+   rapora gerekçe ve ayrıntıyla yazılır.
+5. **Kalite süzgeci** (`--quality-policy tr-web-v2`) → atılır, rapora yazılır.
+6. **Normalize tekrar** (`normalized-document-sha256-v1`) → ikinci görülen atılır,
    rapora `normalized_duplicate` + `duplicate_of` ile yazılır.
-6. **Yakın kopya** (`--near-dedup`; `normalized-word-3gram-simhash64-v1`, Hamming ≤ 3,
+7. **Yakın kopya** (`--near-dedup`; `normalized-word-3gram-simhash64-v1`, Hamming ≤ 3,
    4 × 16 bit bant — dondurmadaki `release_near_duplicates` ile aynı yöntem) → ikinci
    görülen atılır, rapora `near_duplicate` + `duplicate_of` ile yazılır.
-7. **Held-out bölmesi** (`--held-out-rule afacan-held-out-v1`): satırın yazılacak
+8. **Held-out bölmesi** (`--held-out-rule afacan-held-out-v1`): satırın yazılacak
    baytları (sondaki LF hariç) için `int(sha256[:8], 16) % 2500 == 0` ise held-out
    dosyasına, değilse eğitim adayına yazılır.
 
-**Tekilleştirme (5 ve 6) iki akış için ortaktır.** Held-out'a düşen bir satırın birebir,
+**Tekilleştirme (6 ve 7) iki akış için ortaktır.** Held-out'a düşen bir satırın birebir,
 normalize ya da yakın kopyası eğitim adayına gidemez; sonra gelen kopya hangi tarafa
 düşecek olursa olsun atılır. Dondurmada birebir dekontaminasyon kapısının **0** vermesi
 bu yüzden yapı gereğidir; sıfırdan farklı sonuç üretim hatasıdır.
@@ -75,24 +77,36 @@ Girdi 100.000 satır / 215.303.310 bayt (tohum 20260917). Süre **249 sn**.
 Kova taşması 0. Tam korpus (5.922.891 satır) için süre kestirimi ~4 saat; zamanı
 SimHash hesabı belirler.
 
-## Dil tespiti: bu turda yok (ölçüldü, 2026-09-18)
+## Dil kuralı: fastText ile, atılacak-satır listesi olarak (ölçüldü, 2026-09-18)
 
-Python 3.14'te fastText derlenemedi; `lingua` 2.2.0 ve `langdetect` 1.0.9 kuruldu
-(atılabilir ortamda). `lingua` (tüm diller) 82.239 uzun satırı 323 sn'de taradı ve 121'ine
-(%0,147) güven ≥ 0,5 ile "Türkçe değil" dedi — **bunların 77'si (%64) Türkçe** (yabancı
-özel ad yoğun futbolcu biyografileri "Tagalog 1.0", "İsveççe 1.0" çıktı). Kalan 44 çoğunlukla
-ad listesi ve İngilizce kaynakça satırı. Gerçek yabancı dil oranı uzun satırlarda en fazla
-%0,053; kazanç küçük, Türkçe metni atma riski büyük. `langdetect` aynı satırlarda 291 sn'de
-84 satırı (%0,102) işaretledi, dil dağılımı daha makul (en 40, de 16, fr 7); yanlış pozitif
-oranı **ölçülmedi**. Bu tur dil kuralı uygulanmaz; ölçüm dosyası
-`var/olcum-2026-09-17/ornekler-dil-lingua.md`.
+Rafın kuralı: **≥ 200 karakter, `lid.176` güveni ≥ 0,5 ile Türkçe değilse at.** Araç
+seçimi ölçümle yapıldı (aynı 82.239 uzun satır, 100k dilim):
+
+| Araç | Süre | "Türkçe değil" | Bunların Türkçe olanı (Türkçe'ye özgü harf yoğunluğu ≥ %1) |
+|---|---|---|---|
+| lingua 2.2.0 (tüm diller) | 323 sn | 121 (%0,147) | 77 (%64) — futbolcu biyografileri "Tagalog 1.0" |
+| langdetect 1.0.9 | 291 sn | 84 (%0,102) | ölçülmedi |
+| **fastText lid.176.ftz** | **23 sn** | **30 (%0,036)** | 7 (%23); çoğu gerçekten karışık dilli |
+
+fastText'in resmi paketi Python 3.14'te (proje ortamı) derlenemiyor; `fasttext-predict`
+Python 3.13'te kuruluyor. Bu yüzden dil kararı **proje ortamının dışında** hesaplanır ve
+üretime bir **atılacak-satır listesi** (`--drop-list`, JSONL: satır baytlarının `sha256`,
+`lang`, `p`) olarak verilir. Listenin SHA256'sı, kayıt sayısı ve yöntemi
+(`--drop-list-method`) manifeste yazılır; atılan her satır raporda
+`language_not_turkish` gerekçesi ve `details: {lang, p}` ile görünür. Liste, 3.13
+ortamındaki `lid.176.ftz` (SHA256 `8f3472cf…603e83`) ile ana kaynak üzerinde üretilir.
+Tüm korpus için süre kestirimi ~25 dk.
+
+Ölçüm dosyaları: `var/olcum-2026-09-17/ornekler-dil-fasttext.md`, `…-lingua.md`.
 
 ## Üretim komutu
 
 ```powershell
 .\.venv\Scripts\python.exe -m derlem_worker.clean_candidate `
   --source-id 06ac330e-350f-45f0-b596-3dd4aa1dbc57 `
-  --quality-policy tr-web-v2 --held-out-rule afacan-held-out-v1 --near-dedup
+  --quality-policy tr-web-v2 --held-out-rule afacan-held-out-v1 --near-dedup `
+  --drop-list var\olcum-2026-09-17\fasttext-drop-list.jsonl `
+  --drop-list-method fasttext-lid176-ftz-min200-p0.5 --drop-list-reason language_not_turkish
 ```
 
 Çıktılar `var/derived/` altında: `<ad>_clean_candidate_v3.txt`,

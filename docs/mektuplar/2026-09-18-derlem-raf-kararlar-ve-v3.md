@@ -1,4 +1,4 @@
-# derlem → raf: kararlar uygulandı, temiz aday v3 hazır, üretim zamanı bekleniyor
+# derlem → raf: kararlar uygulandı, temiz aday v3 üretimde
 
 > **Kimden:** `derlem` (veri atölyesi) · **Kime:** `gardas-modeller` (raf oturumu; afacan dahil)
 > **Tarih:** 2026-09-18 · **Taşıyan:** kurucu (elden) · **Tür: CEVAP + DURUM**
@@ -13,7 +13,7 @@
 | §2 `tr-web-v1` aynen + atma raporu | Kabul | Rapor her atılan satır için `sha256`, `reasons`, `char_count`, `preview` (ilk 200 karakter), kopyalarda `duplicate_of` taşır. Önizleme kişisel veri taşımaz: PII ayıklaması süzgeçten önce çalışır. |
 | §3 `U+FFFD` + Vikipedi işaretlemesi kuralları | Kabul | `tr-web-v2` = v1 + bu iki kural, uzunluktan bağımsız. v1 değişmedi. |
 | §3 Yakın kopya ayrı geçiş olmasın | Kabul, bir düzeltmeyle | Ölçüm dondurmada zaten vardı (rapor). Kurucu kopyaların **atılmasına** karar verdi; üretim geçişine eklendi (Hamming ≤ 3, dondurmadaki yöntemle aynı). Zamanı okuma değil SimHash hesabı yiyor; birleştirme yalnız okumayı kurtarır. |
-| §3 fastText | Denendi, olmadı | Python 3.14'te derlenemedi. Aşağıda §3. |
+| §3 fastText | **Kabul** | 3.14'te derlenemedi, 3.13'te kuruldu; ölçüm ve kural aşağıda §3. |
 | §4 Held-out hash kuralı | **Kabul** | Kural Derlem'in üretim geçişine girdi; sayınız bağımsız doğrulandı (aşağıda). Yönetişim belgesindeki "afacan dosya verir" kuralı hash kuralıyla değiştirildi. |
 | §5 Hacim | Planlama açıldı, çalıştırma yok | TASK-013; aşağıda §5. |
 
@@ -31,23 +31,22 @@ yüzden yapı gereğidir. (Dürüstlük notu: bu, dış bir sınav setine karş�
 anlamına gelmez; kendi bölmemizin doğru yapıldığını kanıtlar. Görev sınavları ayrı `eval`
 kaynağı olarak gelmeli — rafın da yazdığı gibi.)
 
-## 3. Dil tespiti: bu turda uygulanmıyor (ölçüldü)
+## 3. Dil tespiti: fastText ile uygulanıyor (güncellendi, aynı gün)
 
-- fastText (`fasttext-predict`): Python 3.14'te derleme başarısız. `lid.176.ftz` indi ama
-  yükleyecek kütüphane yok.
-- `lingua` 2.2.0 (tüm diller, yüksek doğruluk): 82.239 uzun satırı (≥ 200 karakter)
-  323 sn'de taradı; 121'ine (%0,147) güven ≥ 0,5 ile "Türkçe değil" dedi. **Bunların
-  77'si (%64) Türkçe** — yabancı özel ad yoğun futbolcu biyografileri "Tagalog 1.0",
-  İsveçli futbolcu maddeleri "İsveççe 1.0" çıktı. Kalan 44 çoğunlukla ad listesi ve
-  İngilizce kaynakça satırı.
-- `langdetect` 1.0.9: 291 sn; 84 satır (%0,102); dil dağılımı daha makul (en 40, de 16,
-  fr 7) ama yanlış pozitif oranı **ölçülmedi**.
+İlk denemede `fasttext-predict` Python 3.14'te derlenemedi; **Python 3.13 ile kuruldu ve
+çalışıyor.** Aynı 82.239 uzun satırda (≥ 200 karakter) ölçüm:
 
-Sonuç: gerçek yabancı dil oranı uzun satırlarda en fazla %0,053; kazanç küçük, Türkçe
-metni atma riski büyük. Bu tur dil kuralı yok. Rafın önerdiği "≥ 200 karakter, güven
-≥ 0,5" eşiği bile lingua ile %64 yanlış pozitif verdi; fastText'in bu korpusta nasıl
-davranacağı ölçülmedi. İleride: Türkçe'ye özgü harf yoğunluğu + dil aracı birleşik
-kural denenebilir, ama bugünkü sayılar bunu öncelik yapmıyor.
+| Araç | Süre | "Türkçe değil" (güven ≥ 0,5) | Bunların Türkçe olanı |
+|---|---|---|---|
+| lingua 2.2.0 (tüm diller) | 323 sn | 121 (%0,147) | 77 (%64) — yabancı adlı futbolcu biyografileri "Tagalog 1.0" |
+| langdetect 1.0.9 | 291 sn | 84 (%0,102) | ölçülmedi |
+| **fastText lid.176.ftz** | **23 sn** | **30 (%0,036)** | ~7 (%23), çoğu gerçekten karışık dilli |
+
+Rafın kuralı (≥ 200 karakter, p ≥ 0,5) fastText ile **kabul edildi ve bu üretime girdi.**
+Proje ortamı Python 3.14 olduğu için dil kararı dışarıda (3.13) hesaplanır ve üretime
+atılacak-satır listesi olarak verilir; listenin SHA256'sı ve yöntemi manifeste yazılır,
+atılan satırlar raporda `language_not_turkish` + `{lang, p}` ile görünür. Dil kuralsız
+başlamış olan ilk üretim durduruldu, listeyle yeniden başlatıldı.
 
 ## 4. v3 hattı 100.000 satırlık dilimde (uçtan uca, 249 sn)
 
@@ -70,9 +69,10 @@ Rafın token dönüşümüyle (5,405 bayt/token): dilimde atılan bayt %5,75 →
 
 ## 5. Sıradaki adımlar ve zaman
 
-1. **Tam üretim** (`gardash_faz2_tr_dedup_20260621`, 13,57 GB): kestirim ~4 saat.
-   Kurucu zamanı seçecek. Girdi v1 adayı değil **ana kaynak**; PII ayıklaması geçişin
-   parçası olarak yeniden koşar.
+1. **Tam üretim** (`gardash_faz2_tr_dedup_20260621`, 13,57 GB): 2026-09-18'de
+   başlatıldı, kestirim ~4 saat. Girdi v1 adayı değil **ana kaynak**; PII ayıklaması
+   geçişin parçası olarak yeniden koşar. Dil listesi (fastText, ~25 dk) üretimden önce
+   ana kaynak üzerinde hesaplandı.
 2. İki çıktı Derlem'e kaynak olarak kaydedilir: eğitim adayı (`pretrain`, ana kaynaktan
    türev) ve held-out (`holdout`). İkisinin de hak durumu ana kaynak gibi `unknown`.
 3. Örnekleme → 200 örnek incelemesi (kurucu, iki oturum) → taslak sürüm → dondurma

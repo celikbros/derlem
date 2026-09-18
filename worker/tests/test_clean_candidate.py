@@ -284,3 +284,44 @@ def test_v3_quality_rejection_record_carries_sha_and_preview_without_pii(tmp_pat
     assert record["sha256"] == hashlib.sha256(corrupted.encode("utf-8")).hexdigest()
     assert record["preview"] == corrupted[:200] and record["char_count"] == len(corrupted)
     assert "0532" not in rejections.read_text(encoding="utf-8")
+
+
+def test_v3_drop_list_removes_listed_lines_with_details_and_records_list_hash(tmp_path: Path) -> None:
+    from derlem_worker.clean_candidate import load_drop_list
+
+    foreign = "The quick brown fox jumps over the lazy dog and keeps running across the wide open field."
+    turkish = "Hızlı kahverengi tilki tembel köpeğin üzerinden atlar ve geniş açık tarlada koşmaya devam eder."
+    source = tmp_path / "source.txt"
+    source.write_text(f"{turkish}\n{foreign}\n", encoding="utf-8")
+    drop_list = tmp_path / "dil.jsonl"
+    drop_list.write_text(
+        json.dumps({"sha256": hashlib.sha256(foreign.encode("utf-8")).hexdigest(), "lang": "en", "p": 0.97}) + "\n"
+        + json.dumps({"sha256": "0" * 64, "lang": "de", "p": 0.9}) + "\n",  # eslesmeyen kayit
+        encoding="utf-8",
+    )
+    rejections = tmp_path / "rej.jsonl"
+
+    report = derive_clean_candidate(
+        source, tmp_path / "clean.txt", source=None, max_document_bytes=4096,
+        quality_rejections_path=rejections,
+        drop_list_path=drop_list, drop_list_method="fasttext-lid176-ftz-min200-p0.5", drop_list_reason="language_not_turkish",
+    )
+
+    assert (tmp_path / "clean.txt").read_text(encoding="utf-8").splitlines() == [turkish]
+    assert report.algorithm_version == CLEAN_CANDIDATE_V3_VERSION
+    assert report.removed_drop_list_lines == 1
+    assert report.drop_list_entries == 2
+    assert report.drop_list_method == "fasttext-lid176-ftz-min200-p0.5"
+    assert report.drop_list_sha256 == hashlib.sha256(drop_list.read_bytes()).hexdigest()
+    [record] = _records(rejections)
+    assert record["reasons"] == ["language_not_turkish"]
+    assert record["details"] == {"lang": "en", "p": 0.97}
+    assert record["sha256"] == hashlib.sha256(foreign.encode("utf-8")).hexdigest()
+    # Kontrol: liste verilmezse yabanci satir kalir.
+    control = derive_clean_candidate(source, tmp_path / "control.txt", source=None, max_document_bytes=4096)
+    assert control.written_lines == 2
+    # Bozuk liste reddedilir.
+    bad = tmp_path / "bozuk.jsonl"
+    bad.write_text('{"lang": "en"}\n', encoding="utf-8")
+    with pytest.raises(ValueError, match="sha256"):
+        load_drop_list(bad)

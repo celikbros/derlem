@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **IN PROGRESS** — 2026-09-18. Code, tests and the 100k end-to-end run are done; the full production run waits for the owner to pick a time (~4 h). |
+| Status | **IN PROGRESS** — 2026-09-18. Code, tests and the 100k end-to-end run are done; production run in progress (owner: "time is yours"). |
 | Kind | feature (data pipeline), inside the TASK-002-era exception: it produces the frozen v2 input |
 | Moratorium | allowed by owner decision 2026-09-18 |
 | Owner | (unassigned) |
@@ -22,7 +22,8 @@ rejection report the shelf can audit for false positives.
 - `tr-web-v1` stays as is; two exact rules added as `tr-web-v2` (`U+FFFD`, wiki markup).
 - Near-duplicates (Hamming ≤ 3) are **removed** in the same pass, not only reported.
 - Held-out: the shelf's hash rule (`afacan-held-out-v1`) replaces "afacan sends a file".
-- Language detection: **not applied** this round — measured false-positive rate too high (see doc).
+- Language rule: **applied** with fastText `lid.176` (≥ 200 chars, p ≥ 0.5) as a drop list computed
+  outside the project venv (Python 3.13); lingua was rejected after measurement (64 % false positives).
 
 ## Done
 
@@ -46,6 +47,12 @@ rejection report the shelf can audit for false positives.
   (231 `U+FFFD`, 353 markup).
 - Held-out rule reproduced independently on the current candidate: **2,275 docs /
   5,084,138 bytes**, identical to the shelf's count.
+
+- `--drop-list` / `--drop-list-method` / `--drop-list-reason`: external decisions enter the
+  pass by line SHA256; the list's own SHA256 and entry count go into the manifest. Test added
+  (listed line removed with `details`, unlisted kept, malformed list refused).
+- First production run (no language rule) was stopped after ~25 min by owner decision and its
+  temp files removed; restarted with the drop list.
 
 ## Open
 

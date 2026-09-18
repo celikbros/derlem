@@ -55,6 +55,10 @@ SUPPORTED_HELD_OUT_RULES = frozenset({HELD_OUT_RULE_NONE, HELD_OUT_RULE_AFACAN_V
 REJECTIONS_RECORD_V1 = "clean-candidate-rejections-v1"
 REJECTIONS_RECORD_V2 = "clean-candidate-rejections-v2"
 REJECTION_PREVIEW_CHARS = 200
+# Atilacak-satir listesi: proje ortaminda (Python 3.14) kurulamayan araclarla
+# (ornegin fastText dil tanima, 3.13 ortaminda) disarida hesaplanan karar, satir
+# baytlarinin SHA256'si uzerinden uretime verilir; listenin SHA'si manifeste yazilir.
+DROP_LIST_DEFAULT_REASON = "drop_list"
 
 
 @dataclass(frozen=True)
@@ -98,6 +102,11 @@ class CleanCandidateReport:
     removed_near_duplicate_lines: int = 0
     simhash_indexed_lines: int = 0
     near_dedup_candidate_overflow_lines: int = 0
+    drop_list_path: str | None = None
+    drop_list_sha256: str | None = None
+    drop_list_method: str | None = None
+    drop_list_entries: int = 0
+    removed_drop_list_lines: int = 0
 
 
 def is_held_out(line_bytes: bytes, rule: str) -> bool:
@@ -105,8 +114,28 @@ def is_held_out(line_bytes: bytes, rule: str) -> bool:
         return False
     if rule != HELD_OUT_RULE_AFACAN_V1:
         raise ValueError(f"Unsupported held-out rule: {rule!r}")
-    digest = hashlib.sha256(line_bytes).hexdigest()
-    return int(digest[:8], 16) % HELD_OUT_MODULUS == 0
+    return _is_held_out_hex(hashlib.sha256(line_bytes).hexdigest())
+
+
+def _is_held_out_hex(hexdigest: str) -> bool:
+    return int(hexdigest[:8], 16) % HELD_OUT_MODULUS == 0
+
+
+def load_drop_list(path: Path) -> tuple[dict[bytes, dict[str, Any]], str, int]:
+    """JSONL: her kayitta 64 hex 'sha256' (satir baytlari, LF haric); diger alanlar
+    rapora ayrinti olarak gecer. Donus: (digest -> ayrinti, dosya sha256, kayit sayisi)."""
+    entries: dict[bytes, dict[str, Any]] = {}
+    payload = path.read_bytes()
+    for number, line in enumerate(payload.decode("utf-8").splitlines(), 1):
+        if not line.strip():
+            continue
+        record = json.loads(line)
+        digest = str(record.get("sha256", ""))
+        if not re.fullmatch(r"[0-9a-f]{64}", digest):
+            raise ValueError(f"drop list line {number}: sha256 missing or malformed")
+        details = {key: value for key, value in record.items() if key not in {"sha256", "source_ordinal"}}
+        entries[bytes.fromhex(digest)] = details
+    return entries, hashlib.sha256(payload).hexdigest(), len(entries)
 
 
 class _NearDuplicateIndex:
@@ -234,6 +263,9 @@ def main() -> None:
         action="store_true",
         help=f"Drop near-duplicates (SimHash, Hamming <= {RELEASE_NEAR_DUP_THRESHOLD}) in the same pass (v3)",
     )
+    parser.add_argument("--drop-list", type=Path, help="JSONL of line sha256 digests to drop (v3; e.g. language decisions)")
+    parser.add_argument("--drop-list-method", help="Method identifier recorded in the manifest (required with --drop-list)")
+    parser.add_argument("--drop-list-reason", default=DROP_LIST_DEFAULT_REASON, help="Reason code written to the rejection report")
     parser.add_argument("--force", action="store_true", help="Overwrite existing output/manifest paths")
     args = parser.parse_args()
 
@@ -243,13 +275,15 @@ def main() -> None:
         parser.error("--limit-lines must be positive")
     if args.held_out_path and args.held_out_rule == HELD_OUT_RULE_NONE:
         parser.error("--held-out-path requires --held-out-rule")
+    if bool(args.drop_list) != bool(args.drop_list_method):
+        parser.error("--drop-list and --drop-list-method go together")
 
     config = load_config()
     max_document_bytes = args.max_document_bytes or config.max_document_bytes
     if max_document_bytes <= 0:
         parser.error("--max-document-bytes must be positive")
 
-    v3 = args.held_out_rule != HELD_OUT_RULE_NONE or args.near_dedup
+    v3 = args.held_out_rule != HELD_OUT_RULE_NONE or args.near_dedup or args.drop_list is not None
     source: dict[str, Any] | None = None
     if args.source_id:
         source = load_source(config.database_url, config.storage_root, args.source_id)
@@ -295,6 +329,9 @@ def main() -> None:
         held_out_rule=args.held_out_rule,
         held_out_path=held_out_path,
         near_dedup=args.near_dedup,
+        drop_list_path=args.drop_list,
+        drop_list_method=args.drop_list_method,
+        drop_list_reason=args.drop_list_reason,
     )
     write_json_atomic(manifest_path, asdict(report))
     print(json.dumps({"output": str(output_path), "manifest": str(manifest_path), "report": asdict(report)}, ensure_ascii=False, indent=2))
@@ -341,6 +378,7 @@ def _rejection_record(
     line_bytes: bytes = b"",
     text: str = "",
     duplicate_of: int | None = None,
+    details: dict[str, Any] | None = None,
 ) -> bytes:
     if not full:
         record: dict[str, Any] = {"source_ordinal": ordinal, "reasons": list(reasons)}
@@ -356,6 +394,8 @@ def _rejection_record(
     }
     if duplicate_of is not None:
         record["duplicate_of"] = duplicate_of
+    if details:
+        record["details"] = details
     return json.dumps(record, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8") + b"\n"
 
 
@@ -371,12 +411,17 @@ def derive_clean_candidate(
     held_out_rule: str = HELD_OUT_RULE_NONE,
     held_out_path: Path | None = None,
     near_dedup: bool = False,
+    drop_list_path: Path | None = None,
+    drop_list_method: str | None = None,
+    drop_list_reason: str = DROP_LIST_DEFAULT_REASON,
 ) -> CleanCandidateReport:
     if quality_policy not in SUPPORTED_QUALITY_POLICIES:
         raise ValueError(f"Unsupported quality policy: {quality_policy}")
     if held_out_rule not in SUPPORTED_HELD_OUT_RULES:
         raise ValueError(f"Unsupported held-out rule: {held_out_rule}")
-    v3 = held_out_rule != HELD_OUT_RULE_NONE or near_dedup
+    if bool(drop_list_path) != bool(drop_list_method):
+        raise ValueError("drop_list_path and drop_list_method go together")
+    v3 = held_out_rule != HELD_OUT_RULE_NONE or near_dedup or drop_list_path is not None
     input_path = input_path.resolve(strict=True)
     output_path = output_path.resolve()
     if input_path == output_path:
@@ -401,6 +446,13 @@ def derive_clean_candidate(
     # held-out bir satirin birebir/normalize kopyasi egitime gidemez.
     seen_fingerprints: dict[bytes, int] = {}
     near_index = _NearDuplicateIndex() if near_dedup else None
+    drop_list: dict[bytes, dict[str, Any]] = {}
+    drop_list_sha256: str | None = None
+    drop_list_entries = 0
+    removed_drop_list_lines = 0
+    if drop_list_path is not None:
+        drop_list_path = drop_list_path.resolve(strict=True)
+        drop_list, drop_list_sha256, drop_list_entries = load_drop_list(drop_list_path)
     pii_findings = {key: 0 for key in PII_KEYS}
     pii_line_counts = {key: 0 for key in PII_KEYS}
     total_lines = 0
@@ -452,7 +504,18 @@ def derive_clean_candidate(
                     continue
 
                 line_bytes = raw_line.encode("utf-8")
+                line_digest = hashlib.sha256(line_bytes)
                 text, _ = _document_from_line(stripped)
+                if drop_list:
+                    dropped = drop_list.get(line_digest.digest())
+                    if dropped is not None:
+                        removed_drop_list_lines += 1
+                        if rejections is not None:
+                            rejections.write(_rejection_record(
+                                ordinal=ordinal, reasons=(drop_list_reason,), full=True,
+                                line_bytes=line_bytes, text=text, details=dropped,
+                            ))
+                        continue
                 quality_reasons = quality_rejection_reasons(text, quality_policy)
                 if quality_reasons:
                     removed_quality_lines += 1
@@ -496,7 +559,7 @@ def derive_clean_candidate(
                         near_index.add(signature, ordinal)
 
                 encoded = line_bytes + b"\n"
-                if held_out is not None and is_held_out(line_bytes, held_out_rule):
+                if held_out is not None and _is_held_out_hex(line_digest.hexdigest()):
                     held_out.write(encoded)
                     held_out_lines += 1
                 else:
@@ -559,6 +622,11 @@ def derive_clean_candidate(
         removed_near_duplicate_lines=removed_near_duplicate_lines,
         simhash_indexed_lines=(len(near_index) if near_index is not None else 0),
         near_dedup_candidate_overflow_lines=(near_index.overflow_lines if near_index is not None else 0),
+        drop_list_path=(str(drop_list_path) if drop_list_path is not None else None),
+        drop_list_sha256=drop_list_sha256,
+        drop_list_method=drop_list_method,
+        drop_list_entries=drop_list_entries,
+        removed_drop_list_lines=removed_drop_list_lines,
     )
 
 

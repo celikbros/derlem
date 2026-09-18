@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -264,5 +266,120 @@ func TestQueueDistillationPinsImmutableProductionProvenanceBeforeJob(t *testing.
 		UPDATE production_runs SET config_sha256 = repeat('f', 64) WHERE id = $1
 	`, *updated.ProductionRunID); err == nil {
 		t.Fatal("production run unexpectedly allowed mutation")
+	}
+}
+
+// Çoklu girdi soyu (000029): oluştururken yazılır, okunurken gelir, güncellemede
+// nil dokunmaz / liste değiştirir; kendine referans ve var olmayan girdi reddedilir.
+func TestSourceLineageInputsRoundTrip(t *testing.T) {
+	databaseURL := testdb.URL(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	t.Cleanup(cancel)
+	adminPool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(adminPool.Close)
+	schemaName := fmt.Sprintf("derlem_lineage_inputs_test_%d", time.Now().UnixNano())
+	schemaIdentifier := pgx.Identifier{schemaName}.Sanitize()
+	if _, err := adminPool.Exec(ctx, "CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public"); err != nil {
+		t.Fatalf("ensure pgcrypto: %v", err)
+	}
+	if _, err := adminPool.Exec(ctx, "CREATE SCHEMA "+schemaIdentifier); err != nil {
+		t.Fatalf("create test schema: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cleanupCancel()
+		_, _ = adminPool.Exec(cleanupCtx, "DROP SCHEMA "+schemaIdentifier+" CASCADE")
+	})
+	config, err := pgxpool.ParseConfig(databaseURL)
+	if err != nil {
+		t.Fatalf("parse config: %v", err)
+	}
+	config.ConnConfig.RuntimeParams["search_path"] = schemaName + ",public"
+	pool, err := pgxpool.NewWithConfig(ctx, config)
+	if err != nil {
+		t.Fatalf("connect schema pool: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	if err := database.Migrate(ctx, pool); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	var actorID string
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO users(email, password_hash, display_name)
+		VALUES ('lineage-inputs@example.test', 'test', 'Lineage Inputs')
+		RETURNING id::text
+	`).Scan(&actorID); err != nil {
+		t.Fatalf("insert actor: %v", err)
+	}
+	repo := repository.NewSources(pool)
+	base := domain.CreateSourceInput{
+		SourceType: "text_corpus", ContentPurpose: "pretrain", License: "unknown",
+		RightsStatus: "unknown", Language: "tr", Domain: "mixed", LineageRef: "test",
+	}
+	create := func(name string, inputs ...string) domain.Source {
+		input := base
+		input.Name = name
+		input.LineageInputSourceIDs = inputs
+		source, err := repo.Create(ctx, input, actorID)
+		if err != nil {
+			t.Fatalf("create %s: %v", name, err)
+		}
+		return source
+	}
+	rawA := create("raw-a")
+	rawB := create("raw-b")
+	if len(rawA.LineageInputSourceIDs) != 0 {
+		t.Fatalf("a source without inputs must report an empty list, got %#v", rawA.LineageInputSourceIDs)
+	}
+
+	parent := create("parent", rawB.ID, rawA.ID)
+	want := []string{rawA.ID, rawB.ID}
+	sort.Strings(want)
+	if strings.Join(parent.LineageInputSourceIDs, ",") != strings.Join(want, ",") {
+		t.Fatalf("inputs not persisted in sorted order: %#v", parent.LineageInputSourceIDs)
+	}
+	fetched, err := repo.Get(ctx, parent.ID)
+	if err != nil {
+		t.Fatalf("get parent: %v", err)
+	}
+	if strings.Join(fetched.LineageInputSourceIDs, ",") != strings.Join(want, ",") {
+		t.Fatalf("inputs not read back: %#v", fetched.LineageInputSourceIDs)
+	}
+
+	update := domain.UpdateSourceInput{
+		Name: parent.Name, SourceType: parent.SourceType, License: parent.License,
+		RightsStatus: parent.RightsStatus, Language: parent.Language, Domain: parent.Domain,
+		LineageRef: parent.LineageRef, Version: parent.Version,
+	}
+	untouched, err := repo.Update(ctx, parent.ID, update, actorID)
+	if err != nil {
+		t.Fatalf("update without inputs: %v", err)
+	}
+	if len(untouched.LineageInputSourceIDs) != 2 {
+		t.Fatalf("nil inputs must leave the list untouched, got %#v", untouched.LineageInputSourceIDs)
+	}
+	update.Version = untouched.Version
+	update.LineageInputSourceIDs = []string{rawA.ID}
+	narrowed, err := repo.Update(ctx, parent.ID, update, actorID)
+	if err != nil {
+		t.Fatalf("update with inputs: %v", err)
+	}
+	if strings.Join(narrowed.LineageInputSourceIDs, ",") != rawA.ID {
+		t.Fatalf("inputs not replaced: %#v", narrowed.LineageInputSourceIDs)
+	}
+
+	update.Version = narrowed.Version
+	update.LineageInputSourceIDs = []string{parent.ID}
+	if _, err := repo.Update(ctx, parent.ID, update, actorID); !errors.Is(err, repository.ErrSelfLineage) {
+		t.Fatalf("self input must be rejected, got %v", err)
+	}
+	missing := base
+	missing.Name = "orphan"
+	missing.LineageInputSourceIDs = []string{"00000000-0000-4000-8000-000000000000"}
+	if _, err := repo.Create(ctx, missing, actorID); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("missing input must be rejected, got %v", err)
 	}
 }

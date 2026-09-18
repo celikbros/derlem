@@ -123,3 +123,47 @@ func TestDistillSourceRejectsProviderOutsideAllowlist(t *testing.T) {
 		t.Fatalf("unexpected response body: %s", response.Body.String())
 	}
 }
+
+// Çoklu girdi soyu (000029): kimlikler kanonik UUID olmalı, küçük harfe
+// çevrilir, tekrarları atılır ve sıralanır; güncellemede nil "dokunma" demektir.
+func TestCreateSourceValidationNormalizesLineageInputIDs(t *testing.T) {
+	input := domain.CreateSourceInput{
+		Name: "Source", SourceType: "jsonl", ContentPurpose: "pretrain",
+		License: "internal", RightsStatus: "unknown", Language: "tr",
+		Domain: "general", LineageRef: "source.jsonl",
+		LineageInputSourceIDs: []string{
+			" 0A178606-2B3C-4D5E-8F90-123456789ABC ",
+			"0a178606-2b3c-4d5e-8f90-123456789abc",
+			"00000000-0000-4000-8000-000000000001",
+		},
+	}
+	if message := normalizeAndValidateSource(&input); message != "" {
+		t.Fatalf("unexpected validation message: %q", message)
+	}
+	want := []string{"00000000-0000-4000-8000-000000000001", "0a178606-2b3c-4d5e-8f90-123456789abc"}
+	if strings.Join(input.LineageInputSourceIDs, ",") != strings.Join(want, ",") {
+		t.Fatalf("lineage inputs not normalized: %#v", input.LineageInputSourceIDs)
+	}
+
+	input.LineageInputSourceIDs = []string{"not-a-uuid"}
+	if message := normalizeAndValidateSource(&input); !strings.Contains(message, "UUID") {
+		t.Fatalf("invalid lineage input must be rejected, got %q", message)
+	}
+}
+
+func TestUpdateSourceValidationKeepsNilLineageInputsUntouched(t *testing.T) {
+	input := domain.UpdateSourceInput{
+		Name: "Source", SourceType: "jsonl", License: "internal", RightsStatus: "unknown",
+		Language: "tr", Domain: "general", LineageRef: "source.jsonl", Version: 1,
+	}
+	if message := normalizeAndValidateSourceUpdate(&input); message != "" {
+		t.Fatalf("unexpected validation message: %q", message)
+	}
+	if input.LineageInputSourceIDs != nil {
+		t.Fatal("nil lineage inputs must stay nil so the repository leaves the list untouched")
+	}
+	input.LineageInputSourceIDs = []string{}
+	if message := normalizeAndValidateSourceUpdate(&input); message != "" || input.LineageInputSourceIDs == nil {
+		t.Fatalf("an empty list must survive as an explicit clear, got %q / %#v", message, input.LineageInputSourceIDs)
+	}
+}

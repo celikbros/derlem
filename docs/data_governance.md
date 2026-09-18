@@ -68,6 +68,14 @@ Girdi `unknown` ise turev de `unknown`'dir; temizlik (PII ayiklama, tekrar alma,
 kalite suzgeci) metnin hakkini degistirmez. Hak durumu yalniz kaynak bazli hak
 arastirmasiyla yukseltilir, turetme islemiyle degil.
 
+## Soy Ailesi Tekrar Sayilmaz (2026-09-19)
+
+Bir kaynagin atalari, girdileri (`derived_from_source_id` ve `source_lineage_inputs`,
+000029), bir atayi ya da girdiyi paylasan kardesleri ve kendisinden tureyenler
+normalize tekrar kapisinda "baska kaynakta kopya" sayilmaz: ayni malzemenin yeniden
+kesimidir, kopyasi degil. Ilgisiz kaynaklar sayilir. Turev kaynak kaydedilirken
+girdileri bildirilir; bildirilmeyen girdi kapiyi yaniltir (TASK-014).
+
 ## Sinav Seti Olmadan Pretrain Surumu Dondurulmaz (kurucu karari, 2026-09-17)
 
 `eval`/`holdout` amacli en az bir kaynak kayitli olmadan hicbir `pretrain` surumu

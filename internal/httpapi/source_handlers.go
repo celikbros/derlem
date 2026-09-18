@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"regexp"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -75,7 +76,11 @@ func (s *Server) createSource(w http.ResponseWriter, r *http.Request) {
 	principal, _ := principalFrom(r.Context())
 	source, err := s.sources.Create(r.Context(), input, principal.Subject)
 	if errors.Is(err, repository.ErrNotFound) {
-		writeError(w, http.StatusUnprocessableEntity, "derived_source_not_found", "Turetilen kaynagin parent kaydi bulunamadi.")
+		writeError(w, http.StatusUnprocessableEntity, "derived_source_not_found", "Turetilen kaynagin parent ya da girdi kaydi bulunamadi.")
+		return
+	}
+	if errors.Is(err, repository.ErrSelfLineage) {
+		writeError(w, http.StatusUnprocessableEntity, "self_lineage", "Kaynak kendi girdisi olamaz.")
 		return
 	}
 	if err != nil {
@@ -98,7 +103,11 @@ func (s *Server) updateSource(w http.ResponseWriter, r *http.Request) {
 	principal, _ := principalFrom(r.Context())
 	source, err := s.sources.Update(r.Context(), r.PathValue("id"), input, principal.Subject)
 	if errors.Is(err, repository.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "source_not_found", "Kaynak bulunamadı.")
+		writeError(w, http.StatusNotFound, "source_not_found", "Kaynak ya da girdi kaynağı bulunamadı.")
+		return
+	}
+	if errors.Is(err, repository.ErrSelfLineage) {
+		writeError(w, http.StatusUnprocessableEntity, "self_lineage", "Kaynak kendi girdisi olamaz.")
 		return
 	}
 	if errors.Is(err, repository.ErrConflict) {
@@ -223,6 +232,11 @@ func normalizeAndValidateSource(input *domain.CreateSourceInput) string {
 	if input.Name == "" || input.SourceType == "" || input.License == "" || input.Language == "" || input.Domain == "" || input.LineageRef == "" {
 		return "Ad, kaynak tipi, lisans, dil, alan ve köken bilgisi zorunludur."
 	}
+	if normalized, message := normalizeLineageInputIDs(input.LineageInputSourceIDs); message != "" {
+		return message
+	} else {
+		input.LineageInputSourceIDs = normalized
+	}
 	if _, ok := domain.ContentPurposes[input.ContentPurpose]; !ok {
 		return "Geçerli bir içerik amacı seçilmelidir."
 	}
@@ -238,6 +252,26 @@ func normalizeAndValidateSource(input *domain.CreateSourceInput) string {
 	return ""
 }
 
+// normalizeLineageInputIDs, girdi kaynak kimliklerini kucuk harfe cevirir,
+// tekrarlari atar ve siralar; kanonik UUID olmayan kimligi reddeder.
+func normalizeLineageInputIDs(ids []string) ([]string, string) {
+	seen := make(map[string]struct{}, len(ids))
+	normalized := make([]string, 0, len(ids))
+	for _, raw := range ids {
+		id := strings.ToLower(strings.TrimSpace(raw))
+		if !canonicalUUIDPattern.MatchString(id) {
+			return nil, "Girdi kaynak kimlikleri canonical UUID biciminde olmalidir."
+		}
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		normalized = append(normalized, id)
+	}
+	sort.Strings(normalized)
+	return normalized, ""
+}
+
 func normalizeAndValidateSourceUpdate(input *domain.UpdateSourceInput) string {
 	input.Name = strings.TrimSpace(input.Name)
 	input.SourceType = strings.TrimSpace(input.SourceType)
@@ -251,6 +285,13 @@ func normalizeAndValidateSourceUpdate(input *domain.UpdateSourceInput) string {
 
 	if input.Version <= 0 {
 		return "Geçerli kaynak sürümü zorunludur."
+	}
+	if input.LineageInputSourceIDs != nil {
+		normalized, message := normalizeLineageInputIDs(input.LineageInputSourceIDs)
+		if message != "" {
+			return message
+		}
+		input.LineageInputSourceIDs = normalized
 	}
 	if input.Name == "" || input.SourceType == "" || input.License == "" || input.Language == "" || input.Domain == "" || input.LineageRef == "" {
 		return "Ad, kaynak tipi, lisans, dil, alan ve köken bilgisi zorunludur."

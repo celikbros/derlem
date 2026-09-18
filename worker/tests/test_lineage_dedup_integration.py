@@ -51,6 +51,12 @@ def lineage_database_url(test_database_url: str, isolated_schema_name):
                     created_by uuid
                 );
 
+                CREATE TABLE source_lineage_inputs (
+                    source_id uuid NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+                    input_source_id uuid NOT NULL REFERENCES sources(id) ON DELETE RESTRICT,
+                    PRIMARY KEY (source_id, input_source_id)
+                );
+
                 CREATE TABLE document_fingerprints (
                     source_id uuid NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
                     source_sha256 text NOT NULL REFERENCES storage_objects(sha256),
@@ -91,7 +97,7 @@ def lineage_database_url(test_database_url: str, isolated_schema_name):
             admin.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
 
 
-def test_normalized_dedup_excludes_all_ancestors_but_not_unrelated_sources(
+def test_normalized_dedup_excludes_lineage_family_but_not_unrelated_sources(
     lineage_database_url: str, tmp_path: Path
 ) -> None:
     config = SimpleNamespace(
@@ -190,3 +196,28 @@ def test_normalized_dedup_excludes_all_ancestors_but_not_unrelated_sources(
     (unrelated_result, unrelated_audit) = fingerprint(unrelated_id, unrelated_sha)
     assert unrelated_result == ("duplicates_found", 1, 3)
     assert unrelated_audit["lineage_excluded_source_ids"] == []
+
+    # Kardes: raw'dan tureyen ikinci aday (v3 gibi). Atasi degil ama ayni
+    # aileden; v1 ve v2 ile ayni belgeleri tasimasi beklenen bir durumdur.
+    sibling_id, sibling_sha = create_source(
+        "Kardes aday icin ozgun ve yeterince uzun ikinci satir.", raw_id
+    )
+    (sibling_result, sibling_audit) = fingerprint(sibling_id, sibling_sha)
+    assert sibling_result == ("duplicates_found", 1, 1), "yalniz ilgisiz kaynak sayilmali"
+    assert set(sibling_audit["lineage_excluded_source_ids"]) == {str(raw_id), str(v1_id), str(v2_id)}
+
+    # Coklu girdi: raw'in girdisi olarak kaydedilen ham kaynak (000029). Ne raw'in
+    # atasi ne de cocugu; kayit olmadan raw ve tum turevleri onu kopya sayardi.
+    input_id, input_sha = create_source(
+        "Ham girdi kaynagi icin ozgun ve yeterince uzun ikinci satir."
+    )
+    with psycopg.connect(lineage_database_url) as connection:
+        connection.execute(
+            "INSERT INTO source_lineage_inputs(source_id, input_source_id) VALUES (%s, %s)",
+            (raw_id, input_id),
+        )
+    (input_result, input_audit) = fingerprint(input_id, input_sha)
+    assert input_result == ("duplicates_found", 1, 1), "yalniz ilgisiz kaynak sayilmali"
+    assert set(input_audit["lineage_excluded_source_ids"]) == {
+        str(raw_id), str(v1_id), str(v2_id), str(sibling_id),
+    }

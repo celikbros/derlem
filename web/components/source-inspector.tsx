@@ -912,6 +912,9 @@ export function SourceInspector({
         {source.derived_from_source_id && (
           <Detail label="Türetildiği kaynak" value={source.derived_from_source_id} mono />
         )}
+        {source.lineage_input_source_ids && source.lineage_input_source_ids.length > 0 && (
+          <Detail label="Girdi kaynakları" value={source.lineage_input_source_ids.join(", ")} mono />
+        )}
         <Detail label="Durum" value={source.approval_status} />
         <Detail label="PII / risk" value={`${piiStatusText(source.pii_status)} / ${source.risk_level}`} />
         <Detail label="Exact tekrar" value={source.duplicate_status} />

@@ -15,7 +15,9 @@ type UpdateSourceInput struct {
 	SourceURL          *string `json:"source_url"`
 	LicenseEvidenceRef *string `json:"license_evidence_ref"`
 	LineageRef         string  `json:"lineage_ref"`
-	Version            int64   `json:"version"`
+	// nil: girdi listesine dokunma; bos liste: girdileri temizle.
+	LineageInputSourceIDs []string `json:"lineage_input_source_ids"`
+	Version               int64    `json:"version"`
 }
 
 type ReviewInput struct {

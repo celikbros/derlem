@@ -27,6 +27,8 @@ export type Source = {
   license_evidence_ref?: string;
   lineage_ref: string;
   derived_from_source_id?: string;
+  /** Çoklu girdi soyu (000029): bu kaynağın üretildiği kaynaklar; tekrar kapısı aynı aileyi saymaz. */
+  lineage_input_source_ids?: string[];
   data_profile_key: string;
   data_profile_version: string;
   profile_config_artifact_kind: string;

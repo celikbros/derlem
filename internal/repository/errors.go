@@ -10,7 +10,9 @@ var (
 	ErrConflict   = errors.New("version conflict")
 	ErrForbidden  = errors.New("forbidden")
 	ErrSelfReview = errors.New("self review is not allowed")
-	ErrClaimLost  = errors.New("document review claim is missing, expired, or owned by another reviewer")
+	// ErrSelfLineage: kaynak kendi girdisi olamaz (000029).
+	ErrSelfLineage = errors.New("a source cannot be its own lineage input")
+	ErrClaimLost   = errors.New("document review claim is missing, expired, or owned by another reviewer")
 )
 
 type GateError struct {

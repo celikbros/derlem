@@ -37,6 +37,11 @@ func (r *Sources) Update(ctx context.Context, id string, input domain.UpdateSour
 	if before.Version != input.Version {
 		return domain.Source{}, ErrConflict
 	}
+	if input.LineageInputSourceIDs != nil {
+		if err := replaceLineageInputs(ctx, tx, id, input.LineageInputSourceIDs); err != nil {
+			return domain.Source{}, err
+		}
+	}
 
 	updated, err := scanSource(tx.QueryRow(ctx, `
 		UPDATE sources
@@ -72,11 +77,13 @@ func (r *Sources) Update(ctx context.Context, id string, input domain.UpdateSour
 			"name": before.Name, "license": before.License, "rights_status": before.RightsStatus,
 			"language": before.Language, "domain": before.Domain, "source_url": before.SourceURL,
 			"license_evidence_ref": before.LicenseEvidenceRef, "lineage_ref": before.LineageRef,
+			"lineage_input_source_ids": before.LineageInputSourceIDs,
 		},
 		"after": map[string]any{
 			"name": updated.Name, "license": updated.License, "rights_status": updated.RightsStatus,
 			"language": updated.Language, "domain": updated.Domain, "source_url": updated.SourceURL,
 			"license_evidence_ref": updated.LicenseEvidenceRef, "lineage_ref": updated.LineageRef,
+			"lineage_input_source_ids": updated.LineageInputSourceIDs,
 		},
 		"source_version": updated.Version,
 	})
@@ -90,6 +97,33 @@ func (r *Sources) Update(ctx context.Context, id string, input domain.UpdateSour
 		return domain.Source{}, err
 	}
 	return updated, nil
+}
+
+// replaceLineageInputs, kaynagin girdi listesini verilen kumeyle degistirir.
+// Kendine referans ErrSelfLineage, var olmayan girdi ErrNotFound doner.
+func replaceLineageInputs(ctx context.Context, tx pgx.Tx, sourceID string, inputIDs []string) error {
+	for _, inputID := range inputIDs {
+		if inputID == sourceID {
+			return ErrSelfLineage
+		}
+		var found string
+		err := tx.QueryRow(ctx, `SELECT id::text FROM sources WHERE id = $1 FOR KEY SHARE`, inputID).Scan(&found)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return fmt.Errorf("validate lineage input: %w", err)
+		}
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM source_lineage_inputs WHERE source_id = $1`, sourceID); err != nil {
+		return fmt.Errorf("clear lineage inputs: %w", err)
+	}
+	for _, inputID := range inputIDs {
+		if _, err := tx.Exec(ctx, `INSERT INTO source_lineage_inputs(source_id, input_source_id) VALUES ($1, $2)`, sourceID, inputID); err != nil {
+			return fmt.Errorf("insert lineage input: %w", err)
+		}
+	}
+	return nil
 }
 
 func NewSources(pool *pgxpool.Pool) *Sources {
@@ -134,12 +168,22 @@ func (r *Sources) Create(ctx context.Context, input domain.CreateSourceInput, ac
 	if err != nil {
 		return domain.Source{}, fmt.Errorf("insert source: %w", err)
 	}
+	if len(input.LineageInputSourceIDs) > 0 {
+		if err := replaceLineageInputs(ctx, tx, source.ID, input.LineageInputSourceIDs); err != nil {
+			return domain.Source{}, err
+		}
+		source, err = scanSource(tx.QueryRow(ctx, "SELECT "+sourceColumns+" FROM sources WHERE id = $1", source.ID))
+		if err != nil {
+			return domain.Source{}, fmt.Errorf("reload source: %w", err)
+		}
+	}
 
 	details, _ := json.Marshal(map[string]any{
 		"name":                         source.Name,
 		"content_purpose":              source.ContentPurpose,
 		"rights_status":                source.RightsStatus,
 		"derived_from_source_id":       source.DerivedFromSourceID,
+		"lineage_input_source_ids":     source.LineageInputSourceIDs,
 		"data_profile_key":             source.DataProfileKey,
 		"data_profile_version":         source.DataProfileVersion,
 		"profile_config_artifact_kind": source.ProfileConfigArtifactKind,
@@ -304,6 +348,8 @@ const sourceColumns = `
 	id::text, name, source_type, content_purpose, license, rights_status,
 	language, domain, source_url, license_evidence_ref, lineage_ref,
 	derived_from_source_id::text,
+	(SELECT COALESCE(array_agg(input.input_source_id::text ORDER BY input.input_source_id), ARRAY[]::text[])
+	   FROM source_lineage_inputs AS input WHERE input.source_id = sources.id) AS lineage_input_source_ids,
 	data_profile_key, data_profile_version,
 	profile_config_artifact_kind, profile_config_sha256,
 	profile_assignment_reason, profile_assigned_at, data_origin,
@@ -328,7 +374,7 @@ func scanSource(row scanner) (domain.Source, error) {
 		&source.ID, &source.Name, &source.SourceType, &source.ContentPurpose,
 		&source.License, &source.RightsStatus, &source.Language, &source.Domain,
 		&source.SourceURL, &source.LicenseEvidenceRef, &source.LineageRef,
-		&source.DerivedFromSourceID,
+		&source.DerivedFromSourceID, &source.LineageInputSourceIDs,
 		&source.DataProfileKey, &source.DataProfileVersion,
 		&source.ProfileConfigArtifactKind, &source.ProfileConfigSHA256,
 		&source.ProfileAssignmentReason, &source.ProfileAssignedAt, &source.DataOrigin,

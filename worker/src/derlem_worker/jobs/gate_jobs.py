@@ -402,17 +402,37 @@ class GateJobsMixin:
             self._assert_job_ownership(connection, job)
             duplicate_counts = connection.execute(
                 """
-                WITH RECURSIVE source_ancestors(source_id) AS (
-                    SELECT source.derived_from_source_id
-                    FROM sources AS source
-                    WHERE source.id = %s
-                      AND source.derived_from_source_id IS NOT NULL
+                WITH RECURSIVE up_edges(child_id, parent_id) AS (
+                    -- Soy agacinin yukari kenarlari: tek-parent turetme ve coklu girdi (000029).
+                    SELECT id, derived_from_source_id FROM sources WHERE derived_from_source_id IS NOT NULL
                     UNION
-                    SELECT parent.derived_from_source_id
-                    FROM sources AS parent
-                    JOIN source_ancestors AS ancestor
-                      ON parent.id = ancestor.source_id
-                    WHERE parent.derived_from_source_id IS NOT NULL
+                    SELECT source_id, input_source_id FROM source_lineage_inputs
+                ),
+                all_up(origin_id, ancestor_id) AS (
+                    SELECT child_id, parent_id FROM up_edges
+                    UNION
+                    SELECT all_up.origin_id, up_edges.parent_id
+                    FROM all_up JOIN up_edges ON up_edges.child_id = all_up.ancestor_id
+                ),
+                own_set(source_id) AS (
+                    SELECT %s::uuid
+                    UNION
+                    SELECT ancestor_id FROM all_up WHERE origin_id = %s::uuid
+                ),
+                -- Ayni soy ailesi: atalar/girdiler, bir atayi ya da girdiyi paylasan
+                -- kardesler ve bu kaynaktan tureyenler. Ilgisiz kaynaklar sayilir.
+                source_ancestors(source_id) AS (
+                    SELECT other.id
+                    FROM sources AS other
+                    WHERE other.id <> %s::uuid
+                      AND (
+                          other.id IN (SELECT source_id FROM own_set)
+                          OR EXISTS (
+                              SELECT 1 FROM all_up
+                              WHERE all_up.origin_id = other.id
+                                AND all_up.ancestor_id IN (SELECT source_id FROM own_set)
+                          )
+                      )
                 ),
                 current_fingerprints AS (
                     SELECT source_ordinal, normalized_sha256
@@ -460,7 +480,9 @@ class GateJobsMixin:
                 FROM internal_duplicates, external_duplicates, lineage_summary
                 """,
                 (
-                    source_id,
+                    source_id,  # own_set: kaynagin kendisi
+                    source_id,  # own_set: atalari/girdileri
+                    source_id,  # source_ancestors: kendisi haric
                     source_id,
                     object_sha256,
                     FINGERPRINT_VERSION,

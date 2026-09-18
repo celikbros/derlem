@@ -19,18 +19,21 @@ var RightsStatuses = map[string]struct{}{
 }
 
 type Source struct {
-	ID                             string    `json:"id"`
-	Name                           string    `json:"name"`
-	SourceType                     string    `json:"source_type"`
-	ContentPurpose                 string    `json:"content_purpose"`
-	License                        string    `json:"license"`
-	RightsStatus                   string    `json:"rights_status"`
-	Language                       string    `json:"language"`
-	Domain                         string    `json:"domain"`
-	SourceURL                      *string   `json:"source_url,omitempty"`
-	LicenseEvidenceRef             *string   `json:"license_evidence_ref,omitempty"`
-	LineageRef                     string    `json:"lineage_ref"`
-	DerivedFromSourceID            *string   `json:"derived_from_source_id,omitempty"`
+	ID                  string  `json:"id"`
+	Name                string  `json:"name"`
+	SourceType          string  `json:"source_type"`
+	ContentPurpose      string  `json:"content_purpose"`
+	License             string  `json:"license"`
+	RightsStatus        string  `json:"rights_status"`
+	Language            string  `json:"language"`
+	Domain              string  `json:"domain"`
+	SourceURL           *string `json:"source_url,omitempty"`
+	LicenseEvidenceRef  *string `json:"license_evidence_ref,omitempty"`
+	LineageRef          string  `json:"lineage_ref"`
+	DerivedFromSourceID *string `json:"derived_from_source_id,omitempty"`
+	// LineageInputSourceIDs: coklu girdi soyu (000029). Tek-parent derived_from
+	// ile birlikte "soy ailesi"ni kurar; tekrar kapisi bu aileyi disarida tutar.
+	LineageInputSourceIDs          []string  `json:"lineage_input_source_ids"`
 	DataProfileKey                 string    `json:"data_profile_key"`
 	DataProfileVersion             string    `json:"data_profile_version"`
 	ProfileConfigArtifactKind      string    `json:"profile_config_artifact_kind"`
@@ -70,15 +73,16 @@ type Source struct {
 }
 
 type CreateSourceInput struct {
-	Name                string  `json:"name"`
-	SourceType          string  `json:"source_type"`
-	ContentPurpose      string  `json:"content_purpose"`
-	License             string  `json:"license"`
-	RightsStatus        string  `json:"rights_status"`
-	Language            string  `json:"language"`
-	Domain              string  `json:"domain"`
-	SourceURL           *string `json:"source_url"`
-	LicenseEvidenceRef  *string `json:"license_evidence_ref"`
-	LineageRef          string  `json:"lineage_ref"`
-	DerivedFromSourceID *string `json:"derived_from_source_id"`
+	Name                  string   `json:"name"`
+	SourceType            string   `json:"source_type"`
+	ContentPurpose        string   `json:"content_purpose"`
+	License               string   `json:"license"`
+	RightsStatus          string   `json:"rights_status"`
+	Language              string   `json:"language"`
+	Domain                string   `json:"domain"`
+	SourceURL             *string  `json:"source_url"`
+	LicenseEvidenceRef    *string  `json:"license_evidence_ref"`
+	LineageRef            string   `json:"lineage_ref"`
+	DerivedFromSourceID   *string  `json:"derived_from_source_id"`
+	LineageInputSourceIDs []string `json:"lineage_input_source_ids"`
 }

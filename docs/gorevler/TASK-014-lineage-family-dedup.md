@@ -50,8 +50,11 @@ shapes it cannot see:
 
 ## Rollout (owner actions, in order)
 
-1. Apply `000029` to the working database (`go run ./cmd/migrate` — owner approval).
-2. Restart the worker so the gate uses the new query.
+1. ~~Apply `000029` to the working database~~ — **done 2026-09-19 07:16** (`go run ./cmd/migrate`,
+   owner approval; `schema_migrations` head is `000029_source_lineage_inputs.sql`).
+2. Restart the API (the running build predates `lineage_input_source_ids`) and the worker
+   (old gate query). Measured before the restart: the v3 candidate and held-out were still
+   `not_checked` for normalized dedup — the old query had not run on them.
 3. Derlem declares the parent's inputs = the five `faz2_ham_*` sources (API PATCH, audited),
    and later the two big raw files once registered.
 4. If the old query already quarantined the v3 candidate / held-out, reset their

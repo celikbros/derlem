@@ -162,3 +162,71 @@ Ticari olmayan kapsam `license_evidence_ref` ve `lineage_ref` metinlerinde yazı
 hedefleniyorsa `ttk` da çıkar. Kalan karar B ile A arasında hız/risk dengesidir; B seçilirse
 memo şunları açıkça söylemeli: hangi kaynaklar, hangi kullanım (yalnız kendi eğitimimiz,
 yeniden dağıtım yok), tazmin ve share-alike risklerinin kabulü, takedown taahhüdü.
+
+## TASK-038 — `tr_corpus` kökeni (ölçüm, 2026-09-19)
+
+TASK-011 `tr_corpus` için "toplayıcı bulunamadı" yazmıştı; TASK-022 ilk 500 satırın 366'sını
+`wiki_oscar` kayıtlarının içinde bulmuştu. Bu kez **1.502.165 satırın tamamı** 12,8 GB'lik
+`wiki_oscar`'ın **4.253.739 kaydının tamamına** karşı ölçüldü (salt okunur; hak durumu
+değiştirilmedi).
+
+**Yöntem.** İki taraf da aynı kodla normalize edildi (TASK-016 kuralı: boşluk dizileri tek
+boşluğa, kırpma, `casefold`, utf-8). Normalize satırların en kısası 50 bayt, bu yüzden kısa
+satır istisnası gerekmedi. Her satırdan, satıra eşit aralıkla yayılmış **8 adet 32 baytlık
+pencere** ("çıpa") alınıp 64 bit'e özetlendi (numpy `cumsum` ile yuvarlanan polinom karma +
+splitmix64) — 12.017.320 çıpa. `wiki_oscar` 8 MB'lik öbeklerle akıtıldı, **her kaydın bütün
+32 baytlık pencereleri** karmalanıp çıpa dizininde arandı. Bir satır bir kaydın içinde
+geçiyorsa satırın *her* penceresi, dolayısıyla 8 çıpanın hepsi o kayıtta vardır; bu yüzden
+tarama hiçbir içerme'yi kaçıramaz. En az 2 çıpa tutunca (kayıt, satır) çifti aday sayıldı ve
+her aday **tam `bytes in bytes` denetimiyle** doğrulandı — yani sonuç sezgisel değil, tam
+alt dizgi içermesi. Karma çakışması yalnız fazladan aday üretir, doğrulama eler. Wikipedia
+içinde bulunan satırlar dizinden budandı (12,0M → 2,1M çıpa); ölçümü doğrusal tutan budur.
+Ayrıca istenen **yaklaşık kural** da hesaplandı: aday çiftlerde satırın 8 kelimelik
+gölgelerinin (shingle) **≥ %95'i** kayıtta geçiyorsa "yakın içerme".
+
+**Sonuç** (bayt = ham satır, satır sonu dahil; toplam 457.814.564 bayt):
+
+| Sınıf | Satır | Satır payı | Bayt | Bayt payı | uzunluk p10/p50/p90 |
+|---|---:|---:|---:|---:|---|
+| (a) bir `wikipedia` kaydının içinde | 1.243.012 | %82,748 | 369.389.846 | %80,685 | 64 / 188 / 660 |
+| (b) yalnız bir `mc4` kaydının içinde | 1.452 | %0,097 | 208.600 | %0,046 | 58 / 75 / 288 |
+| (c) hiçbiri | 257.701 | %17,155 | 88.216.118 | %19,269 | 61 / 192 / 793 |
+
+≥ %95 gölge kuralı eklenince (a)'ya 5.384 satır daha girer (+0,36 puan).
+
+**Kalıntı aslında da Wikipedia.** Eşleşmeyen satırların **%40,5'i** tipografik kesme
+işareti (U+2019) taşıyor; eşleşen satırların **%0,00'ı** taşıyor — yani kalıntı `wiki_oscar`'dan
+kelimelerde değil, noktalama biçiminde ayrılıyor (toplayıcı `download_tr_corpus.py`
+`20220301.tr` dökümünü okuyor, `wiki_oscar` ise `20231101.tr`). Kalıntı, kıvrık tırnak/kesme,
+tireler ve üç nokta iki tarafta da ASCII'ye indirgenerek **aynı tam yöntemle** yeniden
+tarandı; 114.972 satır daha Wikipedia kayıtlarının içinde çıktı:
+
+| Sınıf | Satır | Satır payı | Bayt | Bayt payı | uzunluk p10/p50/p90 |
+|---|---:|---:|---:|---:|---|
+| (a) Wikipedia | 1.357.984 | **%90,402** | 430.400.365 | **%94,012** | 65 / 205 / 699 |
+| (b) yalnız mC4 | 1.504 | %0,100 | 223.365 | %0,049 | 58 / 76 / 295 |
+| (c) hiçbiri | 142.677 | %9,498 | 27.190.834 | %5,939 | 57 / 82 / 378 |
+
+Kalan %5,9: 142.677 kısa satır (ortanca 82 bayt) — kategori listeleri, oyuncu/künye
+listeleri, taslak cümleler, kaynakça satırları; tipi yine Wikipedia, ama bu dökümde yok.
+
+**Doğrulama.** Rastgele **2.000 satır** (tohum 20260919), aynı geçişte bağımsız bir
+Aho-Corasick otomatıyla **her kayda** karşı tam alt dizgi olarak da arandı. Gerçek değer:
+1.651 wikipedia, 1 yalnız mC4, 348 hiçbiri. Çıpa yöntemi: kesinlik **1,0000**, duyarlılık
+**1,0000** (kaba kuvvetle birebir aynı). ≥ %95 gölge kuralı tam içermeye karşı: kesinlik
+**0,9952**, duyarlılık **1,0000** — 8 yanlış pozitifin hepsi gerçek yakın kopya (toplayıcının
+`clean_wiki_text`'i `'''kalın'''`, `[[bağ|metin]]`, `<ref>` temizliyor), gürültü değil.
+
+**Süre.** Tek süreç, tepe bellek ~1,6 GB: satır hazırlığı 29 sn · ana tarama **1.611 sn**
+(26,9 dk) · kalıntının tipografi taraması 2.187 sn (36,5 dk) · raporlar ~60 sn →
+**toplam ≈ 64 dk** (12,81 GB + 458 MB). Betikler ve çıktılar:
+`var/olcum-2026-09-19/task-038/`.
+
+**Kurucuya öneri (karar kurucunun).** `tr_corpus` "kökeni bilinmiyor" değil: baytının
+**%94,0'ı** harfi harfine, `wiki_oscar`'ın zaten taşıdığı Türkçe Wikipedia metni
+(CC BY-SA 3.0 + GFDL, ticari olmayan kullanımda `cleared`). Önerim: kaynak kaydını
+**`unknown` bırakmak** — v4 bu satırları zaten atıyor ve aynı metin `wiki_oscar`'da bütün
+madde olarak duruyor, dolayısıyla durumu değiştirmenin kazancı yok — ama bu belgeye şu
+yazılsın: `tr_corpus`'un %94'ünde hak sorusu Wikipedia sorusudur; ileride `tr_corpus` geri
+istenirse Wikipedia'da geçen pay `wiki_oscar` şartları altında kabul edilebilir, %5,9'luk
+kalıntı dışarıda kalır.

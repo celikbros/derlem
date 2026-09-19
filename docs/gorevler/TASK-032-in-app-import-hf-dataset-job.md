@@ -21,6 +21,7 @@ The only large volume lever (TASK-013 options 2–3). Rights (TASK-030), boundar
 
 - Worker job `import_hf_dataset(dataset_id, config, split, revision)`: streaming download to `IMPORT_ROOT` by shard with per-shard SHA and resume; one document per record with paragraph breaks preserved in JSONL (never split); production manifest (repo, config, split, revision SHA, text field, record count, licence id, dataset-card snapshot SHA); register via the existing intake with `lineage_ref` = manifest, `license_id` from the card, `rights_status` per the licence note; gates follow.
 - API endpoint + minimal admin/data_manager form fields (`DisallowUnknownFields`); progress counters like exports.
+- Boundary rule per the policy note [belge_sinirlari_politikasi.md](../belge_sinirlari_politikasi.md) (TASK-022, §4): one record = one document, never split or merged; the text field only (title stays metadata); paragraph breaks kept as `\n` in the stored JSONL object and joined to a single space only by the txt export.
 - Dry run of one record first (measured), then the full config.
 - Tests with a local fixture dataset (no network): revision pinning, boundary preservation, resume after injected failure with identical SHA; control run. Docs `docs/hf_ice_alim.md`.
 

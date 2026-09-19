@@ -136,6 +136,15 @@ Süzmenin kanıtı (atılacak satır listesinin SHA256'sı, ölçüm) v4 manifes
 bilinmeyenleri çıkar, TTK/TDK/akademik kalsın"; ticari hedef: "Hayır, şimdilik
 araştırma/kendi kullanım").
 
+**Uygulandı (2026-09-19, kurucu onayı "ok onay veriyorum"):** tablodaki hak durumları
+`sources` kayıtlarına API üzerinden (denetim izli) işlendi — `ttk`, `academic`, `tdk`
+`cleared` (lisans kanıtı: bu belge), `trt` `blocked`; `tr_corpus` `unknown` kaldı.
+`wiki_oscar` ham dosyası kaynak olarak kaydedildi (`faz2_ham_wiki_oscar_20260919`,
+`e6f3b29b-d2e6-4f89-bdee-cd1e3c52703e`, `cleared`, lisans kanıtı bu belge) ve ana
+korpusun girdilerine eklendi (6 girdi; `celik_gold` hâlâ kayıtsız, S2'de dışarıda).
+Ticari olmayan kapsam `license_evidence_ref` ve `lineage_ref` metinlerinde yazılıdır;
+`rights_status` sözlüğünde kapsam alanı yoktur (bkz. TASK-030, makine okunur lisans defteri).
+
 ## Kurucunun önündeki seçenekler (TASK-011 kararı, 2. inceleme oturumundan önce)
 
 - **A) Kaynak bazlı temizlik + v4:** `trt` çıkarılır; `ttk` ticari amaçta çıkarılır;

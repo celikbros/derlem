@@ -80,15 +80,25 @@ Its 1,339-byte manifest was kept as the record of how the derivative was produce
 - `docs/backup_restore.md`: the raw archive is **deliberately** outside the backup
   scope, with the founder's reasoning and the accepted risk.
 
-### 5. Open — source registration of the seven corpora
+### 5. Source registration of the seven corpora — 6 of 7 done
 
-Not started. Order (founder's decision: small first, the two big ones last):
-`trt` → `tdk` → `academic` → `ttk` → `tr_corpus` (~0.65 GB together), then
-`celik_gold` and `wiki_oscar` (13.0 + 12.8 GB). Each goes through `IMPORT_ROOT` and
-the admin-only local-file intake, `content_purpose = pretrain`,
-`rights_status = unknown`, lineage pointing at the letter and the archive doc.
-Expect the normalized-dedup gate to quarantine `celik_gold` as a duplicate: it is an
-input of the Faz-2 text we already hold. That is the correct answer, not a bug.
+- 2026-09-18: `trt`, `tdk`, `academic`, `ttk`, `tr_corpus` registered
+  (`faz2_ham_<name>_20260918`), ingested, linked as lineage inputs of the parent (000029,
+  TASK-014); all `unique` at the normalized-dedup gate (family rule), all quarantined by
+  the PII gate as expected for raw text.
+- 2026-09-19 (owner: "ok onay veriyorum"): `wiki_oscar` registered as
+  `faz2_ham_wiki_oscar_20260919` (`e6f3b29b-d2e6-4f89-bdee-cd1e3c52703e`) with
+  `rights_status = cleared` (documented licence, non-commercial scope per the S2 decision,
+  evidence [hak_kanit_paketi_2026_09.md](../hak_kanit_paketi_2026_09.md)) and added to the
+  parent's inputs (6). Reason for doing it before v4: v4 is 93 % `wiki_oscar` by bytes;
+  a frozen manifest cannot gain an input later. The file is a **hard link** under
+  `IMPORT_ROOT` (same volume, intake only reads) — no 12.8 GB copy. Ingest is queued
+  **after** v4's gates so the single worker loop serves v4 first.
+- The S2 rights table was applied to the four other registered raw sources at the same
+  time: `ttk`/`academic`/`tdk` → `cleared` (evidence: the packet), `trt` → `blocked`;
+  `tr_corpus` stays `unknown`.
+- Open (TASK-010b): `celik_gold` (13.0 GB). Outside S2 (own share 1.96 % of bytes); only
+  needed for the parent's complete lineage. Ask the owner before starting.
 
 ### 6. Open — restore drill
 

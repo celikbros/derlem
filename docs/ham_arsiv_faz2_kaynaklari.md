@@ -69,13 +69,29 @@ bir iş olarak açıktır ve ürün çıkmadan önce yapılacaktır
 `celik_gold` için her biri ayrı değerlendirilmelidir; kazıyıcı kodu bu
 değerlendirmenin girdisidir.
 
-## Sıradaki iş: kaynak kaydı
+## Kaynak kaydı: durum (2026-09-19)
 
-Arşiv, Derlem'in `sources` tablosuna henüz girmedi. Plan (kurucu kararı: küçükten
-büyüğe, iki büyük dosya en sonda):
+| Kaynak | Derlem kaydı | Hak durumu (S2 kararı, 2026-09-19) |
+|---|---|---|
+| `trt` | `faz2_ham_trt_20260918` | `blocked` |
+| `tdk` | `faz2_ham_tdk_20260918` | `cleared` (kurucu risk kabulü, ticari olmayan) |
+| `academic` | `faz2_ham_academic_20260918` | `cleared` (kurucu risk kabulü, ticari olmayan) |
+| `ttk` | `faz2_ham_ttk_20260918` | `cleared` (CC BY-NC, ticari olmayan) |
+| `tr_corpus` | `faz2_ham_tr_corpus_20260918` | `unknown` |
+| `wiki_oscar` | `faz2_ham_wiki_oscar_20260919` (`e6f3b29b…`), içe alma v4 kapılarından sonra kuyruğa | `cleared` (belgeli lisans, ticari olmayan) |
+| `celik_gold` | **kayıtsız** (TASK-010b; S2'de dışarıda, özgü kısmı %1,96) | `unknown` |
 
-1. `trt` → `tdk` → `academic` → `ttk` → `tr_corpus` (toplam ~0,65 GB)
-2. `celik_gold` ve `wiki_oscar` (13,0 + 12,8 GB) — saatler sürecek; acelesi yok
+Hak dayanakları: [hak_kanit_paketi_2026_09.md](hak_kanit_paketi_2026_09.md). Beş küçük
+kaynak ve `wiki_oscar`, ana korpusun (`gardash_faz2_tr_dedup_20260621`) girdileri olarak
+bağlıdır (000029); bu yüzden tekrar kapısı onları kopya saymaz, PII kapısı ham metni
+beklendiği gibi karantinaya alır. `wiki_oscar` dosyası `IMPORT_ROOT` altına kopyalanmadı,
+**sabit bağ** (hard link) verildi: aynı disk, içe alma yalnız okur, arşiv kopyası değişmez.
+
+Eski plan (kurucu kararı: küçükten büyüğe, iki büyük dosya en sonda):
+
+1. `trt` → `tdk` → `academic` → `ttk` → `tr_corpus` (toplam ~0,65 GB) — yapıldı 2026-09-18
+2. `celik_gold` ve `wiki_oscar` (13,0 + 12,8 GB) — `wiki_oscar` kaydedildi 2026-09-19
+   (v4'ün soy kaydı için); `celik_gold` bekliyor
 
 Her kaynak `IMPORT_ROOT` altına kopyalanıp yerel dosya içe alma yoluyla kaydedilir
 (yalnız admin), `content_purpose = pretrain`, `rights_status = unknown`,

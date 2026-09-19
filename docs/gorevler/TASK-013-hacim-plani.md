@@ -75,7 +75,9 @@ kelime/bayt beyanından). "Örtüşme" = ana korpustaki `wiki_oscar` (mC4 + Wiki
 | 6 | [`wikimedia/wikipedia` `20231101.tr`](../haklar/hf-wikimedia-wikipedia.md) | CC BY-SA 3.0 + GFDL | Wikimedia ToU (CC BY-SA 4.0 + GFDL) | `b04c8d1…` | 534.988 makale; 997 MB | ~0,2 B | **Evet, tamamen** (aynı config) | `cleared` (ticari olmayan; mevcut karar) | Net yeni ≈ 0; TASK-024 pilotu için sabit referans |
 | 7 | [`oscar-corpus/OSCAR-2301` `tr`](../haklar/hf-oscar-2301.md) | CC0 (yalnız üstveri/paketleme) | İçerik lisansı yok; CC Kas/Ara 2022 | `c293046…` | 26,65 M belge; 73,7 GB; 8,29 B kelime | ~14 B | Hayır | `blocked` (erişim askıda) | Gated-manuel, onay verilmiyor; açılırsa `restricted` |
 
-Kurucu kararı bekleyenler: (a) #1 için `wiki_oscar` kabullerinin (atıf, Common Crawl tazmin
-maddesi, ticari olmayan kapsam) yazılı olarak genişletilmesi; (b) #3 için "içerik lisansı yok,
-yalnız paketleme CC0" konumunda risk kabulü verilip verilmeyeceği; (c) share-alike'ın (yalnız
-Wikipedia) kabul edilmiş sayılması — zaten S2 kararında.
+Kurucu kararı (2026-09-19; kurucu, 2026-09-19 gece: "önerilerin ok"), notlardaki önerilere göre: (a) #1 FineWeb-2 için
+`wiki_oscar` kabulleri (atıf, Common Crawl tazmin maddesi, ticari olmayan kapsam) **genişletildi**
+— alındığında `cleared` (ticari olmayan); (b) #3/#4 HPLT için risk kabulü **verilmedi** —
+`restricted` kalır; CulturaX izlenmez, OSCAR `blocked`; (c) share-alike (yalnız Wikipedia)
+S2 kararında zaten kabul. Liste onaylandı. **Hiçbir şey indirilmedi**; alım TASK-032 (onay ister)
+ve TASK-024 pilotuyla gelir.

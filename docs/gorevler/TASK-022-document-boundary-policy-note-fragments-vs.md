@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **IN PROGRESS** — 2026-09-19: policy note written ([belge_sinirlari_politikasi.md](../belge_sinirlari_politikasi.md)); owner decision line pending; shelf question drafted for the next letter. Was: DRAFT — from the 2026-09-19 plan ([plan_2026_09.md](../plan_2026_09.md), Faz 2); no new feature — may start when its dependencies are done |
+| Status | **DONE** — 2026-09-19: policy note written ([belge_sinirlari_politikasi.md](../belge_sinirlari_politikasi.md)); owner decided (a) yes, (c) yes, (b) later; shelf question goes in the next letter (answer tracked in the note). Was: DRAFT — from the 2026-09-19 plan ([plan_2026_09.md](../plan_2026_09.md), Faz 2); no new feature — may start when its dependencies are done |
 | Kind | research |
 | Moratorium | allowed — a decision note (feature-list item 2 reduced to policy; corpus merge deferred) |
 | Estimate | 0.5 day(s) |
@@ -30,12 +30,12 @@ The parent lost boundaries (title + body lines, Wikipedia sentence fragments); f
 
 ## Acceptance criteria
 
-- [x] Policy doc exists with a dated owner decision line and the shelf's answer (or 'not answered yet'). — 2026-09-19: decision line present as "(karar bekliyor …)", shelf answer "henüz sorulmadı".
-- [ ] TASK-032 cites the policy in its scope.
+- [x] Policy doc exists with a dated owner decision line and the shelf's answer (or 'not answered yet'). — 2026-09-19: decision dated (owner: "önerilerin ok"), shelf answer "henüz sorulmadı".
+- [x] TASK-032 cites the policy in its scope.
 
 ## Owner actions
 
-- Decide (a)/(b)/(c) and date it; recommended: (a) yes, (c) yes, (b) later.
+- ~~Decide (a)/(b)/(c) and date it~~ — decided 2026-09-19: (a) yes, (c) yes, (b) later.
 
 ## Report
 

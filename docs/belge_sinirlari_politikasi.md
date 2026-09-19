@@ -111,7 +111,9 @@ TASK-032 ve TASK-024 için bağlayıcı kural:
 
 ## 5. Kurucu kararı
 
-**Kurucu kararı (tarih: —):** (karar bekliyor — öneri: (a) evet, (c) evet, (b) sonra)
+**Kurucu kararı (2026-09-19; kurucu, 2026-09-19 gece: "önerilerin ok"):** (a) **evet** — yeni alımlarda kayıt bütün belge, paragraf
+sonları JSONL'de korunur, yalnız txt ihracında birleşir; (c) **evet** — v2 teslimatı v4 ile
+yapılır; (b) **sonra** — ham JSONL'den yeniden türetme sınır kazandırmadığı için şimdi yapılmaz.
 
 **Rafın cevabı:** henüz sorulmadı (aşağıdaki paragraf sonraki mektuba girer).
 

@@ -32,7 +32,7 @@ Lingua had 64 % false positives; fastText lid.176.ftz measured 30 flagged / 82,2
 
 ## Owner actions
 
-- None.
+- None required. Recommendation **accepted** 2026-09-19 (kurucu, 2026-09-19 gece: "önerilerin ok"): TASK-028 (still approval-gated) builds on the subprocess bridge (`DERLEM_LID_PYTHON`, SHA-pinned, `unavailable` fallback) with the window-carrying method id.
 
 ## Report
 

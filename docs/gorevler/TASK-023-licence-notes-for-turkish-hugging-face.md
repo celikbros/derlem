@@ -34,7 +34,7 @@ Owner decision #2: each dataset arrives with a documented licence. Card licences
 
 ## Owner actions
 
-- Confirm the shortlist; decide whether share-alike and attribution-only terms are acceptable for the shelf's use.
+- ~~Confirm the shortlist; decide whether share-alike and attribution-only terms are acceptable~~ — **decided 2026-09-19** (kurucu, 2026-09-19 gece: "önerilerin ok"): shortlist confirmed; recommendations accepted (FineWeb-2/mC4/Wikipedia `cleared` non-commercial, HPLT/CulturaX `restricted`, OSCAR `blocked`). See TASK-013.
 
 ## Report (2026-09-19)
 

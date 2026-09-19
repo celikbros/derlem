@@ -61,8 +61,14 @@ rejection report the shelf can audit for false positives.
    93,223-record rejection report; removed: PII 104,853, quality 55,677, near-dup 35,833,
    language 1,492, normalized-dup 221, oversized 3; overflow 0. Numbers in
    [temiz_aday_v3.md](../temiz_aday_v3.md).
-2. Register both outputs as sources through the API (owner starts API + worker):
-   `pretrain` candidate (`derived_from` parent) and `holdout`; rights `unknown`.
+2. ~~Register both outputs~~ **done 2026-09-19**: v3 candidate `0820b63b…` (`pretrain`) and
+   held-out `a043125e…` (`holdout`), both `unique`, sampled 200. Then the owner's S2 rights
+   decision (TASK-011) made v3 the *input* of **v4**: same pass with the S2 scope drop list
+   (1.529.744 + 598 digests): candidate 4.297.899 lines /
+   11.255.199.803 bytes (`23bfcdcf…`), held-out 1.641 lines
+   (`2dc81fcd…`); extra quality drops **7** (`extreme_repetition`) — traced to the zlib-implementation-dependent compression ratio in `tr-web-*` (v3 ran under Python 3.14/zlib-ng, v4 under 3.13/zlib); see TASK-039. Numbers in
+   [temiz_aday_v3.md](../temiz_aday_v3.md) (v4 section). v4 sources: `gardash_faz2_tr_dedup_20260621_clean_candidate_v4_20260919` → `47c5748c-7f4f-4a9c-a8d3-2d4ec67f88cd`; `gardash_faz2_tr_dedup_20260621_heldout_v2_20260919` → `596ae2fa-3b1b-4733-9ed7-b314518aed9e`; rights `cleared`
+   (non-commercial), inputs wiki_oscar/ttk/academic/tdk.
 3. Then sampling → 200-sample review (owner, two sessions) → draft release → freeze
    (decontamination gate now numeric) → exports → delivery letter with SHA256.
 4. Hand the rejection report to the shelf for the false-positive audit.

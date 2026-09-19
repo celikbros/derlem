@@ -166,3 +166,40 @@ bir korumadır, sürüm kapısı raporlaması değildir (sürüm kalite satırla
 `document_reviews`'tan gelir); dil tanıma (TASK-028) kapsam dışıdır. Kontrol (2026-09-19):
 koruma kaldırıldığında `test_tr_web_policy_is_not_evaluated_for_non_turkish_source`
 kırmızıya döner, geri konunca 42 test yeşil.
+
+## v4 — S2 kapsam süzmesi (2026-09-19 → 20)
+
+Kurucu kararı S2 ([hak_kanit_paketi_2026_09.md](hak_kanit_paketi_2026_09.md)): v4, **v3
+çıktısından** kaynak bazlı süzülerek üretildi — yalnız `wiki_oscar`/`ttk`/`academic`/`tdk`
+belgelerinde geçen satırlar tutuldu, TRT'de geçenler atıldı. Yeniden türetme değil, aynı
+`clean-candidate-v3` geçişi bir atılacak-satır listesiyle: liste `s2-scope-2026-09-19`
+(v3 adayı için `1.529.744` kayıt, SHA `270de33f2da4cfa6f373ec56fb5171b4354a44b2df950b8f6bbb480a2c56db94`; held-out için
+`598` kayıt, SHA `146058c07f68e35f1e62129966125a2ff93ac992351541f7c844303bc1834ea0`). Liste, TASK-016'nın normalize belge
+özetleriyle (boşluk sıkıştırma + casefold, BLAKE2b-128) yedi ham dosya taranarak üretildi;
+`scope` alanı `source_not_in_scope_s2` ya da `trt_terms_forbid` (v3 adayında 197 TRT satırı).
+Kalite (`tr-web-v2`) yeniden uygulandı; beklenen ek atma 0'dı, ölçülen: kalite **7**
+(`extreme_repetition`), PII 0, tekrar 0, aşırı büyük 0. Yedi satırın nedeni araştırıldı ve
+bulundu ([TASK-039](gorevler/TASK-039-zlib-dependent-compression-rule.md)): kuralın
+sıkıştırma-oranı ölçütü (`zlib.compress(level=9)` ≤ %18) **zlib uygulamasına bağlı**. v3 kök
+`.venv` (Python 3.14, zlib-ng 1.3.1) ile, v4 `worker/.venv` (Python 3.13, klasik zlib 1.3.1) ile
+üretildi; aynı satır birinde eşiğin hemen üstünde, ötekinde hemen altında. Yedi satır da çift
+kodlanmış (mojibake) e-ticaret/hava durumu sayfaları; atılmaları içerik olarak doğru, ama
+gerekçe tekrarlanabilir değil. v4 manifesti olduğu gibi kalır (atma kaydı raporda); kural
+düzeltmesi v5 öncesi işidir, v4'ü değiştirmez.
+
+| Sonuç | Satır | Bayt | SHA256 |
+|---|---|---|---|
+| **Eğitim adayı v4** (`…_clean_candidate_v4.txt`) | 4.297.899 | 11.255.199.803 | `23bfcdcf175afa18fa661c82b4fe396b837566922c9a8a43bc8aabdbfafae074` |
+| **Held-out v2** (`…_v4_heldout.txt`) | 1.641 | 4.323.687 | `2dc81fcdd540fafc44b5319cc54f15384450657454ffbe69462d150542c5dd87` |
+| Atma raporu v4 (`…_v4.txt.rejections.jsonl`) | 1.529.751 kayıt | 570.734.261 | `4b1c6265943fbf0afb867fb268cfb3956281dc9086093bd8a33794959a73e839` |
+
+v3 → v4: aday 5.827.650 → 4.297.899 satır (1.529.744 kapsam dışı,
+%5.39 bayt); held-out 2.239 → 1.641
+(598 kapsam dışı). Held-out kuralı satır baytına bağlı olduğundan bölme
+değişmedi; yalnız kapsam dışı belgeler düştü. Hak durumu: kalan dört kaynağın en kısıtlısı —
+`cleared`, **ticari olmayan** kapsam. Kaynak kayıtları: `gardash_faz2_tr_dedup_20260621_clean_candidate_v4_20260919` → `47c5748c-7f4f-4a9c-a8d3-2d4ec67f88cd`; `gardash_faz2_tr_dedup_20260621_heldout_v2_20260919` → `596ae2fa-3b1b-4733-9ed7-b314518aed9e`; girdiler (000029)
+`wiki_oscar`/`ttk`/`academic`/`tdk`, `derived_from` v3 kayıtları.
+
+Üretim: `clean_candidate --source-id <v3 kaydı> --quality-policy tr-web-v2 --drop-list
+var/derived/s2-droplist-{v3,heldout}-2026-09-19.jsonl --drop-list-method s2-scope-2026-09-19
+--drop-list-reason source_not_in_scope_s2` (held-out kuralı ve yakın kopya kapalı: v3'te uygulandı).

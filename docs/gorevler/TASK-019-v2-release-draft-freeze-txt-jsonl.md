@@ -36,6 +36,38 @@ This is the reason the project exists; everything in later phases is conditional
 - [ ] Two `release_exports` rows `ready`; `sha256sum` of each downloaded artifact equals the manifest value.
 - [ ] Letter committed with all SHAs and durations as numbers; post-export backup manifest lists the frozen manifest and both artifacts; diyet Faz 0 shows delivery count 1.
 
+## Rehearsal numbers (TASK-018)
+
+Measured 2026-09-19 on `derlem_ci_test` with the 100k slice (99,007 lines, 202.9 MB; 43-line
+held-out) driven in-process through the real worker code (`Worker.run_once()`), same machine
+that will run the real job. **Extrapolation is linear in bytes (×58.6 for 11,896,793,726 B)
+and is a labelled estimate, not a measurement**; the near-duplicate SimHash index and the
+approximate-decontamination candidate lookups grow with document count and may be worse
+than linear at 5.8 M documents, so treat the freeze figure as a lower bound.
+
+| Step | Measured (202.9 MB) | Throughput | Extrapolated (11.9 GB) |
+|---|---|---|---|
+| freeze_release (verify copies + near-dup + exact + approximate decontamination) | 326 s | 0.62 MB/s | ≈ 19,100 s ≈ **5.3 h** (lower bound) |
+| export_release txt | 6.65 s | 30.5 MB/s | ≈ 390 s ≈ **6.5 min** |
+| export_release jsonl | 8.91 s | 22.8 MB/s in (27.7 MB/s out, output ≈ 1.22 × input) | ≈ 520 s ≈ **8.7 min**, artifact ≈ 14.5 GB |
+
+Gate values seen on the slice (the keys the worker actually writes):
+`gate_results.decontamination.reference_document_count = 43`, `match_count = 0`, status
+`passed`; `approximate_decontamination.status = reported`, `potential_match_count = 0`;
+`near_duplicate_report.status = reported`. For the real run the reference is the 2,239-line
+v3 held-out, so expect `reference_document_count = 2239` (this card's acceptance line says
+`exact_decontamination.compared_document_count`; that key does not exist — read
+`decontamination.reference_document_count`).
+
+Disk: each of the three jobs first copies the source object into a verified temp snapshot
+under the store's `.tmp` (≈ 11.9 GB, deleted when the job ends) and the exports add ≈ 11.9 GB
+(txt; on this input the txt artifact is byte-identical to the source) and ≈ 14.5 GB (jsonl).
+The ≥ 30 GB free-disk check above is consistent with that; ~40 GB is the comfortable figure.
+
+Before queueing: the worker's `MAX_DOCUMENT_BYTES` default is 256 KiB; one longer line blocks
+the freeze with `document_too_large`. The slice's longest line is 159,267 B; check the full
+candidate's longest line (or raise the limit) first. — Checked 2026-09-20 from the v3 manifest: `clean_candidate` ran with `max_document_bytes = 262144` and dropped 3 oversized lines, so no v3 line (and therefore no v4 line, v4 ⊂ v3) exceeds the worker limit. Nothing to raise.
+
 ## Owner actions
 
 - Check free disk (≥ ~30 GB) before export; approve each working-DB action (draft, attach, freeze, two exports) or perform them in the UI; keep API + worker running.

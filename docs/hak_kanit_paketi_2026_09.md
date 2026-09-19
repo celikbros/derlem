@@ -40,8 +40,8 @@ kullanımına bir şart bulaşır mı.
   CC BY-SA share-alike: metnin yeniden dağıtımında aynı lisans; model ağırlıklarının "türev
   eser" sayılıp sayılmadığı dünyada tartışmalı — risk kabulü kararı. Common Crawl tazmin
   yükümlülüğü hukuki risktir; kabul edilecekse yazılı kabul edilir.
-- **Doğrulanmadı:** `wiki_oscar_corpus.jsonl` dosyasının gerçekten bu iki veri setinden
-  geldiği ad ve kod yolundan çıkarımdır; dosya içeriğinden doğrulanmadı (TASK-016).
+- **Doğrulandı (2026-09-19):** `wiki_oscar_corpus.jsonl` kayıtlarında `source` alanı var;
+  85.075 kayıtlık örneklemde değerler yalnız `mc4` (%90,6) ve `wikipedia` (%9,4).
 
 ### 2. `ttk` — Türk Tarih Kurumu Belleten
 
@@ -109,7 +109,8 @@ baytça %1,96); `tr_corpus` kısa parçalar (baytça %3,36, satırca %24,9).
 - **A) Kaynak bazlı temizlik + v4:** `trt` çıkarılır; `ttk` ticari amaçta çıkarılır;
   `academic` dergi bazında ayrışır; `tdk`, `celik_gold`, `tr_corpus` köken/izin gelene kadar
   çıkarılır; `wiki_oscar` için atıf + share-alike + tazmin kabulü yazılır. Aday **v4** olarak
-  yeniden üretilir; 200 örnek incelemesi yenilenir. En temiz, en pahalı.
+  yeniden üretilir; 200 örnek incelemesi yenilenir. En temiz; ölçüme göre **bedeli baytın
+  %6,66'sı** (S5; TTK/TDK/akademik izinleri sonradan gelirse geri eklenir).
 - **B) Risk kabulü memosu:** kurucu, kapsamı ve tarihi yazılı bir memoyla `celik_gold`,
   `tr_corpus`, `tdk` için riski üstlenir; memo bu kaynakların lisans kanıtı olur; ana korpus,
   aday ve held-out `cleared`'ı miras alır. `trt` (388 belge) yine de çıkarılmalı (açık yasak).

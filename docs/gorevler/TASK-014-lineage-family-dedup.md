@@ -62,4 +62,10 @@ shapes it cannot see:
    `not_checked`, counts → 0, `approval_status` → `auto_checked`, `risk_level` → `low`
    for both sources, each with a `source.normalized_dedup_reset` audit event carrying the
    before/after state and the reason. The worker re-enqueues the gate on its own.
-5. Pending: the gate's re-run result (expected `unique` for both), then sampling.
+5. **Found while waiting:** the worker's maintenance sweep (`enqueue_maintenance_jobs`,
+   which enqueues exact-dup / fingerprint / sampling jobs for sources in `not_checked`
+   states) runs **only once at worker start-up** (`main.py`), not in the loop. A reset
+   done after a restart therefore never gets picked up. With the owner's approval the
+   sweep was invoked once from the worker's own code (no hand-written SQL). Follow-up:
+   run the sweep periodically in `run_forever` (small change; separate card).
+6. Pending: the gate's re-run result (expected `unique` for both), then sampling.

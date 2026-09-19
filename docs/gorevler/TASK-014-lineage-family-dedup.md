@@ -52,11 +52,14 @@ shapes it cannot see:
 
 1. ~~Apply `000029` to the working database~~ — **done 2026-09-19 07:16** (`go run ./cmd/migrate`,
    owner approval; `schema_migrations` head is `000029_source_lineage_inputs.sql`).
-2. Restart the API (the running build predates `lineage_input_source_ids`) and the worker
-   (old gate query). Measured before the restart: the v3 candidate and held-out were still
-   `not_checked` for normalized dedup — the old query had not run on them.
-3. Derlem declares the parent's inputs = the five `faz2_ham_*` sources (API PATCH, audited),
-   and later the two big raw files once registered.
-4. If the old query already quarantined the v3 candidate / held-out, reset their
-   `normalized_dedup_status` to `not_checked` (owner approval; the worker re-enqueues the
-   gate) — see the card's report for what was measured.
+2. ~~Restart the API and the worker~~ — **done by the owner 2026-09-19 10:43.** Before the
+   restart the old worker had already run the gate on both new sources: the v3 candidate
+   was quarantined with **5,807,521** "external duplicates" (every fingerprinted document)
+   and the held-out with **2,226** — the measured shape of the bug.
+3. ~~Declare the parent's inputs~~ — **done 2026-09-19** (API PATCH, parent version 5 → 6,
+   five `faz2_ham_*` sources; `celik_gold` and `wiki_oscar` to be added once registered).
+4. ~~Reset~~ — **done 2026-09-19** with the owner's approval: `normalized_dedup_status` →
+   `not_checked`, counts → 0, `approval_status` → `auto_checked`, `risk_level` → `low`
+   for both sources, each with a `source.normalized_dedup_reset` audit event carrying the
+   before/after state and the reason. The worker re-enqueues the gate on its own.
+5. Pending: the gate's re-run result (expected `unique` for both), then sampling.

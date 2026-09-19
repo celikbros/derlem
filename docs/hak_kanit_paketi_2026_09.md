@@ -86,6 +86,24 @@ kullanımına bir şart bulaşır mı.
   girdisi (13,0 GB). Köken, içerik bileşimi (TASK-016: bu iki dosyanın satırları diğer beş
   kaynakla ve birbirleriyle ne kadar örtüşüyor) ve kurucunun hafızasıyla aranır.
 
+## Ölçüm: hak sorunu korpusun baytça %6,66'sı (TASK-016, 2026-09-19)
+
+`wiki_oscar`'ın kaynağı içerikten doğrulandı: her kayıtta `source` alanı var; 85.075 kayıtlık
+örneklemde yalnız `mc4` (%90,6) ve `wikipedia` (%9,4). Ana korpusun her satırı hangi ham
+kaynaklarda geçiyor ölçüldü (baytla):
+
+| Senaryo | Kullanılan kaynaklar | Korunan bayt | Pay |
+|---|---|---|---|
+| S0 bugünkü v3 | yedisi | 13,57 GB | %100 |
+| S1 TRT çıkar | TRT hariç | 13,57 GB | %100,00 |
+| S2 kökeni bilinmeyenler de çıkar | wiki_oscar, ttk, academic, tdk | 12,85 GB | %94,67 |
+| S3 + TTK çıkar (ticari hedef) | wiki_oscar, academic, tdk | 12,74 GB | %93,87 |
+| S4 + TDK çıkar (lisans yok) | wiki_oscar, academic | 12,73 GB | %93,80 |
+| **S5 yalnız lisansı belgeli kaynak** | **wiki_oscar** | **12,67 GB** | **%93,34** |
+
+`celik_gold` bağımsız kaynak değil (belgelerinin %99'u başka dosyalarda; kendine özgü payı
+baytça %1,96); `tr_corpus` kısa parçalar (baytça %3,36, satırca %24,9).
+
 ## Kurucunun önündeki seçenekler (TASK-011 kararı, 2. inceleme oturumundan önce)
 
 - **A) Kaynak bazlı temizlik + v4:** `trt` çıkarılır; `ttk` ticari amaçta çıkarılır;

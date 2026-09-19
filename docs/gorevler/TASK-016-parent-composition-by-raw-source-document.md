@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **DRAFT** — from the 2026-09-19 plan ([plan_2026_09.md](../plan_2026_09.md), Faz 1); no new feature — may start when its dependencies are done |
+| Status | **IN PROGRESS** — 2026-09-19: containment measured (below); exclusive attribution + length distribution running. Was: DRAFT — from the 2026-09-19 plan ([plan_2026_09.md](../plan_2026_09.md), Faz 1); no new feature — may start when its dependencies are done |
 | Kind | research |
 | Moratorium | allowed — measurement, no product surface |
 | Estimate | 1.5 day(s) |
@@ -43,4 +43,31 @@ The rights decision is otherwise all-or-nothing: the parent is one merged file a
 
 ## Report
 
-(not started)
+### Containment (measured 2026-09-19, 1,235 s)
+
+Method: every line of the parent (`9826d58e…`, 6,027,968 lines → 6,027,720 unique after
+whitespace-collapse + casefold normalisation, BLAKE2b-128) was indexed; every document of
+each raw file (`text`/`content`/`body` field of JSONL, or the raw line) was normalised the
+same way and looked up.
+
+| Raw source | Documents | Found in parent | Share |
+|---|---|---|---|
+| `celik_gold` | 4,460,931 | 4,460,931 | 100.0 % |
+| `wiki_oscar` | 4,253,739 | 4,253,739 | 100.0 % |
+| `tr_corpus` | 1,502,165 | 1,502,165 | 100.0 % |
+| `tdk` | 118,455 | 118,455 | 100.0 % |
+| `ttk` | 84,789 | 84,789 | 100.0 % |
+| `academic` | 45,208 | 45,208 | 100.0 % |
+| `trt` | 388 | 388 | 100.0 % |
+
+Parent lines matched by at least one raw source: **6,027,720 / 6,027,720 (100.00 %)**,
+unmatched 0 — the seven files are the complete input, nothing else went in. Raw documents
+sum to 10,465,675 (= `documents_in` of the Faz-2 manifest) against 6,027,720 unique parent
+lines, so the raw sources overlap heavily with each other; `celik_gold` alone (4.46 M docs,
+13.0 GB) is near the size of the whole parent and is likely a merge of the others.
+
+Next (running): per-source **exclusive** attribution — parent lines found in exactly one raw
+source, and the count of parent lines not covered by any source other than
+`celik_gold`/`tr_corpus`. If that count is ~0, the two unknown-provenance files add no
+unique text and their rights question falls away. Length distribution per raw source is
+measured in the same pass (document-boundary question).

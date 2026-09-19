@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **IN REVIEW** — 2026-09-19: implemented; waiting for the owner to restart the API. Was: DRAFT — from the 2026-09-19 plan ([plan_2026_09.md](../plan_2026_09.md), Faz 1); no new feature — may start when its dependencies are done |
+| Status | **DONE** — 2026-09-19: `cc4e945`, CI green; API restarted by the owner 22:05 (after the commit). Earlier: Was: DRAFT — from the 2026-09-19 plan ([plan_2026_09.md](../plan_2026_09.md), Faz 1); no new feature — may start when its dependencies are done |
 | Kind | fix |
 | Moratorium | allowed — enforces a written governance rule (2026-09-17) |
 | Estimate | 0.5 day(s) |
@@ -55,4 +55,4 @@ package ok. Control run: disabling the check makes the test fail with "expected
 eval_reference_missing gate error, got <nil>". `data_governance.md` now says the rule is a
 hard gate.
 
-Owner action pending: restart the API after this is on main.
+Owner restarted the API 2026-09-19 22:05 (process start after commit time 21:31).

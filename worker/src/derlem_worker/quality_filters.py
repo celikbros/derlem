@@ -5,6 +5,8 @@ import re
 import unicodedata
 import zlib
 
+from derlem_worker.pii import normalize_language_tag
+
 
 QUALITY_POLICY_NONE = "none"
 QUALITY_POLICY_TR_WEB_V1 = "tr-web-v1"
@@ -19,6 +21,42 @@ SUPPORTED_QUALITY_POLICIES = frozenset(
         QUALITY_POLICY_TR_WEB_V2,
     }
 )
+
+# Dil durustlugu (TASK-026, 2026-09-19): tr-web kurallari Turkce sozluk kurallaridir.
+# Baska dil ilan etmis bir kaynaga uygulanmazlar; "temiz" yerine "not_evaluated"
+# yazilir. Politika burada yoksa dil kisiti yoktur (none). Anahtar: normalize dil
+# etiketi (birincil alt etiket, kucuk harf; 'tr-TR' -> 'tr').
+QUALITY_POLICY_SUPPORTED_LANGUAGES: dict[str, frozenset[str]] = {
+    QUALITY_POLICY_TR_WEB_V1: frozenset({"tr"}),
+    QUALITY_POLICY_TR_WEB_V2: frozenset({"tr"}),
+}
+
+QUALITY_FILTER_STATUS_APPLIED = "applied"
+# Dil bilinmiyor (--input-path ile yerel deney): politika bugunku gibi uygulanir,
+# manifest bunu acikca kaydeder.
+QUALITY_FILTER_STATUS_APPLIED_LANGUAGE_UNKNOWN = "applied_language_unknown"
+QUALITY_FILTER_STATUS_NOT_EVALUATED = "not_evaluated"
+
+
+def quality_filter_status(policy: str, language: str | None) -> str | None:
+    """Politikanin ilan edilen kaynak diline uygulanip uygulanmayacagi.
+
+    'none' icin None (surumde suzgec yok). Politikanin dil kisiti yoksa ya da dil
+    kisitin icindeyse 'applied'; dil bilinmiyorsa 'applied_language_unknown';
+    dil kisitin disindaysa 'not_evaluated' (hicbir satir kalite icin atilmaz)."""
+    if policy not in SUPPORTED_QUALITY_POLICIES:
+        raise ValueError(f"Unsupported quality policy: {policy!r}")
+    if policy == QUALITY_POLICY_NONE:
+        return None
+    supported = QUALITY_POLICY_SUPPORTED_LANGUAGES.get(policy)
+    if supported is None:
+        return QUALITY_FILTER_STATUS_APPLIED
+    if language is None or not language.strip():
+        return QUALITY_FILTER_STATUS_APPLIED_LANGUAGE_UNKNOWN
+    if normalize_language_tag(language) in supported:
+        return QUALITY_FILTER_STATUS_APPLIED
+    return QUALITY_FILTER_STATUS_NOT_EVALUATED
+
 
 _WIKI_MARKUP_RE = re.compile(r'align="|\{\{|\}\}|\[\[|\]\]')
 
@@ -531,8 +569,14 @@ def _fraction_at_least(
 
 
 __all__ = [
+    "QUALITY_FILTER_STATUS_APPLIED",
+    "QUALITY_FILTER_STATUS_APPLIED_LANGUAGE_UNKNOWN",
+    "QUALITY_FILTER_STATUS_NOT_EVALUATED",
     "QUALITY_POLICY_NONE",
+    "QUALITY_POLICY_SUPPORTED_LANGUAGES",
     "QUALITY_POLICY_TR_WEB_V1",
+    "QUALITY_POLICY_TR_WEB_V2",
     "SUPPORTED_QUALITY_POLICIES",
+    "quality_filter_status",
     "quality_rejection_reasons",
 ]

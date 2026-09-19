@@ -140,3 +140,21 @@ yakın kopya ya da dil kuralına takıldı — kural gereği eğitime sızmadıl
 dosya `IMPORT_ROOT` üzerinden kaynak olarak kaydedilir: eğitim adayı `pretrain`
 (`derived_from` = ana kaynak), held-out `holdout`. İkisinin de hak durumu ana kaynak
 gibi `unknown`'dır (türev girdisinden temiz olamaz).
+
+## Dil dürüstlüğü (TASK-026)
+
+`tr-web-v1` ve `tr-web-v2` Türkçe sözlük kurallarıdır; `quality_filters.py` bunu artık
+açıkça ilan eder (`QUALITY_POLICY_SUPPORTED_LANGUAGES`: her ikisi için `{"tr"}`).
+`--source-id` ile koşulan türetimde kaynağın kayıtlı dili (`sources.language`; `tr-TR`
+→ `tr` normalize edilir) bu kümenin dışındaysa kalite süzgeci **hiç çalıştırılmaz**:
+kalite gerekçesiyle 0 satır atılır, manifest `quality_filter_version` alanında istenen
+politikayı, yeni `quality_filter_status` alanında `not_evaluated` değerini yazar (eski
+alanlar, `algorithm_version` ve dosya adındaki `_v2`/`_v3` eki değişmez; atma raporu boş
+üretilir). Türkçe kaynakta durum `applied`, davranış öncekiyle birebir aynıdır.
+`--input-path` ile koşulan yerel deneyde kaynak kaydı, dolayısıyla dil yoktur; politika
+bugünkü gibi uygulanır ve manifest bunu `applied_language_unknown` olarak kaydeder —
+sessizce `applied` demez. Politika `none` ise alan `null` kalır. Bu, türetim betiğinde
+bir korumadır, sürüm kapısı raporlaması değildir (sürüm kalite satırları
+`document_reviews`'tan gelir); dil tanıma (TASK-028) kapsam dışıdır. Kontrol (2026-09-19):
+koruma kaldırıldığında `test_tr_web_policy_is_not_evaluated_for_non_turkish_source`
+kırmızıya döner, geri konunca 42 test yeşil.

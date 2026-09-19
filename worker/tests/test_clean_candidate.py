@@ -325,3 +325,99 @@ def test_v3_drop_list_removes_listed_lines_with_details_and_records_list_hash(tm
     bad.write_text('{"lang": "en"}\n', encoding="utf-8")
     with pytest.raises(ValueError, match="sha256"):
         load_drop_list(bad)
+
+
+# --- TASK-026 (2026-09-19): dil durustlugu — tr-web politikasi Turkce disi kaynakta calismaz ---
+
+from dataclasses import asdict  # noqa: E402
+
+from derlem_worker.quality_filters import (  # noqa: E402
+    QUALITY_FILTER_STATUS_APPLIED,
+    QUALITY_FILTER_STATUS_APPLIED_LANGUAGE_UNKNOWN,
+    QUALITY_FILTER_STATUS_NOT_EVALUATED,
+)
+
+_LANGUAGE_SOURCE_ID = "f63352dd-fdd1-4e4b-a8d2-b167b3c856cf"
+
+
+def _source_row(language: str) -> dict:
+    # load_source'un dondurdugu satirin derive_clean_candidate'in kullandigi alanlari.
+    return {"id": _LANGUAGE_SOURCE_ID, "name": "Dil deneme", "object_sha256": "ab" * 32, "language": language}
+
+
+def _write_spam_source(tmp_path: Path) -> tuple[Path, str, str]:
+    clean = "Bu doğal Türkçe belge, doğrulanabilir bir olayı dengeli biçimde açıklıyor."
+    hashtag_spam = " ".join(f"#etiket{index % 80}" for index in range(800))
+    source = tmp_path / "source.txt"
+    source.write_text(f"{clean}\n{hashtag_spam}\n", encoding="utf-8")
+    return source, clean, hashtag_spam
+
+
+def test_tr_web_policy_is_not_evaluated_for_non_turkish_source(tmp_path: Path) -> None:
+    source, clean, hashtag_spam = _write_spam_source(tmp_path)
+    output = tmp_path / "clean-en.txt"
+    rejections = tmp_path / "clean-en.rejections.jsonl"
+
+    report = derive_clean_candidate(
+        source, output, source=_source_row("en"), max_document_bytes=256 * 1024,
+        quality_policy=QUALITY_POLICY_TR_WEB_V2, quality_rejections_path=rejections,
+    )
+
+    # Kural hic calismaz: spam satiri da yazilir, kalite atmasi 0, gerekce sayimi bos.
+    assert output.read_text(encoding="utf-8").splitlines() == [clean, hashtag_spam]
+    assert report.quality_filter_status == QUALITY_FILTER_STATUS_NOT_EVALUATED
+    assert report.quality_filter_version == QUALITY_POLICY_TR_WEB_V2  # istenen politika yine kayitli
+    assert report.removed_quality_lines == 0
+    assert report.quality_reason_document_counts == {}
+    assert report.written_lines == 2
+    assert rejections.read_text(encoding="utf-8") == ""
+    assert report.source_id == _LANGUAGE_SOURCE_ID
+    # Manifest geriye uyumlu: yeni alan asdict ile cikar, eski alanlar yerinde.
+    manifest = asdict(report)
+    assert manifest["quality_filter_status"] == "not_evaluated"
+    assert manifest["quality_filter_version"] == "tr-web-v2"
+    assert manifest["algorithm_version"] == CLEAN_CANDIDATE_V2_VERSION
+
+
+def test_tr_web_policy_still_applies_to_turkish_source(tmp_path: Path) -> None:
+    source, clean, _ = _write_spam_source(tmp_path)
+
+    for language in ("tr", "tr-TR"):
+        output = tmp_path / f"clean-{language}.txt"
+        report = derive_clean_candidate(
+            source, output, source=_source_row(language), max_document_bytes=256 * 1024,
+            quality_policy=QUALITY_POLICY_TR_WEB_V2,
+        )
+
+        assert output.read_text(encoding="utf-8").splitlines() == [clean]
+        assert report.quality_filter_status == QUALITY_FILTER_STATUS_APPLIED
+        assert report.quality_filter_version == QUALITY_POLICY_TR_WEB_V2
+        assert report.removed_quality_lines == 1
+        # Kurallar degismedi: ayni satir v1'in iki gerekcesini birden tasir.
+        assert report.quality_reason_document_counts == {"extreme_repetition": 1, "hashtag_stuffing": 1}
+
+
+def test_input_path_run_without_source_language_applies_policy_and_says_so(tmp_path: Path) -> None:
+    source, clean, _ = _write_spam_source(tmp_path)
+    output = tmp_path / "clean-local.txt"
+
+    report = derive_clean_candidate(
+        source, output, source=None, max_document_bytes=256 * 1024, quality_policy=QUALITY_POLICY_TR_WEB_V2,
+    )
+
+    # --input-path: kaynak kaydi yok, dil bilinmiyor; politika bugunku gibi uygulanir.
+    assert output.read_text(encoding="utf-8").splitlines() == [clean]
+    assert report.quality_filter_status == QUALITY_FILTER_STATUS_APPLIED_LANGUAGE_UNKNOWN
+    assert report.removed_quality_lines == 1
+
+
+def test_no_policy_has_no_quality_filter_status(tmp_path: Path) -> None:
+    source, _, _ = _write_spam_source(tmp_path)
+
+    report = derive_clean_candidate(
+        source, tmp_path / "clean.txt", source=_source_row("en"), max_document_bytes=256 * 1024,
+    )
+
+    assert report.quality_filter_status is None
+    assert report.quality_filter_version is None
+    assert report.removed_quality_lines == 0

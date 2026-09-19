@@ -21,8 +21,10 @@ from derlem_worker.config import load_config
 from derlem_worker.fingerprints import FINGERPRINT_VERSION, document_fingerprint
 from derlem_worker.pii import PII_KEYS, count_pii_in_text
 from derlem_worker.quality_filters import (
+    QUALITY_FILTER_STATUS_NOT_EVALUATED,
     QUALITY_POLICY_NONE,
     SUPPORTED_QUALITY_POLICIES,
+    quality_filter_status,
     quality_rejection_reasons,
 )
 from derlem_worker.sampling import _bounded_lines, _document_from_line
@@ -107,6 +109,10 @@ class CleanCandidateReport:
     drop_list_method: str | None = None
     drop_list_entries: int = 0
     removed_drop_list_lines: int = 0
+    # TASK-026 (2026-09-19): politikanin kaynak diline uygulanip uygulanmadigi
+    # ("applied" / "applied_language_unknown" / "not_evaluated"); politika yoksa None.
+    # quality_filter_version her durumda istenen politikayi tasir.
+    quality_filter_status: str | None = None
 
 
 def is_held_out(line_bytes: bytes, rule: str) -> bool:
@@ -345,6 +351,7 @@ def load_source(database_url: str, storage_root: Path, source_id: str) -> dict[s
                 source.id::text,
                 source.name,
                 source.object_sha256,
+                source.language,
                 source.content_purpose,
                 source.approval_status,
                 source.pii_status,
@@ -442,6 +449,16 @@ def derive_clean_candidate(
     elif held_out_path is not None:
         raise ValueError("A held-out path requires a held-out rule")
 
+    # Dil durustlugu (TASK-026): kaynak politikanin dili disinda bir dil ilan
+    # etmisse kurallar hic calistirilmaz (0 kalite atmasi); manifest istenen
+    # politikayi ve "not_evaluated" durumunu birlikte yazar. Kaynaksiz (--input-path)
+    # kosuda dil bilinmez, politika bugunku gibi uygulanir.
+    source_language = str(source["language"]) if source and source.get("language") else None
+    quality_status = quality_filter_status(quality_policy, source_language)
+    effective_quality_policy = (
+        QUALITY_POLICY_NONE if quality_status == QUALITY_FILTER_STATUS_NOT_EVALUATED else quality_policy
+    )
+
     # Tekillestirme kaydi iki akis (egitim adayi ve held-out) icin ortaktir:
     # held-out bir satirin birebir/normalize kopyasi egitime gidemez.
     seen_fingerprints: dict[bytes, int] = {}
@@ -516,7 +533,7 @@ def derive_clean_candidate(
                                 line_bytes=line_bytes, text=text, details=dropped,
                             ))
                         continue
-                quality_reasons = quality_rejection_reasons(text, quality_policy)
+                quality_reasons = quality_rejection_reasons(text, effective_quality_policy)
                 if quality_reasons:
                     removed_quality_lines += 1
                     quality_reason_document_counts.update(quality_reasons)
@@ -627,6 +644,7 @@ def derive_clean_candidate(
         drop_list_method=drop_list_method,
         drop_list_entries=drop_list_entries,
         removed_drop_list_lines=removed_drop_list_lines,
+        quality_filter_status=quality_status,
     )
 
 

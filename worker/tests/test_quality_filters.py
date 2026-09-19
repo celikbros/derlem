@@ -3,10 +3,15 @@ from __future__ import annotations
 import pytest
 
 from derlem_worker.quality_filters import (
+    QUALITY_FILTER_STATUS_APPLIED,
+    QUALITY_FILTER_STATUS_APPLIED_LANGUAGE_UNKNOWN,
+    QUALITY_FILTER_STATUS_NOT_EVALUATED,
     QUALITY_POLICY_NONE,
+    QUALITY_POLICY_SUPPORTED_LANGUAGES,
     QUALITY_POLICY_TR_WEB_V1,
     QUALITY_POLICY_TR_WEB_V2,
     SUPPORTED_QUALITY_POLICIES,
+    quality_filter_status,
     quality_rejection_reasons,
 )
 
@@ -267,3 +272,35 @@ def test_v2_includes_v1_reasons_and_orders_new_reasons_first() -> None:
     assert reasons[0] == "encoding_corruption"
     assert "hashtag_stuffing" in reasons
     assert quality_rejection_reasons(spam.replace("�", ""), QUALITY_POLICY_TR_WEB_V1) == ("hashtag_stuffing",)
+
+
+# TASK-026 (2026-09-19): dil durustlugu. tr-web politikalari Turkce sozluk kurallaridir;
+# baska dil ilan etmis kaynakta calistirilmaz, manifest "not_evaluated" yazar.
+
+
+def test_tr_web_policies_declare_turkish_only() -> None:
+    assert QUALITY_POLICY_SUPPORTED_LANGUAGES == {
+        QUALITY_POLICY_TR_WEB_V1: frozenset({"tr"}),
+        QUALITY_POLICY_TR_WEB_V2: frozenset({"tr"}),
+    }
+    assert QUALITY_POLICY_NONE not in QUALITY_POLICY_SUPPORTED_LANGUAGES
+
+
+@pytest.mark.parametrize("policy", (QUALITY_POLICY_TR_WEB_V1, QUALITY_POLICY_TR_WEB_V2))
+def test_quality_filter_status_follows_declared_language(policy: str) -> None:
+    assert quality_filter_status(policy, "tr") == QUALITY_FILTER_STATUS_APPLIED
+    # Etiket normalize edilir: bolge alt etiketi, buyuk harf ve bosluk fark yaratmaz.
+    assert quality_filter_status(policy, "tr-TR") == QUALITY_FILTER_STATUS_APPLIED
+    assert quality_filter_status(policy, " TR ") == QUALITY_FILTER_STATUS_APPLIED
+    assert quality_filter_status(policy, "en") == QUALITY_FILTER_STATUS_NOT_EVALUATED
+    assert quality_filter_status(policy, "en-US") == QUALITY_FILTER_STATUS_NOT_EVALUATED
+    # Dil bilinmiyor (--input-path): politika uygulanir, durum bunu acikca soyler.
+    assert quality_filter_status(policy, None) == QUALITY_FILTER_STATUS_APPLIED_LANGUAGE_UNKNOWN
+    assert quality_filter_status(policy, "") == QUALITY_FILTER_STATUS_APPLIED_LANGUAGE_UNKNOWN
+
+
+def test_quality_filter_status_none_policy_and_unknown_policy() -> None:
+    assert quality_filter_status(QUALITY_POLICY_NONE, "en") is None
+    assert quality_filter_status(QUALITY_POLICY_NONE, None) is None
+    with pytest.raises(ValueError, match="future-policy"):
+        quality_filter_status("future-policy", "tr")

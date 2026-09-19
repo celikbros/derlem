@@ -57,3 +57,25 @@ institutional sites with their own terms of use.
 - [ ] Disk/backup plan: raw archive is deliberately outside the backup scope; new raw
       data of tens of GB needs the same decision made explicitly.
 - [ ] Owner go/no-go per collector.
+
+## HF veri setleri — lisans özeti (TASK-023)
+
+Notlar: `docs/haklar/hf-*.md` (okuma tarihi 2026-09-19, veri indirilmedi, hukuki görüş değil).
+Sıralama: beklenen **net yeni token / lisans riski** — önce en çok yeni hacmi en tanıdık
+şartlarla getiren. Token sayıları kaba tahmindir (raf çevrimi 5,405 bayt/token; kartların
+kelime/bayt beyanından). "Örtüşme" = ana korpustaki `wiki_oscar` (mC4 + Wikipedia) ile.
+
+| # | Veri seti / Türkçe alt küme | Kart lisansı | Üst kaynak şartı | Sabit sürüm | Türkçe boyut (kart) | Kaba token | Örtüşme | Öneri `rights_status` | Not |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | [`HuggingFaceFW/fineweb-2` `tur_Latn`](../haklar/hf-fineweb-2.md) | ODC-By 1.0 | Common Crawl ToU (atıf + AI tazmin) | `af9c133…` | 95,1 M belge; 284,52 GB UTF-8; 41,9 B kelime | ~53 B | Hayır (dolaylı: aynı CC kökeni) | `cleared` (ticari olmayan; wiki_oscar kabulleri genişletilir) | Açık erişim; PII/opt-out formu; en iyi hacim/risk oranı |
+| 2 | [`allenai/c4` mC4 `tr` (kalan kısım)](../haklar/hf-allenai-c4.md) | ODC-BY | Common Crawl ToU | `1588ec4…` | ~87,6 M satır; 110 GB gzip (1.024 dosya) | ~50 B (bunun ~%11'i elimizde) | **Evet, kısmen** — akışın ilk ~9,75 M belgesi `wiki_oscar`'da | `cleared` (ticari olmayan; mevcut karar) | Aynı şartlar zaten kabul edildi; net yeni ≈ 78 M belge |
+| 3 | [`HPLT/HPLT2.0_cleaned` `tur_Latn`](../haklar/hf-hplt-monolingual.md) | CC0 (yalnız paketleme) | İçerik lisansı **yok**; IA + CC kökenli; takedown | `d1324a5…` | 116,6 M satır; 262 GB parquet; 51,7 B kelime | ~70 B | Hayır (çoğu Internet Archive) | `restricted` (kurucu risk kabulü gerekir) | Farklı köken → en yüksek net yeni; hak konumu zayıf |
+| 4 | [`HPLT/hplt_monolingual_v1_2` `tr` cleaned](../haklar/hf-hplt-monolingual.md) | CC0 (yalnız paketleme) | Aynı | `dbe8882…` (yalnız yükleyici; veri hplt-project.org'da) | 27,05 M belge; 47 GB; 42,65 B kelime | ~9 B | Hayır | `restricted` | v2 varken gereksiz; veri dosyaları HF dışında |
+| 5 | [`uonlp/CulturaX` `tr`](../haklar/hf-culturax.md) | Lisans alanı yok; "mC4 + OSCAR şartları" | mC4: ODC-BY + CC ToU; OSCAR: içerik lisansı yok | `6a8734b…` | 94,2 M belge; 64,3 B token | ~64 B (büyük kısmı mC4 ile aynı) | **Evet, kısmen** (mC4 bileşeni) | `restricted` | Alınmasın: aynı hacim #1 + #2 ile daha temiz |
+| 6 | [`wikimedia/wikipedia` `20231101.tr`](../haklar/hf-wikimedia-wikipedia.md) | CC BY-SA 3.0 + GFDL | Wikimedia ToU (CC BY-SA 4.0 + GFDL) | `b04c8d1…` | 534.988 makale; 997 MB | ~0,2 B | **Evet, tamamen** (aynı config) | `cleared` (ticari olmayan; mevcut karar) | Net yeni ≈ 0; TASK-024 pilotu için sabit referans |
+| 7 | [`oscar-corpus/OSCAR-2301` `tr`](../haklar/hf-oscar-2301.md) | CC0 (yalnız üstveri/paketleme) | İçerik lisansı yok; CC Kas/Ara 2022 | `c293046…` | 26,65 M belge; 73,7 GB; 8,29 B kelime | ~14 B | Hayır | `blocked` (erişim askıda) | Gated-manuel, onay verilmiyor; açılırsa `restricted` |
+
+Kurucu kararı bekleyenler: (a) #1 için `wiki_oscar` kabullerinin (atıf, Common Crawl tazmin
+maddesi, ticari olmayan kapsam) yazılı olarak genişletilmesi; (b) #3 için "içerik lisansı yok,
+yalnız paketleme CC0" konumunda risk kabulü verilip verilmeyeceği; (c) share-alike'ın (yalnız
+Wikipedia) kabul edilmiş sayılması — zaten S2 kararında.

@@ -104,6 +104,38 @@ kaynaklarda geçiyor ölçüldü (baytla):
 `celik_gold` bağımsız kaynak değil (belgelerinin %99'u başka dosyalarda; kendine özgü payı
 baytça %1,96); `tr_corpus` kısa parçalar (baytça %3,36, satırca %24,9).
 
+## KURUCU KARARI (2026-09-19): S2, ticari olmayan kullanım
+
+**Seçilen yol: S2.** v2, yalnız şu ham kaynaklarda geçen satırlardan oluşur: `wiki_oscar`
+(mC4 + Wikipedia), `ttk` (Belleten), `academic` (DergiPark özetleri), `tdk` (sözlük).
+**Çıkarılan:** kökeni bilinmeyen `tr_corpus` ve `celik_gold`'a özgü satırlar; kullanım
+şartları kopyalamayı yasaklayan `trt`'de geçen her satır. Ölçülen bedel: baytın %5,33'ü
+(S2 %94,67 korur; ana korpus üzerinde).
+
+**Kullanım kapsamı:** araştırma ve kendi modelimizin eğitimi; **ticari kullanım yok**.
+Ham metin yeniden dağıtılmaz. Ticari kullanım başlamadan bu karar yeniden değerlendirilir
+(o durumda en az `ttk` — CC BY-NC — çıkar; Common Crawl şartları için hukuki danışma).
+
+**Kaynak başına dayanak:**
+
+| Kaynak | Dayanak | Hak durumu (kapsamlı) |
+|---|---|---|
+| `wiki_oscar` | Belgeli lisans: mC4 ODC-BY + Common Crawl şartları; Wikipedia CC BY-SA 3.0 + GFDL. Kabul edilen yükümlülükler: atıf (veri kartında ve model künyesinde), share-alike riskinin kabulü, Common Crawl'ın yapay zekâ kullanımındaki tazmin maddesinin kabulü. | `cleared` (ticari olmayan) |
+| `ttk` | Belgeli lisans: CC BY-NC 4.0; kullanım ticari olmadığı için lisans kapsamında. Atıf. | `cleared` (ticari olmayan) |
+| `academic` | Dergi bazında lisans (platform lisansı yok); **kurucu risk kabulü**, kapsam: ticari olmayan araştırma. Ticari kullanımdan önce dergi bazında ayrıştırılır. | `cleared` (kurucu risk kabulü, ticari olmayan) |
+| `tdk` | Lisans beyanı yok; **kurucu risk kabulü**, kapsam: ticari olmayan araştırma. Ticari kullanımdan önce TDK'dan yazılı izin. | `cleared` (kurucu risk kabulü, ticari olmayan) |
+| `trt` | Kullanım şartları yasaklıyor. | `blocked` |
+| `tr_corpus`, `celik_gold` (özgü kısmı) | Köken bilinmiyor; v2'ye girmez. | `unknown` |
+
+**Türev kuralıyla ilişkisi:** "türev, girdisinden temiz olamaz" kuralı aklama yasağıdır.
+v4, v3'ten **kaynak bazlı süzülerek** üretilir: içeriği yalnız yukarıdaki dört kaynaktan
+gelir, dolayısıyla hak durumu o dört kaynağın en kısıtlısıdır (ticari olmayan `cleared`).
+Süzmenin kanıtı (atılacak satır listesinin SHA256'sı, ölçüm) v4 manifestinde durur.
+
+**Kaydeden:** Derlem oturumu, kurucunun 2026-09-19 tarihli cevabı üzerine ("S2:
+bilinmeyenleri çıkar, TTK/TDK/akademik kalsın"; ticari hedef: "Hayır, şimdilik
+araştırma/kendi kullanım").
+
 ## Kurucunun önündeki seçenekler (TASK-011 kararı, 2. inceleme oturumundan önce)
 
 - **A) Kaynak bazlı temizlik + v4:** `trt` çıkarılır; `ttk` ticari amaçta çıkarılır;

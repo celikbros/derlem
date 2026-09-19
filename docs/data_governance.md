@@ -68,6 +68,19 @@ Girdi `unknown` ise turev de `unknown`'dir; temizlik (PII ayiklama, tekrar alma,
 kalite suzgeci) metnin hakkini degistirmez. Hak durumu yalniz kaynak bazli hak
 arastirmasiyla yukseltilir, turetme islemiyle degil.
 
+### Kaynak bazli suzme ile hak durumu (2026-09-19)
+
+Kural aklamayi yasaklar: bir turev, **icerigi hangi kaynaklardan geliyorsa** onlarin en
+kisitlisindan temiz olamaz. Bir turev, girdisinden kaynak bazli suzulerek uretilmisse
+(yalniz belirli kaynaklarda gecen satirlar tutulmus), hak durumu **kalan kaynaklara**
+gore belirlenir. Sartlar: suzme yeni nesne uretir; atilacak satir listesinin SHA256'si ve
+olcumu turevin manifestinde durur; kalan kaynaklar turevin `source_lineage_inputs`
+girdileri olarak kaydedilir. Ilk uygulama: v4 (TASK-011 karari S2, 2026-09-19).
+
+Kurucu risk kabulu `cleared` icin tek istisnadir ve **kapsamli** yazilir (hangi kaynak,
+hangi kullanim, ne zaman yeniden degerlendirilir). S2 karari: `academic` ve `tdk` icin,
+ticari olmayan arastirma kapsaminda ([hak_kanit_paketi_2026_09.md](hak_kanit_paketi_2026_09.md)).
+
 ## Soy Ailesi Tekrar Sayilmaz (2026-09-19)
 
 Bir kaynagin atalari, girdileri (`derived_from_source_id` ve `source_lineage_inputs`,

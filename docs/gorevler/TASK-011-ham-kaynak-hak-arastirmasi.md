@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **IN PROGRESS** — research half done 2026-09-19: [hak_kanit_paketi_2026_09.md](../hak_kanit_paketi_2026_09.md) (publisher terms read and quoted for every source that has one; TDK has none; celik_gold/tr_corpus unknown). Decision half (A/B/C) waits for the owner, before review session two. Was: READY — opened 2026-09-17 by the founder's decision ("rights research stays open as separate work; it will be done before the product ships") |
+| Status | **DONE (for v2)** — owner decision 2026-09-19: **S2, non-commercial use** (unknown-provenance `tr_corpus`/`celik_gold`-own lines and TRT out; `wiki_oscar`, `ttk`, `academic`, `tdk` in; owner risk acceptance for `academic`/`tdk`, scoped non-commercial). Recorded in [hak_kanit_paketi_2026_09.md](../hak_kanit_paketi_2026_09.md); applied by deriving v4 (TASK-012 follow-up). Re-open before any commercial use. Earlier: research half done 2026-09-19: [hak_kanit_paketi_2026_09.md](../hak_kanit_paketi_2026_09.md) (publisher terms read and quoted for every source that has one; TDK has none; celik_gold/tr_corpus unknown). Decision half (A/B/C) waits for the owner, before review session two. Was: READY — opened 2026-09-17 by the founder's decision ("rights research stays open as separate work; it will be done before the product ships") |
 | Kind | research (data rights) |
 | Moratorium | allowed — no new product surface; unblocks releases |
 | Owner | (unassigned) |

@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **IN REVIEW** — 2026-09-19. Code, migration and tests done; migration `000029` must be applied to the working database (owner approval per action), the worker restarted, and the parent's inputs declared. |
+| Status | **DONE** — 2026-09-19. Code, migration and tests done; `000029` applied to the working database (owner approval), API + worker restarted by the owner, parent inputs declared, both new sources re-checked `unique` with 0 external duplicates. Follow-up (periodic sweep) is TASK-015. |
 | Kind | fix (gate correctness) + small schema addition |
 | Moratorium | allowed — a gate that quarantines correct sources blocks the approved v2 path |
 | Owner | (unassigned) |

@@ -258,8 +258,30 @@ class Worker(QueueMixin, IngestJobsMixin, GateJobsMixin, SampleJobsMixin, Releas
                 self._remove_attempt_artifact(converted_path, job_id=job.id)
             if snapshot_path is not None:
                 self._remove_attempt_artifact(snapshot_path, job_id=job.id)
+    def maybe_sweep_maintenance(self, now: float) -> bool:
+        """Bakim taramasini aralik doldugunda kosar; kostuysa True.
+
+        Tarama idempotent (ON CONFLICT DO NOTHING + aktif is kontrolu); araligin
+        kaynagi config.maintenance_sweep_seconds (eski Config'lerde yoksa 300 sn).
+        """
+        interval = float(getattr(self.config, "maintenance_sweep_seconds", 300.0))
+        next_at = getattr(self, "_next_maintenance_sweep_at", None)
+        if next_at is not None and now < next_at:
+            return False
+        self._next_maintenance_sweep_at = now + interval
+        try:
+            self.enqueue_maintenance_jobs()
+        except Exception:  # noqa: BLE001 - tarama hatasi is dongusunu durdurmamali
+            LOGGER.exception("maintenance_sweep_failed")
+        return True
+
     def run_forever(self) -> None:
         LOGGER.info("worker_started worker_id=%s", self.worker_id)
+        # Acilis taramasi main.py'de; ilk periyodik tarama bir aralik sonra.
+        self._next_maintenance_sweep_at = time.monotonic() + float(
+            getattr(self.config, "maintenance_sweep_seconds", 300.0)
+        )
         while True:
+            self.maybe_sweep_maintenance(time.monotonic())
             if not self.run_once():
                 time.sleep(self.config.poll_interval_seconds)

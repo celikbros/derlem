@@ -499,17 +499,17 @@ func (r *Releases) QueueFreeze(ctx context.Context, id, actorID string) (string,
 	}
 	defer tx.Rollback(ctx)
 
-	var status, contractSnapshotStatus string
+	var status, contractSnapshotStatus, contentPurpose string
 	var contractSnapshotSHA256, implementationBundleSHA256 *string
 	if err := tx.QueryRow(ctx, `
 		SELECT status, contract_snapshot_status, contract_snapshot_sha256,
-			implementation_bundle_sha256
+			implementation_bundle_sha256, content_purpose
 		FROM releases
 		WHERE id = $1
 		FOR UPDATE
 	`, id).Scan(
 		&status, &contractSnapshotStatus, &contractSnapshotSHA256,
-		&implementationBundleSHA256,
+		&implementationBundleSHA256, &contentPurpose,
 	); errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrNotFound
 	} else if err != nil {
@@ -548,6 +548,27 @@ func (r *Releases) QueueFreeze(ctx context.Context, id, actorID string) (string,
 	}
 	if sourceCount == 0 || invalidCount > 0 {
 		return "", &GateError{Reasons: []string{"release_sources_changed_or_ineligible"}}
+	}
+
+	// Sınav seti olmadan pretrain sürümü dondurulmaz (data_governance.md,
+	// kurucu kararı 2026-09-17; TASK-017). Referans seçimi worker'ın
+	// dekontaminasyon kapısıyla aynıdır (release_jobs.py): eval/holdout amaçlı,
+	// nesnesi olan, birebir kopya olmayan kaynak. Yoksa kapı sayı yerine
+	// not_applicable dönerdi ve karne dayanaksız kalırdı.
+	if contentPurpose == "pretrain" {
+		var referenceCount int
+		if err := tx.QueryRow(ctx, `
+			SELECT count(*)
+			FROM sources
+			WHERE content_purpose IN ('eval', 'holdout')
+			  AND object_sha256 IS NOT NULL
+			  AND duplicate_status <> 'duplicate'
+		`).Scan(&referenceCount); err != nil {
+			return "", err
+		}
+		if referenceCount == 0 {
+			return "", &GateError{Reasons: []string{"eval_reference_missing"}}
+		}
 	}
 
 	var jobID string

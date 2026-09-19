@@ -23,6 +23,9 @@ class Config:
     poll_interval_seconds: float
     lease_timeout_seconds: float
     heartbeat_interval_seconds: float
+    # Bakim taramasi (not_checked kaynaklar icin kapi islerini kuyruga alma) araligi;
+    # yalniz acilista kosmasi TASK-014'te sifirlanan kaynaklari kuyruksuz birakmisti (TASK-015).
+    maintenance_sweep_seconds: float
     document_sample_size: int
     max_document_bytes: int
     extraction_max_source_bytes: int
@@ -53,6 +56,7 @@ def load_config() -> Config:
         poll_interval_seconds=_parse_duration_seconds(poll_value),
         lease_timeout_seconds=lease_timeout_seconds,
         heartbeat_interval_seconds=heartbeat_interval_seconds,
+        maintenance_sweep_seconds=_duration_env("MAINTENANCE_SWEEP_INTERVAL", "5m"),
         document_sample_size=_positive_int_env("DOCUMENT_SAMPLE_SIZE", 200),
         max_document_bytes=_positive_int_env("MAX_DOCUMENT_BYTES", 256 * 1024),
         extraction_max_source_bytes=_positive_int_env(

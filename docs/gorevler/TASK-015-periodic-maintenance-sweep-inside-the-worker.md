@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **DRAFT** — from the 2026-09-19 plan ([plan_2026_09.md](../plan_2026_09.md), Faz 1); no new feature — may start when its dependencies are done |
+| Status | **IN REVIEW** — 2026-09-19: implemented; waiting for the owner to restart the worker. Was: DRAFT — from the 2026-09-19 plan ([plan_2026_09.md](../plan_2026_09.md), Faz 1); no new feature — may start when its dependencies are done |
 | Kind | fix |
 | Moratorium | allowed — a gate that silently waits for a restart blocks the approved v2 path |
 | Estimate | 0.5 day(s) |
@@ -42,4 +42,15 @@ Found 2026-09-19 (TASK-014 step 5): the sweep runs once in `main.py` before the 
 
 ## Report
 
-(not started)
+**Done 2026-09-19.** `Config.maintenance_sweep_seconds` (`MAINTENANCE_SWEEP_INTERVAL`, default `5m`);
+`Worker.maybe_sweep_maintenance(now)` runs `enqueue_maintenance_jobs()` when the interval has
+elapsed (first periodic sweep one interval after start; the start-up sweep in `main.py` stays);
+`run_forever` calls it on every loop turn with `time.monotonic()`. A sweep failure is logged
+(`maintenance_sweep_failed`) and does not stop the loop. Configs that predate the field
+(tests use `SimpleNamespace`) fall back to 300 s.
+
+Tests (`worker/tests/test_maintenance_sweep.py`, fake clock): once per interval not per poll;
+failure does not stop the loop; default interval. Full worker suite: 273 passed, 1 skipped.
+Control run: making the sweep ignore the interval turns all three tests red.
+
+Owner action pending: restart the worker after this is on main.

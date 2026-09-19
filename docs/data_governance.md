@@ -95,8 +95,9 @@ sinav setine karsi kirlilik olmadigi anlamina gelmez, kendi bolmemizin dogru
 yapildigini kanitlar. Gorev sinavlari (ornegin "karar" dersi) ayri `eval` kaynaklari
 olarak gelir.
 
-Not: bu kural bugun surec kuralidir; kodda sert kapi degildir (`QueueFreeze`
-sinav kaynagi yoklugunu engellemez). Sert kapiya cevrilmesi ayri bir istir.
+Bu kural kodda **sert kapidir** (TASK-017, 2026-09-19): `QueueFreeze`, `pretrain`
+amacli bir surumde eval/holdout amacli, nesnesi olan ve kopya olmayan kaynak yoksa
+`eval_reference_missing` ile reddeder; `instruction`/`preference` surumleri etkilenmez.
 
 ## Release Dondurma Kurali
 

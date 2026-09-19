@@ -97,6 +97,14 @@ Python 3.13'te kuruluyor. Bu yüzden dil kararı **proje ortamının dışında*
 ortamındaki `lid.176.ftz` (SHA256 `8f3472cf…603e83`) ile ana kaynak üzerinde üretilir.
 Tüm korpus için süre kestirimi ~25 dk.
 
+**Pencere (TASK-027 ile ortaya çıktı, 2026-09-19):** üretim listesi satırın **ilk 2.000
+karakterine** bakarak karar verdi (`text[:2000]`, satır sonları boşluğa); manifestteki
+yöntem adı (`fasttext-lid176-ftz-min200-p0.5`) bunu söylemiyordu. Aynı dilimde tüm satırla
+tahmin 33 satır işaretler (30 yerine; +4/−1). Liste ve v3/v4 değişmez; bundan sonraki
+yöntem adı pencereyi taşır: `fasttext-lid.176.ftz@8f3472cf…603e83;window=2000;min_chars=200;p>=0.5;flag=lang!=tr`.
+(Yukarıdaki tablodaki "7 Türkçe" 2026-09-18 ölçümüdür; TASK-027 aynı 30 satırda harf
+yoğunluğu ölçütüyle 10 sayıyor — ölçüt tanımı farkı, karar kümesi birebir aynı.)
+
 Ölçüm dosyaları: `var/olcum-2026-09-17/ornekler-dil-fasttext.md`, `…-lingua.md`.
 
 ## Tam üretim (2026-09-18 → 19, ~3,4 saat)

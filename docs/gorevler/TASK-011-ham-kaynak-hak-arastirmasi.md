@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **READY** — opened 2026-09-17 by the founder's decision ("rights research stays open as separate work; it will be done before the product ships") |
+| Status | **IN PROGRESS** — research half done 2026-09-19: [hak_kanit_paketi_2026_09.md](../hak_kanit_paketi_2026_09.md) (publisher terms read and quoted for every source that has one; TDK has none; celik_gold/tr_corpus unknown). Decision half (A/B/C) waits for the owner, before review session two. Was: READY — opened 2026-09-17 by the founder's decision ("rights research stays open as separate work; it will be done before the product ships") |
 | Kind | research (data rights) |
 | Moratorium | allowed — no new product surface; unblocks releases |
 | Owner | (unassigned) |
@@ -59,6 +59,15 @@ declare the origins (not yet verified against the actual files):
 So the premise of the 2026-07-07 `cleared` decision ("our own crawl of Turkish sites")
 does not hold for the largest input. Next step: match each raw file to a collector by
 content (field names, URL patterns) and read each publisher's terms.
+
+## Report (research half, 2026-09-19)
+
+Evidence pack: [hak_kanit_paketi_2026_09.md](../hak_kanit_paketi_2026_09.md). Measured/read:
+mC4 = ODC-BY + Common Crawl terms (third-party copyright, AI-use indemnity); Wikipedia =
+CC BY-SA 3.0 + GFDL (attribution, share-alike); Belleten = CC BY-NC 4.0 (non-commercial);
+DergiPark = per-journal licences, no platform licence; TRT Haber terms forbid copying and
+automated collection → `blocked`; TDK: no licence statement on sozluk.gov.tr or tdk.gov.tr;
+`celik_gold`/`tr_corpus`: no collector, unknown. Options A/B/C written for the owner.
 
 ## Out of scope
 

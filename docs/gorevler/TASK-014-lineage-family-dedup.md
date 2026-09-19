@@ -68,4 +68,6 @@ shapes it cannot see:
    done after a restart therefore never gets picked up. With the owner's approval the
    sweep was invoked once from the worker's own code (no hand-written SQL). Follow-up:
    run the sweep periodically in `run_forever` (small change; separate card).
-6. Pending: the gate's re-run result (expected `unique` for both), then sampling.
+6. **Gate re-run (2026-09-19): both sources `unique`, 0 external duplicates,
+   `approval_status = auto_checked`** — the same 5.8 M documents that the old query had
+   counted as 5,807,521 duplicates. Next: sampling, then the owner's 200-sample review.

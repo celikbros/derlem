@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **READY (planning only)** — opened 2026-09-18 by owner decision ("start planning, open a card"); nothing is run |
+| Status | **PLANNED — 2026-09-19: [docs/hacim_plani_2026_09.md](../hacim_plani_2026_09.md); runs need owner go/no-go** — was READY (planning only), opened 2026-09-18 by owner decision ("start planning, open a card"); nothing is run |
 | Kind | plan (data acquisition) |
 | Moratorium | planning is allowed; running any collector needs a separate owner decision |
 | Owner | (unassigned) |
@@ -29,7 +29,12 @@ README. Collectors and their targets, **as declared in the code** (not verified 
 | `news_scraper.py` | `trthaber.com` | RSS feeds | — |
 
 A second, older copy of the same collectors sits in `celik_training/data_pipeline/`.
-There is no collector for `celik_gold` or `tr_corpus`; their provenance stays unknown.
+There is no collector for `celik_gold`; its provenance stays unknown. **Corrected 2026-09-19:**
+`tr_corpus` does have one — `celik_ai-kod/CELIK_AI/celik_data/celik_data/pipeline/download_tr_corpus.py`
+in the archive reads an existing `tr_corpus.txt` and expands it with Wikipedia paragraphs
+(`20220301.tr` / `20231101.tr`); the share that is Wikipedia text is being measured in
+[TASK-038](TASK-038-tr-corpus-provenance-wikipedia-share.md). This does not change v4
+(S2 drops those lines; the same text is kept as whole articles in `wiki_oscar`).
 
 **Consequence for TASK-011:** the "own crawl" premise of the 2026-07-07 rights decision
 is contradicted by the code: the largest input is a third-party dataset download
@@ -51,12 +56,20 @@ institutional sites with their own terms of use.
 ## What this card must produce before anything runs
 
 - [ ] Target size from the shelf (tokens, per language) and the product deadline.
-- [ ] Per-source rights position from TASK-011 (at least for C4, Wikipedia, DergiPark).
+      — open: asked in the plan §5 (with the tokenizer and the 2× margin); waiting for the shelf's next letter.
+- [x] Per-source rights position from TASK-011 (at least for C4, Wikipedia, DergiPark).
+      — done: TASK-011 S2 decision (2026-09-19) for the seven raw sources, TASK-023 for the six
+      Hugging Face datasets; positions used as decided in the plan §2.
 - [ ] A dry run of each collector against **one** page/record to confirm the code still
       works (sites change); recorded as measured, not assumed.
+      — not done: the archived collectors are out of scope for volume (hundreds of MB); the dry run
+      that matters is TASK-032's one-record run of `import_hf_dataset`, and it needs the owner's decision.
 - [ ] Disk/backup plan: raw archive is deliberately outside the backup scope; new raw
       data of tens of GB needs the same decision made explicitly.
+      — open: decision requested in the plan §4 (measured 112 GB free, 2026-09-19 23:55; peak need
+      ≈ 76,8 GB for the recommended slice; Derlem's recommendation: raw outside, derived inside).
 - [ ] Owner go/no-go per collector.
+      — open: the list is in the plan §6 (9 rows, source by source, with the numbers).
 
 ## HF veri setleri — lisans özeti (TASK-023)
 
@@ -81,3 +94,60 @@ Kurucu kararı (2026-09-19; kurucu, 2026-09-19 gece: "önerilerin ok"), notlarda
 `restricted` kalır; CulturaX izlenmez, OSCAR `blocked`; (c) share-alike (yalnız Wikipedia)
 S2 kararında zaten kabul. Liste onaylandı. **Hiçbir şey indirilmedi**; alım TASK-032 (onay ister)
 ve TASK-024 pilotuyla gelir.
+
+## Report
+
+**2026-09-19 — the volume plan is written: [`docs/hacim_plani_2026_09.md`](../hacim_plani_2026_09.md).**
+Planning only; nothing was downloaded, no collector and no service was started, no DB was touched.
+
+### Today's volume
+
+| | Number | How |
+|---|---|---|
+| v3 candidate | 11,896,793,726 bytes / 5,827,650 lines | measured (v3 manifest) |
+| v4 (after the S2 filter) | **≈ 11.26 GB expected** (−5.39 % of v3 bytes) | **expected** — the v4 manifest did not exist at 23:58; only the temp output (2.91 GB) and the finished held-out part (4,323,687 bytes / 1,641 lines) were on disk. Replace with `output_byte_size` when the manifest lands. |
+| v4 tokens | **≈ 2.08 B** | estimate (5.405 bytes/token, the shelf's conversion) |
+| Gap to 2.6 B | **0.52 B tokens ≈ 2.80 GB clean text** | estimate |
+| Gap to a labelled 2× margin (5.2 B) | **3.12 B tokens ≈ 16.85 GB clean text** | estimate |
+
+Raw-text equivalent uses the measured v3 retention (87.7 % of input bytes survived the pipeline):
+≈ 3.19 GB net-new raw text to reach 2.6 B, ≈ 19.21 GB for the 2× margin.
+
+### Sources, ranked (plan §2)
+
+FineWeb-2 `tur_Latn` (`cleared` non-commercial after the owner extended the `wiki_oscar`
+acceptances; ~53 B tokens; 134.79 GB parquet in 30 shards) → mC4-tr remainder (`cleared`,
+same terms already accepted; net-new ≈ 78 M documents ≈ 44 B tokens) → Wikipedia-tr (net-new
+≈ 0; its value is the overlap-method pilot) → HPLT (`restricted`, risk acceptance **not**
+given → counts as zero today) → CulturaX and OSCAR (out). The archived collectors
+(TDK/TTK/DergiPark/TRT) are out of scope for volume: their own READMEs claim hundreds of MB.
+Overlap is **unmeasured** everywhere and is measured by TASK-024's net-new-share method.
+
+### Recommended sequence (plan §3)
+
+1. **Wikipedia-tr pilot** (TASK-024): 0.55 GB download, ≈ 2.7 GB peak disk, expected net-new
+   ≈ 0 — it measures the method, not volume.
+2. **FineWeb-2 first slice: 2 shards = 8.99 GB parquet ≈ 18.97 GB text**, ≈ 16.63 GB after
+   cleaning ≈ 3.08 B new tokens → ≈ 5.16 B with v4 (1.98× the target). Machine time from the
+   measured rates (3.4 h / 13.57 GB = 15.0 min/GB; fastText 25 min / 13.5 GB = 1.85 min/GB):
+   **≈ 7.6 h for the joint v4 + slice pass** plus ≈ 56 min for the language drop list; download
+   time **unmeasured**. The joint pass produces a **v5** candidate, so it resets the 200-sample
+   review — it belongs after the v2 delivery.
+3. mC4-tr remainder, separate go/no-go, high-numbered files first.
+
+### Disk is the binding constraint (plan §4)
+
+Measured `df -h /c` on 2026-09-19 **23:55**: 933 GB total, 822 GB used, **112 GB free** (89 %).
+Every new raw byte lives in three places (IMPORT_ROOT file + object-store copy + derived
+candidate), plus the deletable compressed download. Peak for the recommended 2-shard slice
+**≈ 76.8 GB** (67.8 GB if the parquet is deleted after conversion, 47.9 GB if the intake file is
+hard-linked as `wiki_oscar` was) — it fits. **3 shards would need ≈ 109.6 GB and does not fit.**
+
+### Open decisions
+
+Backup scope for tens of GB of new HF raw data (plan §4; Derlem's recommendation: raw outside
+the backup because a pinned revision + manifest makes it reproducible, derived objects that
+enter a frozen release inside); the shelf's three answers (plan §5: target tokens per language
+and whether a margin is wanted, the tokenizer for a real count, and the packing/boundary
+question already drafted in `belge_sinirlari_politikasi.md` §6); and the nine-row owner
+go/no-go list (plan §6).

@@ -112,6 +112,34 @@ characters after the S2 filter).
 - Judge ~50 rows of the newly-kept sheet after the rule diff (the second calibration point).
 - Decide on v5 derivation once the two counts are on the table.
 
+## Owner decisions (2026-09-21)
+
+**Policy: A — strict corpus.** "Şüpheliyi at. Daha az veri, daha temiz. Hacim açığı büyür."
+The relaxation stays only where the evidence is strong; everything else returns to v2
+strictness. Basis: the owner judged 50 newly-kept rows and called 47–49 of them junk (two,
+a chemistry and a technical encyclopedia article, were corrected to "keep" after review);
+independent model juries called 38–44 % of the same rows junk. The relaxation as shipped is
+too permissive.
+
+**Judge model: Sonnet.** Blind benchmark on the owner's 100 labelled rows (agreement /
+Cohen kappa against the owner, sheet A = "was this drop wrong?"):
+
+| Model | Sheet A agreement | kappa | Sheet B agreement |
+|---|---|---|---|
+| Haiku 4.5 | 26 % | 0.02 | 8 % |
+| Sonnet | 68 % | 0.41 | 38 % |
+| Opus | 72 % | 0.47 | 44 % |
+
+Haiku is unusable here. Sonnet and Opus are within noise of each other and of the shelf
+(0.36); Sonnet is cheaper, so bulk judging goes to Sonnet — as a **pre-screen**, never as
+the deciding vote. Sheet B could not be scored: the owner's labels have almost no variance
+(49/50 one class), which makes kappa meaningless, and two of those labels were wrong.
+
+**What the benchmark really showed:** no judge — human or model — reproduces another
+judge's bar. The owner's own bar moved between sheet A (9/50 "good") and sheet B (1/50
+"keep"). This is a policy question wearing an empirical costume; hence the explicit
+policy decision above instead of more measurement.
+
 ## Report
 
 **Status: IN PROGRESS** — the merge is done and `tr-web-v3` ships in code with tests; the

@@ -1,3 +1,4 @@
+from dataclasses import asdict
 import hashlib
 import json
 from pathlib import Path
@@ -11,7 +12,12 @@ from derlem_worker.clean_candidate import (
     resolve_output_path,
     write_json_atomic,
 )
-from derlem_worker.quality_filters import QUALITY_POLICY_TR_WEB_V1
+from derlem_worker.quality_filters import (
+    QUALITY_POLICY_TR_WEB_V1,
+    QUALITY_POLICY_TR_WEB_V2,
+    QUALITY_POLICY_TR_WEB_V3,
+    SUPPORTED_QUALITY_POLICIES,
+)
 
 
 def test_derive_clean_candidate_removes_pii_duplicates_and_oversized(tmp_path: Path) -> None:
@@ -421,3 +427,72 @@ def test_no_policy_has_no_quality_filter_status(tmp_path: Path) -> None:
     assert report.quality_filter_status is None
     assert report.quality_filter_version is None
     assert report.removed_quality_lines == 0
+
+
+# TASK-039/TASK-040 (2026-09-20): manifest hangi yorumlayici ve hangi zlib
+# surumuyle uretildigini yazar; `tr-web-v3` bir politika secenegidir.
+
+
+def test_manifest_records_interpreter_and_zlib_runtime_version(tmp_path: Path) -> None:
+    import platform
+    import zlib
+
+    source = tmp_path / "source.txt"
+    source.write_text(
+        "Bu belge kalite süzgeci olmadan da yazılır ve manifest sürümleri taşır.\n",
+        encoding="utf-8",
+    )
+
+    report = derive_clean_candidate(
+        source, tmp_path / "clean.txt", source=None, max_document_bytes=4096
+    )
+
+    assert report.interpreter_version == platform.python_version()
+    assert report.zlib_runtime_version == zlib.ZLIB_RUNTIME_VERSION
+    # Manifeste gercekten yaziliyor (asdict yolundan gecer).
+    manifest = tmp_path / "manifest.json"
+    write_json_atomic(manifest, asdict(report))
+    written = json.loads(manifest.read_text(encoding="utf-8"))
+    assert written["interpreter_version"] == platform.python_version()
+    assert written["zlib_runtime_version"] == zlib.ZLIB_RUNTIME_VERSION
+
+
+def test_tr_web_v3_policy_is_selectable_and_keeps_what_v2_dropped(tmp_path: Path) -> None:
+    # v2'nin olculen kusuru: tek bir U+FFFD saglam bir haberi attiriyordu.
+    # Ayni belge tr-web-v3 altinda tutulur, sablon spam'i atilmaya devam eder.
+    truncated_byte = (
+        "Belediye meclisi, kent merkezindeki ulaşım planını görüştü ve raporu "
+        "oybirliğiyle kabul etti; karar bir sonraki toplantıda uygulanacak.�"
+    )
+    template_spam = "Aynı cümle tekrar tekrar yazılmıştır burada. " * 200
+    source = tmp_path / "source.txt"
+    source.write_text(f"{truncated_byte}\n{template_spam}\n", encoding="utf-8")
+
+    v2_report = derive_clean_candidate(
+        source,
+        tmp_path / "clean-v2.txt",
+        source=None,
+        max_document_bytes=256 * 1024,
+        quality_policy=QUALITY_POLICY_TR_WEB_V2,
+        quality_rejections_path=tmp_path / "v2.rejections.jsonl",
+    )
+    v3_report = derive_clean_candidate(
+        source,
+        tmp_path / "clean-v3.txt",
+        source=None,
+        max_document_bytes=256 * 1024,
+        quality_policy=QUALITY_POLICY_TR_WEB_V3,
+        quality_rejections_path=tmp_path / "v3.rejections.jsonl",
+    )
+
+    assert v2_report.removed_quality_lines == 2
+    assert v3_report.removed_quality_lines == 1
+    assert v3_report.quality_filter_version == QUALITY_POLICY_TR_WEB_V3
+    assert v3_report.quality_reason_document_counts == {"extreme_repetition": 1}
+    assert (tmp_path / "clean-v3.txt").read_text(encoding="utf-8").splitlines() == [
+        truncated_byte
+    ]
+
+
+def test_tr_web_v3_is_offered_by_the_command_line(tmp_path: Path) -> None:
+    assert QUALITY_POLICY_TR_WEB_V3 in SUPPORTED_QUALITY_POLICIES

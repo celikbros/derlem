@@ -5,7 +5,9 @@ import re
 import unicodedata
 import zlib
 
+from derlem_worker import quality_body, quality_v3
 from derlem_worker.pii import normalize_language_tag
+from derlem_worker.quality_body import body
 
 
 QUALITY_POLICY_NONE = "none"
@@ -14,11 +16,24 @@ QUALITY_POLICY_TR_WEB_V1 = "tr-web-v1"
 # geri getirilemez kodlama bozulmasi (U+FFFD) ve Vikipedi isaretleme kalintisi.
 # Ikisi de belge uzunlugundan bagimsiz uygulanir; v1 kurallari 500+ sozcuk ister.
 QUALITY_POLICY_TR_WEB_V2 = "tr-web-v2"
+# tr-web-v3 = TASK-040 (2026-09-20). v2'nin olculen kusuru: kendi atma
+# raporunda yanlis atma orani %41,8 (raf) / %23,1 (kurucu), esik %10. Uc duzeltme
+# ailesi birlestirildi:
+#   (a) "varlik degil oran" + GOVDE: kural belgenin govdesine bakar, tek bir
+#       U+FFFD ya da uzun bir menu tek basina atma sebebi degildir;
+#   (b) kume ailesi: uslup kumeleri artik ikinci, YAPISAL bir sinyal ister
+#       (sozluk esikleri degismedi) -- kural konu filtresi olmaktan cikti;
+#   (c) tekrar ailesi: `zlib` yerine saf Python LZ77 kestirimi (TASK-039:
+#       hukum yorumlayiciya bagimliydi). Cekirdek esikler degismedi.
+# DEGISMEYENLER: v1/v2 kod yollari, `adult_service_spam_cluster` (rafin
+# olcumunde 50/50 dogru), `mixed_script_artifact` ve cok gerekceli atmalar.
+QUALITY_POLICY_TR_WEB_V3 = "tr-web-v3"
 SUPPORTED_QUALITY_POLICIES = frozenset(
     {
         QUALITY_POLICY_NONE,
         QUALITY_POLICY_TR_WEB_V1,
         QUALITY_POLICY_TR_WEB_V2,
+        QUALITY_POLICY_TR_WEB_V3,
     }
 )
 
@@ -29,6 +44,7 @@ SUPPORTED_QUALITY_POLICIES = frozenset(
 QUALITY_POLICY_SUPPORTED_LANGUAGES: dict[str, frozenset[str]] = {
     QUALITY_POLICY_TR_WEB_V1: frozenset({"tr"}),
     QUALITY_POLICY_TR_WEB_V2: frozenset({"tr"}),
+    QUALITY_POLICY_TR_WEB_V3: frozenset({"tr"}),
 }
 
 QUALITY_FILTER_STATUS_APPLIED = "applied"
@@ -236,7 +252,114 @@ def quality_rejection_reasons(text: str, policy: str) -> tuple[str, ...]:
         return _tr_web_v1_rejection_reasons(text)
     if policy == QUALITY_POLICY_TR_WEB_V2:
         return _tr_web_v2_rejection_reasons(text)
+    if policy == QUALITY_POLICY_TR_WEB_V3:
+        return _tr_web_v3_rejection_reasons(text)
     raise ValueError(f"Unsupported quality policy: {policy!r}")
+
+
+# ---------------------------------------------------------------------------
+# tr-web-v3 (TASK-040). v1/v2 asagida oldugu gibi durur; v3 AYRI BIR DALDIR.
+# ---------------------------------------------------------------------------
+#
+# Tasarim: v3 kendi tetiklerini sifirdan yazmaz. v2'nin gerekceleri iki kez
+# sorulur -- bir kez TAM METINDE, bir kez GOVDEDE -- ve her aile kendi ikinci
+# olcusunu ekler. Bunun uc sonucu var, ucu de olculdu:
+#   1. Tekduzelik: oran ailesi yalniz v2'den daha gevsek olabilir (v2'nin
+#      tuttugu 1.997 satirda 0 yeni atma).
+#   2. Capraz ates yok: kural yalniz kendi tabakasinda konusur.
+#   3. "Kuyruk sayfayi goturmuyor": tetik artik govdeye de soruluyor
+#      (67 bin karakterlik roportaji sondaki yorum blogu atiyordu).
+# Tek istisna tekrar ailesidir: `lz77 <= 260`, `zlib <= 180`in alt kumesi
+# DEGILDIR. Bu bilerek boyledir (TASK-039): dogru hukum artik yorumlayicidan
+# bagimsiz veriliyor.
+
+_V3_UNTOUCHED_REASONS = (
+    # Rafin olcumunde 50/50 dogru: kume fikri saglam, dort esik degil.
+    "adult_service_spam_cluster",
+    "mixed_script_artifact",
+)
+_V3_RATIO_FAMILY = (
+    "encoding_corruption",
+    "wiki_markup_residue",
+    "navigation_boilerplate",
+)
+_V3_CLUSTER_FAMILY = (
+    "hashtag_stuffing",
+    "commercial_keyword_stuffing",
+    "dating_spam_cluster",
+    "optics_spam_cluster",
+    "sexual_pharma_spam_cluster",
+)
+_V3_REPETITION_FAMILY = ("extreme_repetition", "repeated_segments")
+
+
+def _tr_web_v3_rejection_reasons(text: str) -> tuple[str, ...]:
+    v2_full = set(_tr_web_v2_rejection_reasons(text))
+    matched = {reason for reason in _V3_UNTOUCHED_REASONS if reason in v2_full}
+
+    # Oran ve kume aileleri ancak v2 o gerekceyi TAM METINDE uretmisse
+    # konusabilir. Bunun sonucu olculebilir bir guvencedir: bu iki aile
+    # v2'nin TUTTUGU hicbir belgeyi atamaz. (Kume ailesinde tam metin sarti
+    # olmasaydi govde kirpmasi yogunlugu yukseltip 706 satirin birinde -- rafin
+    # `good` dedigi bir sayfada -- yeni bir gerekce uretiyordu.)
+    trigger = v2_full.intersection(_V3_RATIO_FAMILY + _V3_CLUSTER_FAMILY)
+    if trigger:
+        scope = body(text)
+        v2_scope = v2_full if scope == text else set(_tr_web_v2_rejection_reasons(scope))
+
+        # --- oran ailesi: v2 tetigi (tam metin VE govde) + oran olcusu -----
+        if (
+            "encoding_corruption" in trigger
+            and "encoding_corruption" in v2_scope
+            and quality_v3.encoding_corruption_ratio(text, scope)
+        ):
+            matched.add("encoding_corruption")
+        if (
+            "wiki_markup_residue" in trigger
+            and "wiki_markup_residue" in v2_scope
+            and quality_v3.wiki_prose_shortfall(scope)
+        ):
+            matched.add("wiki_markup_residue")
+        if (
+            "navigation_boilerplate" in trigger
+            and "navigation_boilerplate" in v2_scope
+            and quality_v3.navigation_prose_shortfall(scope)
+        ):
+            matched.add("navigation_boilerplate")
+
+        # --- kume ailesi: v2'nin sozluk olcutu GOVDEDE + yapisal sinyal ----
+        # Sozluk esikleri degismedi (binde 8 / 10 / 50, `distinct` sayilari
+        # ayni); degisen tek sey kapsamin govde olmasi ve ikinci sinyal sarti.
+        cluster_hits = [
+            reason
+            for reason in _V3_CLUSTER_FAMILY
+            if reason in trigger and reason in v2_scope
+        ]
+        if cluster_hits:
+            signals = quality_v3.structural_signals(
+                quality_v3.structural_stats(quality_v3.turkish_casefold(scope))
+            )
+            if len(signals) >= quality_v3.REQUIRED_STRUCTURAL_SIGNALS:
+                matched.update(cluster_hits)
+
+    # Mojibake kolunun v2'de karsiligi yok, bu yuzden tetige baglanamaz; yeni
+    # atma uretebilecegi icin KAPALI (gerekce: quality_v3.MOJIBAKE_BRANCH_ENABLED).
+    # Ucuz yoklama once: govde tam metnin bir dilimi oldugu icin tam metinde
+    # mojibake harfi yoksa govdede de yoktur.
+    if (
+        quality_v3.MOJIBAKE_BRANCH_ENABLED
+        and quality_body.MOJIBAKE_PROBE_RE.search(text)
+        and quality_v3.mojibake_corruption(text, body(text))
+    ):
+        matched.add("encoding_corruption")
+
+    # --- tekrar ailesi: v2 cekirdegi, zlib yerine LZ77 (TASK-039) ----------
+    # TAM METIN uzerinde: gerekcesi quality_v3.REPETITION_SCOPE'ta.
+    matched.update(
+        quality_v3.repetition_reasons(text, quality_v3.turkish_casefold(text))
+    )
+
+    return tuple(reason for reason in _REASON_ORDER if reason in matched)
 
 
 def _tr_web_v2_rejection_reasons(text: str) -> tuple[str, ...]:
@@ -576,6 +699,7 @@ __all__ = [
     "QUALITY_POLICY_SUPPORTED_LANGUAGES",
     "QUALITY_POLICY_TR_WEB_V1",
     "QUALITY_POLICY_TR_WEB_V2",
+    "QUALITY_POLICY_TR_WEB_V3",
     "SUPPORTED_QUALITY_POLICIES",
     "quality_filter_status",
     "quality_rejection_reasons",

@@ -10,9 +10,11 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import platform
 import re
 import tempfile
 from typing import Any, BinaryIO
+import zlib
 
 import psycopg
 from psycopg.rows import dict_row
@@ -113,6 +115,13 @@ class CleanCandidateReport:
     # ("applied" / "applied_language_unknown" / "not_evaluated"); politika yoksa None.
     # quality_filter_version her durumda istenen politikayi tasir.
     quality_filter_status: str | None = None
+    # TASK-039 (2026-09-20): tr-web-v1/v2'nin sikistirma olcutu zlib UYGULAMASINA
+    # bagimliydi (3.14/zlib-ng ile 3.13/zlib 1.3.1 arasinda 7 satir taraf
+    # degistirdi). tr-web-v3 bu bagimliligi kaldirdi; yine de her manifest hangi
+    # yorumlayici ve hangi zlib surumuyle uretildigini yazar, cunku v1/v2 ile
+    # uretilmis eski adaylarin yeniden uretilebilirligi buna baglidir.
+    interpreter_version: str = ""
+    zlib_runtime_version: str = ""
 
 
 def is_held_out(line_bytes: bytes, rule: str) -> bool:
@@ -645,6 +654,8 @@ def derive_clean_candidate(
         drop_list_entries=drop_list_entries,
         removed_drop_list_lines=removed_drop_list_lines,
         quality_filter_status=quality_status,
+        interpreter_version=platform.python_version(),
+        zlib_runtime_version=zlib.ZLIB_RUNTIME_VERSION,
     )
 
 

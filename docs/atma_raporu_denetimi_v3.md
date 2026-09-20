@@ -1,6 +1,6 @@
 # Atma raporu denetimi v3 - yanlis-atma orani (TASK-020)
 
-**Puanlama:** 2026-09-20T13:26:43+00:00 · **Cetvel:** `C:\CELIKBROS PROJECTS\derlem\var\olcum-2026-09-19\atma-denetimi-v3\denetim-sayfasi-dolu-raf.csv` (SHA256 `e12b188a02369fad09477df5750ac094051bc082f3adfeaa05fc104d9a708821`) ·
+**Puanlama:** 2026-09-20T13:55:44+00:00 · **Cetvel:** `C:\CELIKBROS PROJECTS\derlem\var\olcum-2026-09-19\atma-denetimi-v3\denetim-sayfasi-dolu-raf.csv` (SHA256 `e12b188a02369fad09477df5750ac094051bc082f3adfeaa05fc104d9a708821`) ·
 **Rapor:** `C:\CELIKBROS PROJECTS\derlem\var\derived\gardash_faz2_tr_dedup_20260621_06ac330e_clean_candidate_v3.txt.rejections.jsonl` (SHA256 `2becaf9d0f1fc9a8ce48a0ea6cc4a78b83b21eac22ce2e1754fbfb5548fdd778`, 93223 kayit) ·
 **Tohum:** `20260919` · katman basina en cok 50 kayit · katman kurali: first reason in `reasons` (primary reason).
 
@@ -61,7 +61,13 @@ bolumler bir sonraki puanlamada silinir. Karar ve takip notlari gorev kartina ya
 
 ## Degerlendirici uyumu
 
-Ikinci cetvel verilmedi; uyum sayisi yok.
+Ikinci cetvel: `C:\CELIKBROS PROJECTS\derlem\var\olcum-2026-09-19\atma-denetimi-v3\denetim-sayfasi-dolu-kurucu.csv`.
+
+| Olcu | Deger |
+|---|---|
+| Ikisinde de karar olan satir | 50 |
+| Ayni karar | 33 (%66,00) |
+| Cohen kappa | 0,361 |
 
 ## Karar
 

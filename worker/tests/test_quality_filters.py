@@ -329,7 +329,7 @@ from derlem_worker.quality_filters import (  # noqa: E402
     _V3_REPETITION_FAMILY,
     _V3_UNTOUCHED_REASONS,
 )
-from test_quality_body import MENU, prose  # noqa: E402
+from test_quality_body import _CONTENT, _FUNCTION, _PREDICATE, MENU, prose  # noqa: E402
 
 ARTICLE = prose(150)
 # Gercek bir site menusu gezinme demetlerinin yaninda promosyon sozcukleri de
@@ -379,28 +379,41 @@ def test_v3_still_drops_widespread_encoding_corruption() -> None:
     assert _v3(text) == ("encoding_corruption",)
 
 
-def test_v3_encoding_needs_at_least_two_replacement_characters() -> None:
-    # Kisa belge: tek bir bozuk karakter bile YOGUNLUK esigini gecer
-    # (10,7/10k > 10). Belgeyi ayakta tutan sey yalniz adet sartidir --
-    # "kirpilmis son bayt bir belgeyi atmaz" kurali budur.
+def test_v3_drops_a_single_replacement_character_outside_the_tail() -> None:
+    # SIKI AYAR (2026-09-21): tek bozuk karakter bile GOVDENIN ICINDE duruyorsa
+    # atma sebebidir. Gevsek v3 bunu yogunluk olcusuyle tutuyordu; kurucunun
+    # B sayfasinda o muafiyetle serbest kalan 12 satirin 12'si cop cikti.
     short = prose(9, seed=555)
     one = _scatter_replacements(short, 1)
-    two = _scatter_replacements(short, 2)
+
+    assert _v2(one) == ("encoding_corruption",)
+    assert _v3(one) == ("encoding_corruption",)
+
+
+def test_v3_encoding_exempts_only_one_replacement_character_in_the_tail() -> None:
+    one = prose(15) + " � bitis sozcugu buradadir."
+    two = prose(15) + " � � bitis sozcugu buradadir."
 
     assert _v2(one) == _v2(two) == ("encoding_corruption",)
-    assert quality_v3.FFFD_MIN_COUNT == 2
+    # Ikisi de TAM metnin son FFFD_TAIL_CHARS karakterinin icinde; ayiran tek
+    # sey ADETTIR: kirpilmis son bayt bir tanedir, ikincisi kayip harftir.
+    assert quality_v3.FFFD_TAIL_CHARS == 64
+    assert quality_v3.FFFD_MAX_EXEMPT_COUNT == 1
     assert _v3(one) == ()
     assert _v3(two) == ("encoding_corruption",)
 
 
-def test_v3_encoding_ignores_corruption_that_sits_only_in_the_tail() -> None:
-    text = prose(15) + " � � bitis sozcugu buradadir."
+def test_v3_drops_a_replacement_character_that_sits_inside_a_word() -> None:
+    """Kurucunun yonergesi: "gövdede kelime içinde geçen bozuk karakter atma
+    sebebidir". Kuyruk muafiyeti kelimenin ICINE uzanmaz -- kirpilmis UTF-8
+    bayti kelime ortasinda durmaz, kaybolmus bir harf durur."""
+    between = prose(15) + " bitis sozcugu bura�dadir."
+    beside = prose(15) + " bitis sozcugu buradadir �."
 
-    assert _v2(text) == ("encoding_corruption",)
-    # Ikisi de TAM metnin son FFFD_TAIL_CHARS karakterinin icinde: kesilmis
-    # baytin yeri orasidir, sayfayi atmaz.
-    assert quality_v3.FFFD_TAIL_CHARS == 64
-    assert _v3(text) == ()
+    assert _v2(between) == _v2(beside) == ("encoding_corruption",)
+    assert quality_v3.FFFD_WORD_INTERNAL_DROPS is True
+    assert _v3(beside) == ()
+    assert _v3(between) == ("encoding_corruption",)
 
 
 def test_v3_keeps_a_long_article_that_carries_a_few_wiki_templates() -> None:
@@ -420,12 +433,23 @@ def test_v3_still_drops_a_stub_that_is_mostly_markup() -> None:
     assert "wiki_markup_residue" in _v3(text)
 
 
-def test_v3_keeps_an_article_whose_menu_is_long_but_whose_body_is_prose() -> None:
-    # "Kuyruk sayfayi goturmuyor": uc kat menu bas ve sonda, ortada makale.
+def test_v3_drops_a_menu_wrapped_article_while_the_nav_exemption_is_off(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """SIKI AYAR: gezinme muafiyeti KAPALI (`NAV_EXEMPTION_ENABLED`).
+
+    Kurucunun iki sayfasinda `navigation_boilerplate` tasiyan 20 belge var ve
+    hicbirine "iyi" demedi (B sayfasinda 15/15 cop). Muafiyet kodu duruyor;
+    acilirsa bu belge -- uc kat menu bas ve sonda, ortada makale -- kurtulur.
+    """
     text = (SITE_MENU + " ") * 3 + ARTICLE + " " + (SITE_MENU + " ") * 3
 
     assert "navigation_boilerplate" in _v2(text)
-    assert _v3(text) == ()
+    assert quality_v3.NAV_EXEMPTION_ENABLED is False
+    assert "navigation_boilerplate" in _v3(text)
+
+    monkeypatch.setattr(quality_v3, "NAV_EXEMPTION_ENABLED", True)
+    assert "navigation_boilerplate" not in _v3(text)
 
 
 def test_v3_still_drops_a_page_that_is_only_a_menu() -> None:
@@ -441,11 +465,19 @@ def test_v3_still_drops_a_page_that_is_only_a_menu() -> None:
 OPTICS_TOPIC = "kamera zoom optik dürbün güvenlik kamerası gece görüş"
 PROMOTION = "hemen ücretsiz kaliteli kampanya tıkla fiyat"
 
-PHONE_REVIEW = ARTICLE + " " + " ".join(
-    f"Bu modelde {OPTICS_TOPIC} özellikleri {index} numaralı testte {PROMOTION} "
-    f"karşılaştırması ile birlikte ayrıntılı olarak değerlendirilmiştir."
-    for index in range(30)
-)
+def _phone_review(paragraphs: int) -> str:
+    return ARTICLE + " " + " ".join(
+        f"Bu modelde {OPTICS_TOPIC} özellikleri {index} numaralı testte {PROMOTION} "
+        f"karşılaştırması ile birlikte ayrıntılı olarak değerlendirilmiştir."
+        for index in range(paragraphs)
+    )
+
+
+# Konu sozlugu v2 esigine DEGEN bir inceleme (binde 12,6 = 1,58x). Kurucunun
+# "iyi" dedigi alti kume belgesi tam bu bantta: 1,00x - 2,00x.
+PHONE_REVIEW = _phone_review(5)
+# Ayni konu, ayni uslup, ama sozluk yogunlugu esigi KATLIYOR (2,44x).
+DENSE_PHONE_REVIEW = _phone_review(8)
 OPTICS_SPAM = (
     OPTICS_TOPIC + " " + PROMOTION + " 0532 111 22 33 599 TL sipariş ver "
 ) * 130
@@ -456,6 +488,38 @@ def test_v3_keeps_topic_words_that_appear_inside_real_prose() -> None:
     # OPPO/Nokia maddelerine basiyordu (%62 yanlis). Konu ayni, uslup farkli.
     assert _v2(PHONE_REVIEW) == ("optics_spam_cluster",)
     assert _v3(PHONE_REVIEW) == ()
+
+
+def test_v3_cluster_exemption_stops_where_the_density_multiplies_the_threshold() -> None:
+    """SIKI AYAR (2026-09-21): yapisal sinyal tek basina yetmiyor.
+
+    Kurucunun B sayfasindaki cop metinlerin cogu duzgun Turkce cumlelerle
+    yazilmis SEO sayfalari: islev sozcugu orani 15-26, yapisal sinyal YOK. Onlari
+    "iyi" belgelerden ayiran tek olcu, kumenin kendi sozlugunun yogunlugudur --
+    iyi belge esige DEGIYOR (1,00x-2,00x), cop belge esigi KATLIYOR.
+    """
+    assert quality_v3.structural_signals(
+        quality_v3.structural_stats(quality_v3.turkish_casefold(DENSE_PHONE_REVIEW))
+    ) == ()
+    assert _v2(DENSE_PHONE_REVIEW) == ("optics_spam_cluster",)
+    assert (quality_v3.CLUSTER_DENSITY_MARGIN_NUM, quality_v3.CLUSTER_DENSITY_MARGIN_DEN) == (21, 10)
+    # 1,58x muaf, 2,44x degil. Ikisi de ayni cumle kalibindan uretildi.
+    assert _v3(PHONE_REVIEW) == ()
+    assert _v3(DENSE_PHONE_REVIEW) == ("optics_spam_cluster",)
+
+
+def test_v3_does_not_relax_hashtag_stuffing() -> None:
+    """SIKI AYAR: `hashtag_stuffing` gevsek kume ailesinden cikarildi.
+
+    Kural zaten KONU degil YAPI olcer (`#` >= 50 ve binde 50), yani rafin
+    "kume kurallari konu filtresi olmus" teshisi ona uymuyordu. Kurucunun iki
+    sayfasindaki 7 hashtag belgesinin hicbiri "iyi" degil.
+    """
+    text = ARTICLE + " " + " ".join(f"#etiket{index % 90}" for index in range(900))
+
+    assert "hashtag_stuffing" in _v2(text)
+    assert quality_v3.HASHTAG_EXEMPTION_ENABLED is False
+    assert "hashtag_stuffing" in _v3(text)
 
 
 def test_v3_still_drops_the_same_topic_without_any_prose() -> None:
@@ -668,16 +732,18 @@ def _scatter_replacements(text: str, count: int) -> str:
     return "".join(pieces)
 
 
-def test_v3_encoding_density_boundary() -> None:
-    # 15.4 bin karakterlik govdede 15 bozuk karakter = 9,7/10k (tutulur),
-    # 16 tanesi = 10,4/10k (atilir). Esik: FFFD_DENSITY_PER_10K.
-    assert quality_v3.FFFD_DENSITY_PER_10K == 10
-    below = _scatter_replacements(ARTICLE, 15)
-    above = _scatter_replacements(ARTICLE, 16)
+def test_v3_encoding_is_measured_on_the_full_text_not_the_body() -> None:
+    """SIKI AYAR: kapsam TAM METIN. Govde kirpmasi bozulmayi gizleyemez.
 
-    assert _v2(below) == _v2(above) == ("encoding_corruption",)
-    assert _v3(below) == ()
-    assert _v3(above) == ("encoding_corruption",)
+    Kurucunun B sayfasinda bu farkin bedeli olculdu: 3, 4, 6, 7 ve 49 numarali
+    satirlarin GOVDESINDE hic U+FFFD kalmiyordu (bozulma bastaki menu/baslik
+    bolgesindeydi) ve besi de cop.
+    """
+    text = "bozuk� başlık " + (SITE_MENU + " ") * 3 + ARTICLE
+
+    assert "�" not in quality_body.body(text)
+    assert "encoding_corruption" in _v2(text)
+    assert "encoding_corruption" in _v3(text)
 
 
 WIKI_MARKUP = (
@@ -691,17 +757,132 @@ MARKUP_HEAVY_ARTICLE = " ".join(
 )
 
 
-def test_v3_keeps_an_article_with_enough_prose_even_if_markup_dominates() -> None:
-    # Mutlak taban: "4000 karakterden fazla duzyazi birakan belge bu kuralla
-    # asla atilamaz". Oran tek basina bakarsa bu madde duserdi (0,41 < 0,45).
+def test_v3_wiki_ratio_boundary_drops_a_markup_heavy_article() -> None:
+    """SIKI AYAR: mutlak duzyazi tabani artik MUAFIYETIN SARTI, ondan kacisin
+    yolu degil. Gevsek v3'te "4000 karakterden cok duzyazi biraktin" tek basina
+    yetiyordu ve bu madde (oran 0,41) kurtuluyordu; simdi oran da sarttir.
+
+    Kurucunun B sayfasindaki 15 numarali satir tam bu tip: 31.741 karakter,
+    13.052 karakter duzyazi, oran 0,416 -- ve cop.
+    """
     stats = quality_body.prose_after_strip(
         quality_body.body(MARKUP_HEAVY_ARTICLE), strip="markup"
     )
 
     assert stats.prose_chars >= quality_v3.WIKI_MIN_PROSE_CHARS
-    assert stats.prose_chars * 100 < stats.scope_chars * quality_v3.WIKI_MIN_PROSE_RATIO_NUM
+    assert (
+        stats.prose_chars * quality_v3.WIKI_MIN_PROSE_RATIO_DEN
+        < stats.scope_chars * quality_v3.WIKI_MIN_PROSE_RATIO_NUM
+    )
     assert "wiki_markup_residue" in _v2(MARKUP_HEAVY_ARTICLE)
-    assert "wiki_markup_residue" not in _v3(MARKUP_HEAVY_ARTICLE)
+    assert "wiki_markup_residue" in _v3(MARKUP_HEAVY_ARTICLE)
+
+
+# Kloroform/XAML benzeri: uzun, duzyazi yogun, isaretleme tasiyan madde.
+# (Kurucu bu ikisinin hukmunu 2026-09-21'de "kalsin" olarak duzeltti; cevap
+# anahtarinda hala "garbage" yaziyor.)
+ENCYCLOPEDIA_ENTRY = (
+    '{{Kimyasal madde|ad=Kloroform|formül=CHCl3|kaynama=61}} '
+    + prose(120, seed=3131)
+    + ' {| align="left" width="200" | 1 || 2 |} [[kategori:kimya]] {{kaynakça}}'
+)
+
+
+def test_v3_keeps_a_long_prose_dense_entry_that_carries_markup() -> None:
+    stats = quality_body.prose_after_strip(
+        quality_body.body(ENCYCLOPEDIA_ENTRY), strip="markup"
+    )
+
+    assert stats.prose_chars >= quality_v3.WIKI_MIN_PROSE_CHARS
+    assert (
+        stats.prose_chars * quality_v3.WIKI_MIN_PROSE_RATIO_DEN
+        >= stats.scope_chars * quality_v3.WIKI_MIN_PROSE_RATIO_NUM
+    )
+    assert _v2(ENCYCLOPEDIA_ENTRY) == ("wiki_markup_residue",)
+    assert _v3(ENCYCLOPEDIA_ENTRY) == ()
+
+
+CONTACT_BLOCK = (
+    "Hemen ara 0532 111 22 33 whatsapp sipariş ver teklif al iletişime geç "
+    "randevu al."
+)
+# Butun ORAN olculerini geciyor (oran 0,983, duzyazi 6.229, islev sozcugu 32)
+# ama ortasinda bir iletisim/CTA blogu var: kurucunun B sayfasindaki 16
+# numarali satirin (22.792 karakter, oran 0,872) imzasi.
+WIKI_WITH_CONTACT_BLOCK = (
+    "{{Bilgi kutusu|ad=Örnek}} "
+    + prose(30, seed=11)
+    + " "
+    + CONTACT_BLOCK
+    + " "
+    + prose(30, seed=12)
+    + " [[kategori]] || ||"
+)
+
+
+def test_v3_wiki_exemption_is_vetoed_by_a_commercial_signal() -> None:
+    signals = quality_v3.structural_signals(
+        quality_v3.structural_stats(
+            quality_v3.turkish_casefold(quality_body.body(WIKI_WITH_CONTACT_BLOCK))
+        )
+    )
+    stats = quality_body.prose_after_strip(
+        quality_body.body(WIKI_WITH_CONTACT_BLOCK), strip="markup"
+    )
+
+    # Her oran olcusunu geciyor; karari yalniz veto sinyali veriyor.
+    assert stats.prose_chars >= quality_v3.WIKI_MIN_PROSE_CHARS
+    assert (
+        stats.prose_chars * quality_v3.WIKI_MIN_PROSE_RATIO_DEN
+        >= stats.scope_chars * quality_v3.WIKI_MIN_PROSE_RATIO_NUM
+    )
+    assert signals == ("contact_cta",)
+    assert quality_v3.WIKI_VETO_SIGNALS == ("contact_cta", "link_flood", "repeated_block")
+    assert _v3(WIKI_WITH_CONTACT_BLOCK) == ("wiki_markup_residue",)
+
+
+def _sparse_prose(sentences: int, *, content: int, seed: int = 4242) -> str:
+    """Islev sozcugu FAKIR ama cekimli yuklemli idari/teknik Turkce taklidi:
+    `body()` bunu duzyazi sayar (yuklem yolu), kume olcusu saymaz."""
+    state = seed
+
+    def pick(pool: list[str]) -> str:
+        nonlocal state
+        state = (state * 1103515245 + 12345) % (2**31)
+        return pool[state % len(pool)]
+
+    out = []
+    for _ in range(sentences):
+        words = [pick(_CONTENT) for _ in range(content)]
+        words.insert(4, pick(_FUNCTION))
+        words.append(pick(_PREDICATE))
+        out.append(" ".join(words).capitalize() + ".")
+    return " ".join(out)
+
+
+def _sparse_wiki(content: int) -> str:
+    return (
+        "{{Bilgi kutusu|ad=Örnek}} "
+        + _sparse_prose(60, content=content)
+        + " [[kategori]] || ||"
+    )
+
+
+def test_v3_wiki_function_word_floor_boundary() -> None:
+    """Kurucunun yonergesi: "gevsetme yalniz uzun ve GERCEKTEN DUZ YAZI
+    belgelere taninsin" -- olcu, kume ailesinin islev sozcugu oranidir.
+
+    Iki belge de oran (0,98) ve mutlak taban olculerini rahatca geciyor; ayiran
+    tek sey 100 sozcukteki baglac/edat/zamir sayisi: 10 muaf, 9 degil.
+    """
+    keeps, drops = _sparse_wiki(8), _sparse_wiki(9)
+
+    assert quality_v3.WIKI_MIN_FUNCTION_WORDS_PER_100 == 10
+    assert not quality_v3.function_words_per_100_below(quality_body.body(keeps), 10)
+    assert quality_v3.function_words_per_100_below(quality_body.body(drops), 10)
+    assert _v2(keeps) == _v2(drops) == ("wiki_markup_residue",)
+    assert _v3(keeps) == ()
+    assert _v3(drops) == ("wiki_markup_residue",)
 
 
 def test_v3_cluster_reason_must_also_appear_on_the_full_text(
@@ -739,34 +920,53 @@ MENU_BETWEEN_SECTIONS = " ".join(
 ) + " " + prose(30, seed=999)
 
 
-def test_v3_keeps_a_short_article_whose_prose_survives_the_markup() -> None:
-    # Mutlak taban tek basina bakarsa bu kisa madde duserdi (2.559 < 4.000);
-    # ayakta tutan sey ORAN olcusudur: isaretleme kirpilinca geriye govdenin
-    # %98'i duzyazi olarak kaliyor.
-    stats = quality_body.prose_after_strip(
+SHORTER_WIKI_ARTICLE = (
+    "{{Bilgi kutusu|ad=Örnek}} " + prose(24, seed=77) + " [[kategori]]"
+)
+
+
+def test_v3_wiki_absolute_prose_floor_boundary() -> None:
+    """SIKI AYAR: `WIKI_MIN_PROSE_CHARS` artik muafiyetin ALT SINIRI (2.500).
+
+    Iki madde de oran olcusunu ayni sekilde geciyor (0,982/0,983); ayiran tek
+    sey isaretleme bosaltildiktan sonra kalan duzyazi miktari. Kurucunun B
+    sayfasindaki 17 numarali satir (394 karakter, 218 karakter duzyazi) bu
+    tabanin altindadir; korunmasi sart olan XAML maddesi (3.158) ustunde.
+    """
+    keeps = quality_body.prose_after_strip(
         quality_body.body(SHORT_WIKI_ARTICLE), strip="markup"
     )
-
-    assert stats.prose_chars < quality_v3.WIKI_MIN_PROSE_CHARS
-    assert (
-        stats.prose_chars * quality_v3.WIKI_MIN_PROSE_RATIO_DEN
-        >= stats.scope_chars * quality_v3.WIKI_MIN_PROSE_RATIO_NUM
+    drops = quality_body.prose_after_strip(
+        quality_body.body(SHORTER_WIKI_ARTICLE), strip="markup"
     )
-    assert _v2(SHORT_WIKI_ARTICLE) == ("wiki_markup_residue",)
+
+    assert quality_v3.WIKI_MIN_PROSE_CHARS == 2500
+    assert keeps.prose_chars >= quality_v3.WIKI_MIN_PROSE_CHARS > drops.prose_chars
+    for stats in (keeps, drops):
+        assert (
+            stats.prose_chars * quality_v3.WIKI_MIN_PROSE_RATIO_DEN
+            >= stats.scope_chars * quality_v3.WIKI_MIN_PROSE_RATIO_NUM
+        )
+    assert _v2(SHORT_WIKI_ARTICLE) == _v2(SHORTER_WIKI_ARTICLE) == ("wiki_markup_residue",)
     assert _v3(SHORT_WIKI_ARTICLE) == ()
+    assert _v3(SHORTER_WIKI_ARTICLE) == ("wiki_markup_residue",)
 
 
-def test_v3_keeps_a_page_whose_menus_sit_between_real_sections() -> None:
-    # Govde kirpmasi burada is goremez (menuler ortada); tetik hem tam metinde
-    # hem govdede basiyor. Sayfayi kurtaran sey "menu dusunce ne kaliyor"
-    # olcusudur: %76 duzyazi kaliyor, esik %65.
+def test_v3_drops_a_page_whose_menus_sit_between_real_sections(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Govde kirpmasi burada is goremez (menuler ortada). Gevsek v3'te sayfayi
+    # "menu dusunce %76 duzyazi kaliyor" olcusu kurtariyordu; siki ayarda
+    # muafiyet kapali oldugu icin olcu hic sorulmuyor.
     scope = quality_body.body(MENU_BETWEEN_SECTIONS)
     stats = quality_body.prose_after_strip(scope, strip="navigation")
 
     assert "navigation_boilerplate" in _v2(MENU_BETWEEN_SECTIONS)
-    assert "navigation_boilerplate" in _v2(scope)
     assert (
         stats.prose_chars * quality_v3.NAV_MIN_PROSE_RATIO_DEN
         >= stats.scope_chars * quality_v3.NAV_MIN_PROSE_RATIO_NUM
     )
+    assert "navigation_boilerplate" in _v3(MENU_BETWEEN_SECTIONS)
+
+    monkeypatch.setattr(quality_v3, "NAV_EXEMPTION_ENABLED", True)
     assert "navigation_boilerplate" not in _v3(MENU_BETWEEN_SECTIONS)

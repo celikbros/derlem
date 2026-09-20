@@ -27,6 +27,20 @@ QUALITY_POLICY_TR_WEB_V2 = "tr-web-v2"
 #       hukum yorumlayiciya bagimliydi). Cekirdek esikler degismedi.
 # DEGISMEYENLER: v1/v2 kod yollari, `adult_service_spam_cluster` (rafin
 # olcumunde 50/50 dogru), `mixed_script_artifact` ve cok gerekceli atmalar.
+#
+# SIKI AYAR (2026-09-21, kurucu karari "A) Siki korpus -- supheliyi at"):
+# yukaridaki gevsetme FAZLA COMERTTI. Kurucu yeni-tutulanlardan 50'sine bakti,
+# 48'ine "cop" dedi (ikisini -- Kloroform ve XAML -- "kalsin" diye duzeltti);
+# bagimsiz model jurileri ayni 50'de %38-44 "cop" dedi. Her ailede muafiyet
+# daraltildi ve muafiyetin sarti acik bir OLCU oldu (esikler ve gerekceler
+# quality_v3.py'de; olcum var/olcum-2026-09-21/task-040-siki/RAPOR.md):
+#   * gezinme ve hashtag muafiyetleri KAPATILDI,
+#   * U+FFFD: yalniz "tek bozuk karakter, tam metnin kuyrugunda, kelime disi",
+#   * wiki: duzyazi miktari + orani + islev sozcugu orani + ticari veto,
+#   * kume: yapisal sinyal (R1 degismedi) YA DA sozluk yogunlugu marji 2,10x,
+#   * "v2 govdede de basiyor mu" kapisi kalkti (govde kirpmasi muafiyet degil).
+# Olculen sonuc: kurucunun "iyi" dedigi 7 belgenin 7'si korundu, B sayfasinin
+# 50 satirindan 43'u yeniden atildi.
 QUALITY_POLICY_TR_WEB_V3 = "tr-web-v3"
 SUPPORTED_QUALITY_POLICIES = frozenset(
     {
@@ -293,6 +307,30 @@ _V3_CLUSTER_FAMILY = (
 _V3_REPETITION_FAMILY = ("extreme_repetition", "repeated_segments")
 
 
+_V3_CLUSTER_LEXICON = {
+    "commercial_keyword_stuffing": lambda: _promotion_re(),
+    "dating_spam_cluster": lambda: _dating_re(),
+    "optics_spam_cluster": lambda: _optics_re(),
+    "sexual_pharma_spam_cluster": lambda: _sexual_pharma_re(),
+}
+
+
+def _v3_cluster_density_exceeds(folded: str, word_count: int, reason: str) -> bool:
+    """Kumenin KENDI sozlugunun TAM METINDEKI yogunlugu muafiyet tavanini
+    asiyor mu (SIKI AYAR, 2026-09-21).
+
+    `hashtag_stuffing` gevsek aileden cikarildi (`HASHTAG_EXEMPTION_ENABLED`):
+    kural zaten yapisaldir, sozluk yogunlugu olcusu yoktur -> muafiyet yok.
+    """
+    if reason == "hashtag_stuffing":
+        return not quality_v3.HASHTAG_EXEMPTION_ENABLED
+    lexicon = _V3_CLUSTER_LEXICON.get(reason)
+    if lexicon is None:
+        return True
+    hits = _lexicon_stats(lexicon(), folded).hits
+    return quality_v3.cluster_density_exceeds(hits, word_count, reason)
+
+
 def _tr_web_v3_rejection_reasons(text: str) -> tuple[str, ...]:
     v2_full = set(_tr_web_v2_rejection_reasons(text))
     matched = {reason for reason in _V3_UNTOUCHED_REASONS if reason in v2_full}
@@ -305,42 +343,46 @@ def _tr_web_v3_rejection_reasons(text: str) -> tuple[str, ...]:
     trigger = v2_full.intersection(_V3_RATIO_FAMILY + _V3_CLUSTER_FAMILY)
     if trigger:
         scope = body(text)
-        v2_scope = v2_full if scope == text else set(_tr_web_v2_rejection_reasons(scope))
+        signals = quality_v3.structural_signals(
+            quality_v3.structural_stats(quality_v3.turkish_casefold(scope))
+        )
 
-        # --- oran ailesi: v2 tetigi (tam metin VE govde) + oran olcusu -----
-        if (
-            "encoding_corruption" in trigger
-            and "encoding_corruption" in v2_scope
-            and quality_v3.encoding_corruption_ratio(text, scope)
+        # --- oran ailesi: v2 tetigi (TAM METIN) + muafiyet olcusu ----------
+        # SIKI AYAR (2026-09-21): "v2 govdede de basiyor mu" kapisi KALKTI.
+        # Govde kirpmasinin kendisi bir muafiyet degildir; muafiyet acikca
+        # olculur. Kurucunun B sayfasinda o kapidan 8 cop belge kaciyordu:
+        # 3, 4, 6, 7, 49 (bozulma bastaki basligta, govdede U+FFFD yok) ve
+        # 23, 28, 42 (gezinme tetigi govdede basmiyor). Tam metin tetigi
+        # duruyor, yani v3 hala v2'nin TUTTUGU hicbir belgeyi atamaz.
+        if "encoding_corruption" in trigger and quality_v3.encoding_corruption_ratio(
+            text, scope
         ):
             matched.add("encoding_corruption")
-        if (
-            "wiki_markup_residue" in trigger
-            and "wiki_markup_residue" in v2_scope
-            and quality_v3.wiki_prose_shortfall(scope)
+        if "wiki_markup_residue" in trigger and quality_v3.wiki_prose_shortfall(
+            scope, signals
         ):
             matched.add("wiki_markup_residue")
-        if (
-            "navigation_boilerplate" in trigger
-            and "navigation_boilerplate" in v2_scope
-            and quality_v3.navigation_prose_shortfall(scope)
+        if "navigation_boilerplate" in trigger and quality_v3.navigation_prose_shortfall(
+            scope
         ):
             matched.add("navigation_boilerplate")
 
-        # --- kume ailesi: v2'nin sozluk olcutu GOVDEDE + yapisal sinyal ----
-        # Sozluk esikleri degismedi (binde 8 / 10 / 50, `distinct` sayilari
-        # ayni); degisen tek sey kapsamin govde olmasi ve ikinci sinyal sarti.
+        # --- kume ailesi: yapisal sinyal (R1) + sozluk yogunlugu marji -----
+        # Sozluk esikleri DEGISMEDI ve R1 yapilandirmasina dokunulmadi; siki
+        # ayarin ekledigi tek sey "esik marji": yogunluk v2 esiginin
+        # `CLUSTER_DENSITY_MARGIN` katina ulasiyorsa muafiyet yoktur.
         cluster_hits = [
-            reason
-            for reason in _V3_CLUSTER_FAMILY
-            if reason in trigger and reason in v2_scope
+            reason for reason in _V3_CLUSTER_FAMILY if reason in trigger
         ]
         if cluster_hits:
-            signals = quality_v3.structural_signals(
-                quality_v3.structural_stats(quality_v3.turkish_casefold(scope))
-            )
-            if len(signals) >= quality_v3.REQUIRED_STRUCTURAL_SIGNALS:
-                matched.update(cluster_hits)
+            relaxed = len(signals) < quality_v3.REQUIRED_STRUCTURAL_SIGNALS
+            folded_full = _turkish_casefold(text)
+            word_count = len(_WORD_RE.findall(folded_full))
+            for reason in cluster_hits:
+                if not relaxed or _v3_cluster_density_exceeds(
+                    folded_full, word_count, reason
+                ):
+                    matched.add(reason)
 
     # Mojibake kolunun v2'de karsiligi yok, bu yuzden tetige baglanamaz; yeni
     # atma uretebilecegi icin KAPALI (gerekce: quality_v3.MOJIBAKE_BRANCH_ENABLED).

@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **IN PROGRESS** — scope approved by the owner 2026-09-20 ("onayladım"); the three families are measured and merged into `tr-web-v3` (code + tests in place); the newly-kept sheet is owed |
+| Status | **IN PROGRESS** — scope approved by the owner 2026-09-20 ("onayladım"); the three families are merged into `tr-web-v3` (code + tests in place); the newly-kept sheet was judged and the owner ruled "strict corpus" 2026-09-21, thresholds tightened accordingly; the strict set's own false-keep rate is owed |
 | Kind | fix (derivation rules) |
 | Moratorium | allowed — a measured defect in the pipeline that produces the v2 delivery; no product surface |
 | Estimate | 1.5–2 day(s) work + ≈ 4.5 h machine |
@@ -104,7 +104,8 @@ characters after the S2 filter).
       `correct_drop`.
 - [ ] Newly-kept sheet judged by the shelf and spot-checked by the owner; false-keep rate
       reported with its interval before v5 is derived.
-- [x] Control runs: each new rule's guard removed → a test goes red (12 guards, 12 red).
+- [x] Control runs: each new rule's guard removed → a test goes red (12 guards, 12 red;
+      the strict pass adds 10 more guards, 10 more red — 2026-09-21).
 
 ## Owner actions
 
@@ -142,9 +143,14 @@ policy decision above instead of more measurement.
 
 ## Report
 
-**Status: IN PROGRESS** — the merge is done and `tr-web-v3` ships in code with tests; the
-newly-kept sheet (acceptance criterion 4) is still owed. Full measurement:
-[var/olcum-2026-09-20/task-040-birlestirme/RAPOR.md](../../var/olcum-2026-09-20/task-040-birlestirme/RAPOR.md).
+**Status: IN PROGRESS** — the merge is done, the newly-kept sheet was judged, and the owner's
+"strict corpus" ruling of 2026-09-21 is in code with tests (see **Strict pass** below; the
+numbers in the three sections that follow are the *pre-ruling* measurement and are kept as the
+record of what the loose thresholds did). Full measurements:
+[var/olcum-2026-09-20/task-040-birlestirme/RAPOR.md](../../var/olcum-2026-09-20/task-040-birlestirme/RAPOR.md)
+(merge) and
+[var/olcum-2026-09-21/task-040-siki/RAPOR.md](../../var/olcum-2026-09-21/task-040-siki/RAPOR.md)
+(strict pass).
 
 ### What shipped
 
@@ -222,9 +228,36 @@ actually bind each bound were built and the tests added.
   the pattern's `Â[ -¿]` arm matches Turkish circumflex Â ("el-ÂMİLÎ", "TABAKÂT") and dropped a
   sound theology article. It needs measuring on a corpus that actually contains mojibake.
 
+### Strict pass (2026-09-21)
+
+The owner ruled after seeing the newly-kept sheet: **"A) Strict corpus — drop the
+suspicious. Less data, cleaner. The volume gap grows."** He judged 50 of the
+newly-kept rows and called 48 garbage (correcting two — a Chloroform chemistry
+entry and a XAML technical entry — to "keep" afterwards); independent model
+juries called 38–44 % of the same 50 garbage. `tr-web-v3`'s exemptions were
+therefore narrowed, with two numbers fixed in advance: **keep** the 7
+quality-dropped documents the owner called `good` (7/7 today), and **re-drop at
+least 85 %** of the 50 newly-kept rows he saw.
+
+Both hold: **7/7 kept, 43/50 (86.0 %) re-dropped** — 43/48 (89.6 %) with
+Chloroform and XAML counted as keeps, and both are kept. Leakage on the owner's
+audit sheet fell from 12/34 to 4/34. What changed: the navigation and hashtag
+exemptions are off, `encoding_corruption` is measured on the full text with a
+single "one replacement character, in the tail, outside a word" exemption, the
+wiki exemption needs prose volume + ratio + function-word ratio + no commercial
+signal, the cluster family adds a 2.10× lexicon-density ceiling (R1 untouched),
+and the "does v2 also fire on the body" gate is gone — body trimming is no
+longer an exemption by itself. Thresholds were picked from a table, not by
+intuition; the repetition family, LZ77 and the two suspended branches are
+untouched. Full measurement, control runs and population effect:
+[var/olcum-2026-09-21/task-040-siki/RAPOR.md](../../var/olcum-2026-09-21/task-040-siki/RAPOR.md).
+
 ### Still owed
 
-The newly-kept sheet for the shelf and the owner (criterion 4) — it should be stratified over
-`encoding_corruption`, `sexual_pharma`, `commercial_keyword_stuffing`, `hashtag_stuffing` and
-the 10 freed multi-reason rows. The population estimate has not been redone with the real
-`body()`. v5 should not be derived before the false-keep rate is on the table.
+The newly-kept sheet was produced and judged (criterion 4 — the owner's 50 rows are the
+basis of the strict pass above), but it sampled the **loose** v3's newly-kept set. The strict
+set is smaller and differently distributed: 4 888 records / 46.8 M characters against
+25 505 / 286.7 M. Its false-keep rate at population scale is still unmeasured; what exists is
+a lower bound from the owner's sheet (5 escapes in 48). Either a fresh stratified sheet comes
+off the strict set, or the owner accepts the current reading — v5 should not be derived
+before that is decided.

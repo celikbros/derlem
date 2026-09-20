@@ -10,6 +10,19 @@ Uc aile, uc ayri olcum raporundan gelir:
   var/olcum-2026-09-20/task-040-kumeler/RAPOR.md       (yapisal ikinci sinyal)
   var/olcum-2026-09-20/task-040-tekrar/RAPOR.md        (lz77 + cerceve muafiyeti)
 
+SIKI AYAR (2026-09-21) -- kurucu karari: "A) Siki korpus -- supheliyi at. Daha
+az veri, daha temiz. Hacim acigi buyur." Gevsek esikler kurucunun hukmunde fazla
+comert cikti (yeni-tutulanlardan 50'sinin 48'ine "cop" dedi), bu yuzden her
+ailenin MUAFIYETI daraltildi. Asagida "SIKI AYAR" diye isaretli her sabit o
+kararin urunudur ve olcusu sudur:
+
+  var/olcum-2026-09-21/task-040-siki/RAPOR.md          (esik tablosu, iki hedef)
+
+Iki hedef, ikisi de tutturuldu: kurucunun "iyi" dedigi 7 kalite-gerekceli belge
+7/7 korunuyor; kurucunun gordugu 50 yeni-tutulanin 43'u (%86,0) yeniden atiliyor
+(Kloroform ve XAML haric 43/48 = %89,6 -- kurucu o ikisinin hukmunu "kalsin"
+olarak duzeltti ve ikisi de tutuluyor).
+
 Belirlenimcilik (TASK-039 kabul olcutu): butun esikler TAMSAYI karsilastirmasi
 ile uygulanir ve sikistirma olcusu `zlib` yerine saf Python LZ77 kestirimidir.
 Ayni belge kumesi kok .venv (3.14, zlib-ng) ile worker/.venv (3.13, zlib)
@@ -23,28 +36,37 @@ import re
 import unicodedata
 
 from derlem_worker.quality_body import (
+    REPLACEMENT_CHARACTER,
     ProseStats,
     encoding_stats,
     prose_after_strip,
 )
+
+_WORD_CHAR_RE = re.compile(r"[^\W_]", re.UNICODE)
 
 
 # ===========================================================================
 # 1. "Varlik degil oran" ailesi
 # ===========================================================================
 
-FFFD_MIN_COUNT = 2
-"""Tek bir U+FFFD hicbir kosulda atma sebebi degildir: kirpilmis son bayt.
-v2 tek bir U+FFFD icin atiyordu ve bu tabakada yanlis atma %54 olculdu."""
+FFFD_MAX_EXEMPT_COUNT = 1
+"""SIKI AYAR (kurucu karari 2026-09-21): muafiyet TEK bir bozuk karakterdir.
+Ikinci bir U+FFFD gorunur gormez belge atilir -- "oran" olcusu kalkti.
 
-FFFD_DENSITY_PER_10K = 10
-"""Govdede 10.000 karakterde bu kadar U+FFFD varsa bozulma yaygindir.
-10 secildi: 20 ile ayni kurtarmayi (25/27) bir eksik sizintiyla veriyor;
-5'e inmek sizintiyi 12'ye indirir ama 5 iyi belgeyi feda eder."""
+Gevsek v3 govdede 10.000 karakterde 10 U+FFFD'ye kadar izin veriyordu
+(FFFD_DENSITY_PER_10K). Kurucunun B sayfasinda o muafiyetle serbest kalan 12
+satirin 12'si cop. Sayfa B'de gorulenler: 1-11 ve 49; beste bozulma kelime
+ICINDE (3, 4, 6, 7, 11)."""
 
 FFFD_TAIL_CHARS = 64
 """TAM metnin son bu kadar karakteri "kuyruk"tur. Yalniz orada duran bozulma
 belgeyi atmaz: kesilmis UTF-8 baytinin yeri orasidir."""
+
+FFFD_WORD_INTERNAL_DROPS = True
+"""Kuyrukta bile olsa, bozuk karakter bir KELIMENIN ICINDE ise (iki yaninda da
+sozcuk karakteri var) muafiyet yoktur: kirpilmis son bayt kelime ortasinda
+durmaz, kaybolmus bir harf orada durur. Kurucunun yonergesi:
+"gövdede kelime içinde geçen bozuk karakter atma sebebidir"."""
 
 MOJIBAKE_BRANCH_ENABLED = False
 """tr-web-v3'te KAPALI (birlestirme kosusu, 2026-09-20).
@@ -67,37 +89,86 @@ harflerden ayrilmasi gerekir (ayri kart)."""
 MOJIBAKE_MIN_COUNT = 5
 MOJIBAKE_DENSITY_PER_10K = 10
 
-WIKI_MIN_PROSE_CHARS = 4000
-"""Isaretleme/makine verisi bosaltildiktan sonra kalmasi gereken en az duzyazi.
-Bu ornekte hic baglamadi ama populasyonda "4000 karakterden fazla duzyazi
-birakan belge bu kuralla asla atilamaz" guvencesi verir."""
+WIKI_MIN_PROSE_CHARS = 2500
+"""SIKI AYAR: muafiyet icin GEREKEN en az duzyazi (eskiden: "bundan azsa
+atilabilir" tarafindaydi, 4000). Kisa/parcali sayfalar gider: sayfa B'deki
+394 karakterlik wiki parcasi (no 17, 218 karakter duzyazi) burada duser.
+2500 secildi: korunmasi sart olan XAML maddesinde 3158 karakter duzyazi var
+(%26 pay); 3000 de iki hedefi tutturur ama XAML'e yalniz %5 pay birakir."""
 
-WIKI_MIN_PROSE_RATIO_NUM, WIKI_MIN_PROSE_RATIO_DEN = 45, 100
-"""Kalan duzyazinin govdeye orani (0,45). En dusuk sizintiya ulasan EN KUCUK
-oran; 0,50/0,55 ayni sonucu daha saldirgan bir esikle verir."""
+WIKI_MIN_PROSE_RATIO_NUM, WIKI_MIN_PROSE_RATIO_DEN = 700, 1000
+"""SIKI AYAR: kalan duzyazinin govdeye orani muafiyet icin en az 0,700
+(eskiden atma tarafinda 0,45). Kurucunun sayfasinda ayrisma genis:
+kalmasi gerekenler Kloroform 0,854 · XAML 0,912 · A-43 0,777;
+gitmesi gerekenler 0,639 · 0,553 · 0,416 (+ 0,626). 0,700 ~ orta nokta."""
+
+WIKI_MIN_FUNCTION_WORDS_PER_100 = 10
+"""SIKI AYAR (kurucunun "islev sozcugu orani" yonergesi): muafiyet yalniz
+GERCEKTEN DUZ YAZI belgeye taninir. Populasyon guvencesi: 100 sozcukte 10'dan
+az baglac/edat/zamir tasiyan bir sayfa (etiket bulutu, menu dokumu) wiki
+muafiyeti alamaz. Olculen: Kloroform 20 · XAML 21 · A-43 13; B-15 (etiket
+yigini) 8."""
+
+WIKI_VETO_SIGNALS = ("contact_cta", "link_flood", "repeated_block")
+"""Muafiyeti IPTAL eden yapisal sinyaller. `no_prose`/`no_sentences` bilerek
+YOK: kisa bir ansiklopedi maddesi (A-43) islev sozcugu esigini kaciriyor ama
+iyi metindir. Ticari imza ise bir ansiklopedi maddesinde hicbir zaman olmaz --
+sayfa B'nin 16 numarali satiri (uzun, oran 0,872, islev sozcugu 20: her oran
+olcusunu geciyor) yalniz buradan duser: `contact_cta` + `repeated_block`."""
+
+NAV_EXEMPTION_ENABLED = False
+"""SIKI AYAR: gezinme muafiyeti KAPALI -- v2 `navigation_boilerplate` derse v3
+de der.
+
+NEDEN TAMAMEN KAPALI, esik degil: kurucunun iki sayfasinda bu gerekceyi tasiyan
+20 belge var (A: 17, 22, 25, 26, 27 · B: 23-28, 40-44, 46-48, 50) ve HICBIRI
+"iyi" degil (A'da 3 dogru atma + 2 emin degilim, B'de 15/15 cop). Denenen her
+oran esigi (§ RAPOR tablosu) bu 20 belgenin bir kismini serbest birakiyor ve
+karsiliginda tek bir iyi belge kurtarmiyor: B'deki 15 satirin gezinme-sonrasi
+duzyazi orani 0,721-0,970 arasinda, yani ayirt edici degil. Islev sozcugu orani
+de ayirmiyor (B'de 14-26; kurtarilmasi gereken A belgelerinde 13-21).
+
+Gevsek v3'te bu kural nufusun %82,5'ini (4.120 kayit, 105,6 M karakter) serbest
+biraken EN COMERT kuraldi; rafin "%82,6 yanlis" olcumu kurucunun hukmuyle
+dogrulanmadi. Muafiyet kodu duruyor ve testi var; kurucu isterse acilir."""
 
 NAV_MIN_PROSE_CHARS: int | None = None
-"""Mutlak taban YOK: bu tabakanin belgeleri zaten uzun (hepsinde >3000
-karakter kaliyor) ve her denenen taban (4k/8k/15k) sizintiyi artirdi."""
+"""Muafiyet acikken mutlak taban YOK (gevsek olcumden kalan deger)."""
 
 NAV_MIN_PROSE_RATIO_NUM, NAV_MIN_PROSE_RATIO_DEN = 65, 100
-"""Menu bloklari dusunce kalan metin / govde (0,65). 0,75 bir iyi belgeyi uc
-cop'a takas eder; kurucunun yeni-tutulanlar sayfasi bu iki deger arasinda
-karar verecek."""
+"""Muafiyet acikken menu bloklari dusunce kalan metin / govde (0,65)."""
+
+
+def _is_word_character(character: str) -> bool:
+    return bool(character) and bool(_WORD_CHAR_RE.match(character))
 
 
 def encoding_corruption_ratio(text: str, scope: str) -> bool:
-    """Govdede U+FFFD hem SAYICA hem ORAN olarak esigi asiyor mu ve bunlarin
-    en az biri metnin kuyrugunun disinda mi.
+    """SIKI: TAM METINDE bir tek muafiyet var -- "tek bozuk karakter, belgenin
+    en sonunda, kelime disinda" (kirpilmis UTF-8 bayti).
+
+    Kapsam bilerek TAM METINDIR: govde kirpmasi bozulmayi gizleyemez. Sayfa
+    B'de bu farkin bedeli olculdu: 3, 4, 6, 7 ve 49 numarali satirlarin
+    govdesinde hic U+FFFD kalmiyordu, hepsi cop. Bu yuzden `scope` artik
+    KULLANILMIYOR; imzada duruyor cunku kapsam secimi bu kuralin olculmus bir
+    kararidir ve kontrol kosusu onu geri cevirerek sinaniyor.
 
     (Mojibake kolu ayri: `mojibake_corruption`.)
     """
-    stats = encoding_stats(text, scope, tail_chars=FFFD_TAIL_CHARS)
-    return (
-        stats.replacement_count >= FFFD_MIN_COUNT
-        and stats.replacement_outside_tail >= 1
-        and stats.replacement_count * 10_000 >= stats.scope_chars * FFFD_DENSITY_PER_10K
-    )
+    total = text.count(REPLACEMENT_CHARACTER)
+    if total == 0:
+        return False
+    if total > FFFD_MAX_EXEMPT_COUNT:
+        return True
+    position = text.rindex(REPLACEMENT_CHARACTER)
+    if position < max(0, len(text) - FFFD_TAIL_CHARS):
+        return True
+    if FFFD_WORD_INTERNAL_DROPS and (
+        _is_word_character(text[position - 1] if position else "")
+        and _is_word_character(text[position + 1] if position + 1 < len(text) else "")
+    ):
+        return True
+    return False
 
 
 def mojibake_corruption(text: str, scope: str) -> bool:
@@ -114,20 +185,38 @@ def _below_ratio(stats: ProseStats, *, numerator: int, denominator: int) -> bool
     return stats.prose_chars * denominator < stats.scope_chars * numerator
 
 
-def wiki_prose_shortfall(scope: str) -> bool:
-    """"Isaretleme var mi" degil: "kirpinca kac karakter duzyazi kaliyor".
+def wiki_prose_shortfall(scope: str, signals: tuple[str, ...] = ()) -> bool:
+    """SIKI: belge atilir; muafiyet icin DORT sartin DORDU birden gerekir.
 
-    Belge ancak HEM mutlak olarak az duzyazi birakiyorsa HEM de kalan duzyazi
-    govdenin kucuk bir parcasiysa atilir (VE).
+      1. isaretleme bosaltildiktan sonra >= `WIKI_MIN_PROSE_CHARS` duzyazi,
+      2. kalan duzyazi / govde >= `WIKI_MIN_PROSE_RATIO`,
+      3. islev sozcugu orani >= `WIKI_MIN_FUNCTION_WORDS_PER_100` (gercekten
+         duz yazi, etiket/menu dokumu degil),
+      4. `WIKI_VETO_SIGNALS`ten hicbiri yanmamis.
+
+    Gevsek v3'te bu kural "az duzyazi VE dusuk oran" diye ATMA tarafindaydi;
+    yani iki olcuden biri tutunca belge serbest kaliyordu.
     """
+    if any(signal in WIKI_VETO_SIGNALS for signal in signals):
+        return True
     stats = prose_after_strip(scope, strip="markup")
-    return stats.prose_chars < WIKI_MIN_PROSE_CHARS and _below_ratio(
+    if stats.prose_chars < WIKI_MIN_PROSE_CHARS:
+        return True
+    if _below_ratio(
         stats, numerator=WIKI_MIN_PROSE_RATIO_NUM, denominator=WIKI_MIN_PROSE_RATIO_DEN
-    )
+    ):
+        return True
+    return function_words_per_100_below(scope, WIKI_MIN_FUNCTION_WORDS_PER_100)
 
 
 def navigation_prose_shortfall(scope: str) -> bool:
-    """"Menusu uzun mu" degil: "menu dusunce kac karakter metin kaliyor"."""
+    """SIKI: `NAV_EXEMPTION_ENABLED` kapali oldugu icin her zaman True.
+
+    Muafiyet acilirsa: "menusu uzun mu" degil, "menu dusunce kac karakter metin
+    kaliyor". Gerekce icin `NAV_EXEMPTION_ENABLED`e bakin.
+    """
+    if not NAV_EXEMPTION_ENABLED:
+        return True
     stats = prose_after_strip(scope, strip="navigation")
     if NAV_MIN_PROSE_CHARS is not None and stats.prose_chars >= NAV_MIN_PROSE_CHARS:
         return False
@@ -217,6 +306,45 @@ CLUSTER_STRUCTURAL_SIGNALS = (
     "repeated_block",
 )
 
+# --- SIKI AYAR (2026-09-21): yapisal sinyale EK OLARAK "esik marji" ---------
+#
+# R1 yapilandirmasina (REQUIRED_STRUCTURAL_SIGNALS = 1) DOKUNULMADI: kurucunun
+# kendi hukmunde 6/6 kurtarma, 0/12 sizinti verdi. Ama sayfa B gosterdi ki
+# yapisal sinyal tek basina yetmiyor: SEO/icerik ciftligi metinleri duzgun
+# Turkce cumlelerle yazilmis (islev sozcugu orani 15-26, sinyal yok) -- sinyal
+# ailesi onlari goremiyor. Ayiran olcu, kumenin KENDI sozlugunun yogunlugudur:
+#
+#   kurucunun "iyi" dedigi 6 kume belgesi:  1,00x · 1,00x · 1,00x · 1,12x ·
+#                                           1,25x · 1,50x · 2,00x   (v2 esigine gore)
+#   sayfa B'de cop olanlar:                 1,00x'ten 15,62x'e, medyan 4,1x
+#
+# Yani iyi belge esige DEGIYOR, cop belge esigi KATLIYOR. Muafiyet yalniz
+# "esige degen" belgeye taninir.
+CLUSTER_V2_PERMILLE_THRESHOLD = {
+    "commercial_keyword_stuffing": 10,
+    "dating_spam_cluster": 8,
+    "optics_spam_cluster": 8,
+    "sexual_pharma_spam_cluster": 8,
+}
+"""v2'nin kendi binde esikleri (quality_filters._tr_web_v1_rejection_reasons).
+Burada TEKRAR EDILMEZ, KARSILASTIRILIR: esikler degismedi."""
+
+CLUSTER_DENSITY_MARGIN_NUM, CLUSTER_DENSITY_MARGIN_DEN = 21, 10
+"""Muafiyet tavani: sozluk yogunlugu v2 esiginin 2,10 katina ULASIRSA belge
+yapisal sinyal olmasa da atilir. Baglayan deger kurucunun kendi hukmudur:
+"iyi" dedigi en yogun belge (A-9, flort sozlugu) tam 2,00x'te. 2,10 en kucuk
+guvenli ustu; 2,00 o belgeyi feda eder, 2,50 ise B-37'yi (2,25x) kacirir."""
+
+HASHTAG_EXEMPTION_ENABLED = False
+"""SIKI AYAR: `hashtag_stuffing` gevsek kume ailesinden CIKARILDI.
+
+Gerekce: bu kural zaten KONU degil YAPI olcer (`#` >= 50 ve binde 50) -- rafin
+"kume kurallari konu filtresi olmus" teshisi ona hic uymuyordu; aileye yalnizca
+gevsetme aile capinda uygulandigi icin girmisti. Kurucunun iki sayfasinda bu
+gerekceyi tasiyan 7 belge var (A: 16, 17, 18 · B: 19, 20, 21, 22) ve hicbiri
+"iyi" degil; B'de 4/4 cop. Nufusta gevsek v3 bu tabakanin %28,7'sini (242
+kayit) seriyordu."""
+
 
 @dataclass(frozen=True, slots=True)
 class StructuralStats:
@@ -270,6 +398,35 @@ def structural_stats(folded_scope: str) -> StructuralStats:
         url_count=_count_matches(_URL_RE, folded_scope),
         duplicate_segments=sum(count for count in counts.values() if count > 1),
         segment_count=len(segments),
+    )
+
+
+def function_words_per_100_below(scope: str, minimum_per_100: int) -> bool:
+    """Kapsamdaki islev sozcugu orani `minimum_per_100`in ALTINDA mi.
+
+    Ayni olcu `no_prose` sinyalinin tasiyicisidir; burada oran ailesinin
+    muafiyet kapisi olarak ayri bir esikle kullanilir (kurucunun yonergesi:
+    "gevsetme yalniz uzun ve gercekten duz yazi belgelere taninsin").
+    Bos kapsam duzyazi sayilmaz.
+    """
+    stats = structural_stats(turkish_casefold(scope))
+    if stats.word_count == 0:
+        return True
+    return stats.function_words * 100 < stats.word_count * minimum_per_100
+
+
+def cluster_density_exceeds(hits: int, word_count: int, reason: str) -> bool:
+    """Sozluk yogunlugu v2 esiginin `CLUSTER_DENSITY_MARGIN` katina ulasti mi.
+
+    Tamsayi karsilastirmasi (belirlenimcilik). `reason` gevsetilen dort kumeden
+    biri degilse muafiyet yoktur -> True.
+    """
+    permille = CLUSTER_V2_PERMILLE_THRESHOLD.get(reason)
+    if permille is None:
+        return True
+    return (
+        hits * 1_000 * CLUSTER_DENSITY_MARGIN_DEN
+        >= word_count * permille * CLUSTER_DENSITY_MARGIN_NUM
     )
 
 
@@ -587,22 +744,31 @@ def repetition_reasons(scope: str, folded_scope: str) -> tuple[str, ...]:
 
 
 __all__ = [
+    "CLUSTER_DENSITY_MARGIN_DEN",
+    "CLUSTER_DENSITY_MARGIN_NUM",
     "CLUSTER_FUNCTION_WORDS",
     "CLUSTER_STRUCTURAL_SIGNALS",
+    "CLUSTER_V2_PERMILLE_THRESHOLD",
     "EXTREME_LZ77_MAX_PERMILLE",
-    "FFFD_DENSITY_PER_10K",
-    "FFFD_MIN_COUNT",
+    "FFFD_MAX_EXEMPT_COUNT",
     "FFFD_TAIL_CHARS",
+    "FFFD_WORD_INTERNAL_DROPS",
     "FRAME_EXEMPTION_ENABLED",
     "FrameStats",
+    "HASHTAG_EXEMPTION_ENABLED",
+    "NAV_EXEMPTION_ENABLED",
     "NAV_MIN_PROSE_RATIO_NUM",
     "REQUIRED_STRUCTURAL_SIGNALS",
     "RepetitionStats",
     "StructuralStats",
+    "WIKI_MIN_FUNCTION_WORDS_PER_100",
     "WIKI_MIN_PROSE_CHARS",
     "WIKI_MIN_PROSE_RATIO_NUM",
+    "WIKI_VETO_SIGNALS",
+    "cluster_density_exceeds",
     "encoding_corruption_ratio",
     "frame_stats",
+    "function_words_per_100_below",
     "informative_frames",
     "lz77_ratio_permille",
     "mojibake_corruption",

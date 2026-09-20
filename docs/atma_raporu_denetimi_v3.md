@@ -1,122 +1,69 @@
-# Atma raporu denetimi v3 — yanlış-atma oranı (TASK-020)
+# Atma raporu denetimi v3 - yanlis-atma orani (TASK-020)
 
-**Durum:** cetvel çıkarıldı, kararlar bekleniyor (2026-09-19) · **Kod:**
-`worker/src/derlem_worker/clean_candidate_audit.py` · **Görev kartı:**
-[TASK-020](gorevler/TASK-020-rejection-report-false-drop-audit-pack.md)
+**Puanlama:** 2026-09-20T13:26:43+00:00 · **Cetvel:** `C:\CELIKBROS PROJECTS\derlem\var\olcum-2026-09-19\atma-denetimi-v3\denetim-sayfasi-dolu-raf.csv` (SHA256 `e12b188a02369fad09477df5750ac094051bc082f3adfeaa05fc104d9a708821`) ·
+**Rapor:** `C:\CELIKBROS PROJECTS\derlem\var\derived\gardash_faz2_tr_dedup_20260621_06ac330e_clean_candidate_v3.txt.rejections.jsonl` (SHA256 `2becaf9d0f1fc9a8ce48a0ea6cc4a78b83b21eac22ce2e1754fbfb5548fdd778`, 93223 kayit) ·
+**Tohum:** `20260919` · katman basina en cok 50 kayit · katman kurali: first reason in `reasons` (primary reason).
 
-Bu belge iskelettir. Kararlar doldurulup puanlayıcı çalıştırıldığında
-(`score` alt komutu) belge baştan yazılır: gerekçe başına tablo, bayt ağırlıklı
-toplam oran ve %95 aralık, en yüksek katkılı üç gerekçe, %10 eşiğiyle
-karşılaştırma ve varsa değerlendirici uyumu. Karar ve takip notları görev
-kartına yazılır; bu belge yalnızca ölçümü taşır.
+Bu belge `derlem_worker.clean_candidate_audit score` tarafindan yazilir; elle duzenlenen
+bolumler bir sonraki puanlamada silinir. Karar ve takip notlari gorev kartina yazilir.
 
-## Neden
+## Yontem
 
-Rafın tek açık isteği: atılan baytın %10'undan fazlası iyi metinse
-`tr-web-v2` kurallarını gevşetmeyi konuşuruz ([temiz_aday_v3.md](temiz_aday_v3.md)).
-93.223 kayıtlık atma raporu kimsenin denetlemediği kurallarla üretildi; sonuç
-v4/HF geçişleri için kural kararını belirler, v2'nin koşulu değildir.
+- Katman = kaydin `reasons` listesindeki ilk gerekce. Katman agirligi `w_s` = katmanin
+  rapordaki `char_count` toplaminin tum raporun toplamina orani (raporda bayt yok; karakter
+  sayisi baytin yerine gecer).
+- Katman orani `p_s` = `good` / (`good` + `correct_drop`); `unsure` ve bos satirlar payda disi.
+  Aralik: Wilson skor araligi, %95.
+- Toplam oran = sum(`w_s` * `p_s`) / sum(`w_s`), yalnizca karara baglanmis satiri olan katmanlar
+  uzerinden. Aralik: Wilson, etkin orneklem `n_eff` = 1 / sum((`w_s`/W)^2 / `n_s`) (Kish).
+- Katki = `w_s` * `p_s`: katmanin toplam yanlis-atma payina getirdigi pay; en yuksek uc katman
+  asagida siralanir.
+- Rafin esigi: toplam oran > %10,00 ise kural gevsetme konusulur.
 
-## Cetvel nasıl çekildi
+## Gerekce basina
 
-| Alan | Değer |
+| Gerekce | Rapor kayit | Rapor karakter | Agirlik | Cetvel | good | correct_drop | unsure | bos | Oran | %95 aralik | Katki | Karakter agirlikli oran |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|
+| `encoding_corruption` | 12751 | 66811388 | %7,60 | 50 | 27 | 21 | 2 | 0 | %56,25 | %42,28 - %69,30 | %4,27 | %72,58 |
+| `wiki_markup_residue` | 21938 | 160201115 | %18,21 | 50 | 18 | 32 | 0 | 0 | %36,00 | %24,14 - %49,86 | %6,56 | %46,42 |
+| `extreme_repetition` | 2117 | 44979909 | %5,11 | 50 | 11 | 39 | 0 | 0 | %22,00 | %12,75 - %35,24 | %1,13 | %17,40 |
+| `hashtag_stuffing` | 1012 | 16277620 | %1,85 | 50 | 17 | 31 | 2 | 0 | %35,42 | %23,43 - %49,56 | %0,66 | %38,90 |
+| `mixed_script_artifact` | 6 | 644808 | %0,07 | 6 | 0 | 6 | 0 | 0 | %0,00 | %0,00 - %39,03 | %0,00 | %0,00 |
+| `repeated_segments` | 1334 | 49002101 | %5,57 | 50 | 13 | 36 | 1 | 0 | %26,53 | %16,21 - %40,26 | %1,48 | %19,00 |
+| `navigation_boilerplate` | 11354 | 294688466 | %33,50 | 50 | 22 | 27 | 1 | 0 | %44,90 | %31,85 - %58,68 | %15,04 | %38,83 |
+| `commercial_keyword_stuffing` | 1756 | 34860220 | %3,96 | 50 | 19 | 29 | 2 | 0 | %39,58 | %27,02 - %53,69 | %1,57 | %58,88 |
+| `dating_spam_cluster` | 2266 | 30126262 | %3,43 | 50 | 17 | 32 | 1 | 0 | %34,69 | %22,92 - %48,69 | %1,19 | %36,44 |
+| `optics_spam_cluster` | 105 | 1345161 | %0,15 | 50 | 31 | 19 | 0 | 0 | %62,00 | %48,15 - %74,14 | %0,09 | %63,92 |
+| `adult_service_spam_cluster` | 892 | 12874650 | %1,46 | 50 | 0 | 49 | 1 | 0 | %0,00 | %0,00 - %7,27 | %0,00 | %0,00 |
+| `sexual_pharma_spam_cluster` | 146 | 8184458 | %0,93 | 50 | 12 | 38 | 0 | 0 | %24,00 | %14,30 - %37,41 | %0,22 | %8,00 |
+| `near_duplicate` | 35833 | 158816282 | %18,06 | 50 | 26 | 23 | 1 | 0 | %53,06 | %39,38 - %66,30 | %9,58 | %60,25 |
+| `normalized_duplicate` | 221 | 27839 | %0,00 | 50 | 0 | 41 | 9 | 0 | %0,00 | %0,00 - %8,57 | %0,00 | %0,00 |
+| `language_not_turkish` | 1492 | 725566 | %0,08 | 50 | 2 | 48 | 0 | 0 | %4,00 | %1,10 - %13,46 | %0,00 | %34,85 |
+
+## Toplam
+
+| Olcu | Deger |
 |---|---|
-| Rapor | `var/derived/gardash_faz2_tr_dedup_20260621_06ac330e_clean_candidate_v3.txt.rejections.jsonl` |
-| Rapor SHA256 | `2becaf9d0f1fc9a8ce48a0ea6cc4a78b83b21eac22ce2e1754fbfb5548fdd778` (93.223 kayıt, 36.329.616 bayt) |
-| Kayıt biçimi | `clean-candidate-rejections-v2` |
-| Tohum | `20260919` |
-| Katman kuralı | kaydın `reasons` listesindeki **ilk (birincil) gerekçe**; liste sırası `quality_filters._REASON_ORDER` ile sabit |
-| Katman başına | min(50, katman büyüklüğü) |
-| Seçim | katman içinde `sha256(f"{tohum}:{sha256}:{source_ordinal}")` anahtarına göre sıralanır, ilk 50 alınır (Python RNG'sine bağlı değil; 3.13 ve 3.14 aynı satırları verdi) |
-| Cetvel | `var/olcum-2026-09-19/atma-denetimi-v3/gardash_faz2_tr_dedup_20260621_06ac330e_clean_candidate_v3_audit_sheet_seed20260919.csv` (+ aynı adla `.md`) |
-| Cetvel satırı | **706** = 14 × 50 + 6 (`mixed_script_artifact` katmanında yalnızca 6 birincil kayıt var) |
-| Cetvel CSV SHA256 | `fac0e207927ea48be6b7be0f9835d38584f3eecb0088432ef082466783144b1e` |
+| Cetvel satiri | 706 (good 215 · correct_drop 471 · unsure 20 · bos 0) |
+| Kapsanan agirlik (karari olan katmanlar) | %100,00 |
+| **Bayt agirlikli yanlis-atma orani** | **%41,79** |
+| %95 aralik (Wilson, n_eff = 254,7) | %35,90 - %47,92 |
+| Karakter agirlikli oran (katman icinde de karakterle) | %44,31 |
+| %10,00 esigi ile karsilastirma | **ustunde** (aralik tumuyle esigin ustunde) |
 
-`var/` sürüme girmez; cetvel yeniden çekilirse satırlar aynıdır, yalnızca
-üst bilgideki `generated_at` değişir (SHA bu yüzden farklı çıkar).
+## En yuksek katkili uc gerekce
 
-### Katmanlar (tam rapor)
+| Sira | Gerekce | Oran | Katki |
+|---:|---|---:|---:|
+| 1 | `navigation_boilerplate` | %44,90 | %15,04 |
+| 2 | `near_duplicate` | %53,06 | %9,58 |
+| 3 | `wiki_markup_residue` | %36,00 | %6,56 |
 
-| Katman | Kayıt | Karakter (`char_count` toplamı) | Cetvel |
-|---|---:|---:|---:|
-| `encoding_corruption` | 12.751 | 66.811.388 | 50 |
-| `wiki_markup_residue` | 21.938 | 160.201.115 | 50 |
-| `extreme_repetition` | 2.117 | 44.979.909 | 50 |
-| `hashtag_stuffing` | 1.012 | 16.277.620 | 50 |
-| `mixed_script_artifact` | 6 | 644.808 | 6 |
-| `repeated_segments` | 1.334 | 49.002.101 | 50 |
-| `navigation_boilerplate` | 11.354 | 294.688.466 | 50 |
-| `commercial_keyword_stuffing` | 1.756 | 34.860.220 | 50 |
-| `dating_spam_cluster` | 2.266 | 30.126.262 | 50 |
-| `optics_spam_cluster` | 105 | 1.345.161 | 50 |
-| `adult_service_spam_cluster` | 892 | 12.874.650 | 50 |
-| `sexual_pharma_spam_cluster` | 146 | 8.184.458 | 50 |
-| `near_duplicate` | 35.833 | 158.816.282 | 50 |
-| `normalized_duplicate` | 221 | 27.839 | 50 |
-| `language_not_turkish` | 1.492 | 725.566 | 50 |
-| **Toplam** | 93.223 | 879.565.845 | 706 |
+## Degerlendirici uyumu
 
-Kalite gerekçelerinin katman sayıları manifestteki belge sayılarından küçüktür
-(ör. `navigation_boilerplate` 12.513 → 11.354): bir satır birden çok gerekçe
-taşıyabilir, katman yalnızca ilkine göre atanır. 10.793 kayıt birden çok gerekçe
-taşıyor; `reasons` sütunu hepsini gösterir.
+Ikinci cetvel verilmedi; uyum sayisi yok.
 
-Ağırlık için raporda bayt yok; `char_count` toplamı baytın yerine geçer
-(`navigation_boilerplate` tek başına %33,5, `wiki_markup_residue` %18,2,
-`near_duplicate` %18,1).
+## Karar
 
-## Cetvel nasıl doldurulur
-
-- CSV'yi açın (UTF-8, BOM'lu; Excel Türkçe harfleri doğru gösterir). `# ` ile
-  başlayan üst bilgi satırlarına ve sütun başlığına dokunmayın.
-- Her satırda `preview` (ilk 200 karakter) ve `reasons` görünür; tam satıra
-  gerek varsa `source_ordinal` ana kaynaktaki satır numarasıdır
-  (`gardash_faz2_tr_dedup_20260621`, `9826d58e…aa07b5`).
-- Kopya atmalarında `duplicate_of` kalan satırın numarasıdır; partner raporda
-  yoksa (kural gereği genelde yok) `duplicate_of_preview` boştur.
-- `verdict` sütununa yalnızca şunlardan biri yazılır:
-  - `good` — metin eğitime girmeliydi (yanlış atma),
-  - `correct_drop` — atma doğru,
-  - `unsure` — karar verilemedi (payda dışı kalır, sayısı raporlanır).
-- Boş bırakılan satır "karar yok" sayılır. Başka değer yazılırsa puanlayıcı
-  satırı ve değeri göstererek durur, belge yazılmaz.
-- İki değerlendirici: aynı CSV'nin iki kopyası; ikinci kopya aynı satırların
-  (ya da bir alt kümesinin, ör. 100 satır) kararını taşır.
-
-## Puanlayıcı nasıl çalıştırılır
-
-Depo kökünden:
-
-```powershell
-$env:PYTHONPATH = "worker/src"; $env:PYTHONIOENCODING = "utf-8"
-.\.venv\Scripts\python.exe -m derlem_worker.clean_candidate_audit score `
-  --sheet var\olcum-2026-09-19\atma-denetimi-v3\gardash_faz2_tr_dedup_20260621_06ac330e_clean_candidate_v3_audit_sheet_seed20260919.csv `
-  --second var\olcum-2026-09-19\atma-denetimi-v3\ikinci-degerlendirici.csv   # istege bagli
-# varsayilan cikti: docs/atma_raporu_denetimi_v3.md (bu belge); --out ile degistirilir
-```
-
-Cetveli yeniden çekmek için (`--force` mevcut dosyaların üstüne yazar):
-
-```powershell
-.\.venv\Scripts\python.exe -m derlem_worker.clean_candidate_audit sheet `
-  --report var\derived\gardash_faz2_tr_dedup_20260621_06ac330e_clean_candidate_v3.txt.rejections.jsonl `
-  --output-dir var\olcum-2026-09-19\atma-denetimi-v3 `
-  --expect-report-sha256 2becaf9d0f1fc9a8ce48a0ea6cc4a78b83b21eac22ce2e1754fbfb5548fdd778
-```
-
-## Puanlayıcının yöntemi
-
-- Katman ağırlığı `w_s` = katmanın rapordaki `char_count` toplamı / tüm raporun toplamı.
-- Katman oranı `p_s` = `good` / (`good` + `correct_drop`); aralık Wilson skor aralığı, %95.
-- Toplam oran = Σ `w_s` · `p_s` / Σ `w_s`, yalnızca karara bağlanmış satırı olan
-  katmanlar üzerinden; aralık Wilson, etkin örneklem
-  `n_eff` = 1 / Σ ((`w_s`/W)² / `n_s`) (Kish) ile. Kapsanan ağırlık ayrıca yazılır.
-- Katkı = `w_s` · `p_s`; en yüksek üç katman listelenir.
-- İkincil ölçü: katman içinde de karakter ağırlıklı oran (iyi satırların
-  karakteri / karara bağlanmış satırların karakteri).
-- Uyum (ikinci cetvel varsa): ikisinde de karar olan satırlarda aynı karar payı
-  ve Cohen kappa (üç kategori).
-
-## Sonuç
-
-(kararlar bekleniyor — puanlayıcı bu bölümü tablolarla değiştirir)
+Kural degisikligi karari ve varsa takip karti gorev kartina (TASK-020) yazilir; bu belge
+yalnizca olcumu tasir.

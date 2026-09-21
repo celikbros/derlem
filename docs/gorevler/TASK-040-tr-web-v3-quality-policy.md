@@ -102,8 +102,13 @@ characters after the S2 filter).
       zlib-ng) and `worker/.venv` (3.13, zlib); manifest carries both versions.
 - [x] Re-run of the 706 audited rows reported per reason: recovered `good`, newly admitted
       `correct_drop`.
-- [ ] Newly-kept sheet judged by the shelf and spot-checked by the owner; false-keep rate
-      reported with its interval before v5 is derived.
+- [x] Newly-kept sheet judged by the shelf and spot-checked by the owner; false-keep rate
+      reported with its interval. **Done 2026-09-22: 33.2 % [26.5–41.5]** on the strict set
+      (293 rows, shelf); the owner's 14-row anchor agreed 13/14, the one disagreement being the
+      shelf keeping a sponsored phone review. Seven of eight rules exceed the agreed per-rule
+      20 % threshold → **TASK-041**; the garbage classes no rule names → **TASK-042**.
+      The sheet was produced from the loose rules first and had to be regenerated from the
+      strict set — the loose package was cancelled in writing.
 - [x] Control runs: each new rule's guard removed → a test goes red (12 guards, 12 red;
       the strict pass adds 10 more guards, 10 more red — 2026-09-21).
 

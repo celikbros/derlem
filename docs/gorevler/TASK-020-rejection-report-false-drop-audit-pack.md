@@ -41,6 +41,28 @@ The shelf's one explicit ask (> 10 % of dropped bytes good text → talk). The 2
 - Hand the sheet to the shelf or assign two office reviewers (same 100 rows to both).
 - Decide with the shelf whether any rule is relaxed for the next candidate.
 
+## Sonuç (2026-09-22)
+
+Sayfa model rafı tarafından dolduruldu (706/706), sonra **düzeltildi**: ilk turda kopya
+tabakalarındaki 100 satırın eşi pakette yoktu (`duplicate_of` sha256 değil satır numarası
+tutuyor), hüküm yalnız metin kalitesine göre verilmişti. Eşlerin tam metni gönderilince
+`near_duplicate` içindeki 26 "iyi"nin **24'ü gerçekten kopya** çıktı.
+
+| Ölçüm | Oran | %95 aralık |
+|---|---|---|
+| v1 (eşler görülemeden) | %41,8 | %35,9 – %47,9 |
+| **v2 (eşler görüldü) — geçerli sayı** | **%32,9** | %27,5 – %38,9 |
+| Kurucunun 50 satırıyla (ayrı ölçüm) | %23,1 | %5,4 – %61,3 (n_eff 6,2) |
+
+Değerlendirici uyumu (kurucu ↔ raf, 50 satır): %66, Cohen kappa 0,35 — ayrışmalar tek yönlü,
+raf daha cömert. Eşik (%10) her okumada fena hâlde aşıldı; karar **TASK-040** oldu ve
+uygulandı. Ters yön ölçümü (kural gevşetmesi çöp aldı mı) aynı kartın altında yapıldı:
+**%33,2**, oradan **TASK-041** ve **TASK-042** doğdu.
+
+Kanıt dosyaları: `docs/mektuplar/2026-09-21-denetim-sayfasi-dolu-v2.csv` (rafın düzeltilmiş
+hükümleri), `var/olcum-2026-09-19/atma-denetimi-v3/denetim-sayfasi-dolu-kurucu.csv`
+(kurucunun 50 hükmü), ölçüm `docs/atma_raporu_denetimi_v3.md`.
+
 ## Report
 
 ### 2026-09-19 — sheet drawn, scorer ready, verdicts pending

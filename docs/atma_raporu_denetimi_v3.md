@@ -1,6 +1,6 @@
 # Atma raporu denetimi v3 - yanlis-atma orani (TASK-020)
 
-**Puanlama:** 2026-09-20T13:55:44+00:00 · **Cetvel:** `C:\CELIKBROS PROJECTS\derlem\var\olcum-2026-09-19\atma-denetimi-v3\denetim-sayfasi-dolu-raf.csv` (SHA256 `e12b188a02369fad09477df5750ac094051bc082f3adfeaa05fc104d9a708821`) ·
+**Puanlama:** 2026-09-21T20:03:51+00:00 · **Cetvel:** `C:\CELIKBROS PROJECTS\derlem\var\olcum-2026-09-19\atma-denetimi-v3\denetim-sayfasi-dolu-raf-v2.csv` (SHA256 `d87892015bf19f2d6048771d669277fed8725825fec82f43b3871b184283ff49`) ·
 **Rapor:** `C:\CELIKBROS PROJECTS\derlem\var\derived\gardash_faz2_tr_dedup_20260621_06ac330e_clean_candidate_v3.txt.rejections.jsonl` (SHA256 `2becaf9d0f1fc9a8ce48a0ea6cc4a78b83b21eac22ce2e1754fbfb5548fdd778`, 93223 kayit) ·
 **Tohum:** `20260919` · katman basina en cok 50 kayit · katman kurali: first reason in `reasons` (primary reason).
 
@@ -36,19 +36,19 @@ bolumler bir sonraki puanlamada silinir. Karar ve takip notlari gorev kartina ya
 | `optics_spam_cluster` | 105 | 1345161 | %0,15 | 50 | 31 | 19 | 0 | 0 | %62,00 | %48,15 - %74,14 | %0,09 | %63,92 |
 | `adult_service_spam_cluster` | 892 | 12874650 | %1,46 | 50 | 0 | 49 | 1 | 0 | %0,00 | %0,00 - %7,27 | %0,00 | %0,00 |
 | `sexual_pharma_spam_cluster` | 146 | 8184458 | %0,93 | 50 | 12 | 38 | 0 | 0 | %24,00 | %14,30 - %37,41 | %0,22 | %8,00 |
-| `near_duplicate` | 35833 | 158816282 | %18,06 | 50 | 26 | 23 | 1 | 0 | %53,06 | %39,38 - %66,30 | %9,58 | %60,25 |
-| `normalized_duplicate` | 221 | 27839 | %0,00 | 50 | 0 | 41 | 9 | 0 | %0,00 | %0,00 - %8,57 | %0,00 | %0,00 |
+| `near_duplicate` | 35833 | 158816282 | %18,06 | 50 | 2 | 48 | 0 | 0 | %4,00 | %1,10 - %13,46 | %0,72 | %6,55 |
+| `normalized_duplicate` | 221 | 27839 | %0,00 | 50 | 0 | 50 | 0 | 0 | %0,00 | %0,00 - %7,13 | %0,00 | %0,00 |
 | `language_not_turkish` | 1492 | 725566 | %0,08 | 50 | 2 | 48 | 0 | 0 | %4,00 | %1,10 - %13,46 | %0,00 | %34,85 |
 
 ## Toplam
 
 | Olcu | Deger |
 |---|---|
-| Cetvel satiri | 706 (good 215 · correct_drop 471 · unsure 20 · bos 0) |
+| Cetvel satiri | 706 (good 191 · correct_drop 505 · unsure 10 · bos 0) |
 | Kapsanan agirlik (karari olan katmanlar) | %100,00 |
-| **Bayt agirlikli yanlis-atma orani** | **%41,79** |
-| %95 aralik (Wilson, n_eff = 254,7) | %35,90 - %47,92 |
-| Karakter agirlikli oran (katman icinde de karakterle) | %44,31 |
+| **Bayt agirlikli yanlis-atma orani** | **%32,93** |
+| %95 aralik (Wilson, n_eff = 255,6) | %27,46 - %38,91 |
+| Karakter agirlikli oran (katman icinde de karakterle) | %34,61 |
 | %10,00 esigi ile karsilastirma | **ustunde** (aralik tumuyle esigin ustunde) |
 
 ## En yuksek katkili uc gerekce
@@ -56,8 +56,8 @@ bolumler bir sonraki puanlamada silinir. Karar ve takip notlari gorev kartina ya
 | Sira | Gerekce | Oran | Katki |
 |---:|---|---:|---:|
 | 1 | `navigation_boilerplate` | %44,90 | %15,04 |
-| 2 | `near_duplicate` | %53,06 | %9,58 |
-| 3 | `wiki_markup_residue` | %36,00 | %6,56 |
+| 2 | `wiki_markup_residue` | %36,00 | %6,56 |
+| 3 | `encoding_corruption` | %56,25 | %4,27 |
 
 ## Degerlendirici uyumu
 
@@ -67,7 +67,7 @@ Ikinci cetvel: `C:\CELIKBROS PROJECTS\derlem\var\olcum-2026-09-19\atma-denetimi-
 |---|---|
 | Ikisinde de karar olan satir | 50 |
 | Ayni karar | 33 (%66,00) |
-| Cohen kappa | 0,361 |
+| Cohen kappa | 0,347 |
 
 ## Karar
 

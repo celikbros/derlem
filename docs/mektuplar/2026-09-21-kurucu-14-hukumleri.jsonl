@@ -1,0 +1,14 @@
+{"sira": 1, "sha256": "b3885c4d09f79680acfa6adbae809b5b5b1cefe085a3612cdc069629eb525ac8", "tabaka": "encoding_corruption", "kurucu": "garbage", "alt_ajan": "garbage", "raf_ana_oturum": "ok_to_keep"}
+{"sira": 2, "sha256": "4f5ca918d271e1e1dd708de80607d3dd6a05b429a4dbd0125355d856e6504bdc", "tabaka": "wiki_markup_residue", "kurucu": "garbage", "alt_ajan": "garbage", "raf_ana_oturum": null}
+{"sira": 3, "sha256": "cd837878f67dd4daf8a69fa4cdf616b59d1554d3d1c4cb9db72e1b297862433d", "tabaka": "optics_spam_cluster", "kurucu": "garbage", "alt_ajan": "ok_to_keep", "raf_ana_oturum": "garbage"}
+{"sira": 4, "sha256": "0d47c68b768086af74fa7d14c046233a0644ef89cde7e93774fa5ae802d7d936", "tabaka": "wiki_markup_residue", "kurucu": "garbage", "alt_ajan": "garbage", "raf_ana_oturum": "ok_to_keep"}
+{"sira": 5, "sha256": "5dbe3b4c1cc9a1e57cdde1d471de42f75d1d251fe9ca7494795114a749a07c11", "tabaka": "wiki_markup_residue", "kurucu": "garbage", "alt_ajan": "garbage", "raf_ana_oturum": null}
+{"sira": 6, "sha256": "25f94587c1c5b1ca809f56de17de5b8fd173994e4fc16250dc04d772794466df", "tabaka": "wiki_markup_residue", "kurucu": "garbage", "alt_ajan": "garbage", "raf_ana_oturum": null}
+{"sira": 7, "sha256": "65eef0fd9580dc2f13691ef796b771875bb9b79e72f2e168daa54811f3cfc8c7", "tabaka": "wiki_markup_residue", "kurucu": "garbage", "alt_ajan": "garbage", "raf_ana_oturum": null}
+{"sira": 8, "sha256": "b413a15e66399c74a5cab6c438264bbb9010e8fb9b6e7fecef8680e345afbb3b", "tabaka": "wiki_markup_residue", "kurucu": "garbage", "alt_ajan": "garbage", "raf_ana_oturum": "ok_to_keep"}
+{"sira": 9, "sha256": "7164a997542e0520e728cb3c82ac79432bb4e93d34d038b9cb3288a017cd7203", "tabaka": "wiki_markup_residue", "kurucu": "garbage", "alt_ajan": "garbage", "raf_ana_oturum": null}
+{"sira": 10, "sha256": "f566f9c09c34330bf2f84035a0f9c655b9f83bd8dd81b2079a10e3cbf7945ec4", "tabaka": "wiki_markup_residue", "kurucu": "garbage", "alt_ajan": "garbage", "raf_ana_oturum": "ok_to_keep"}
+{"sira": 11, "sha256": "71444c2060f59635077a6a5a9e3e0a2ea10b350151bfb136a5555fc54f08d487", "tabaka": "sexual_pharma_spam_cluster", "kurucu": "garbage", "alt_ajan": "garbage", "raf_ana_oturum": "garbage"}
+{"sira": 12, "sha256": "e65fd712d562bbab94f1f5315b8e16fa593b1aea3a875c691b76d628811ae364", "tabaka": "optics_spam_cluster", "kurucu": "garbage", "alt_ajan": "garbage", "raf_ana_oturum": "ok_to_keep"}
+{"sira": 13, "sha256": "b83acab900e451fa457c9cfd6f3d8b34ea4488fa489e0a1bce10c13888ae0271", "tabaka": "encoding_corruption", "kurucu": "garbage", "alt_ajan": "garbage", "raf_ana_oturum": "ok_to_keep"}
+{"sira": 14, "sha256": "7bfe5a57672a6dced1fbfc8df6634874e6a23062e2cd8c55582836b0a67b4805", "tabaka": "optics_spam_cluster", "kurucu": "ok_to_keep", "alt_ajan": "ok_to_keep", "raf_ana_oturum": "ok_to_keep"}

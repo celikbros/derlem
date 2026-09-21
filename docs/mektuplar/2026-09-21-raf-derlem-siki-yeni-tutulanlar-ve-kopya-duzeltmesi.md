@@ -9,6 +9,7 @@
 |---|---|
 | `2026-09-21-yeni-tutulanlar-siki-dolu.csv` | 293/293 satır; `garbage` 130 · `ok_to_keep` 163 · `unsure` 0 |
 | `2026-09-21-denetim-sayfasi-dolu-v2.csv` | 20 Eylül sayfasının **düzeltilmiş** hâli; yalnız kopya tabakalarındaki 100 satır yeniden hükme bağlandı (**35'i değişti**), diğer 606'ya dokunulmadı |
+| `2026-09-21-kurucu-14-hukumleri.jsonl` | **kurucunun kendi okuduğu 14 satır** (hedefli sonda, rastgele örneklem değil) — her satırda kurucu · alt ajan · raf ana oturumu hükmü yan yana. Bkz. §7 |
 
 İkisinde de sütun düzeni, satır sırası ve `#` meta satırları korundu; v2'ye dört açıklayıcı
 meta satırı eklendi.
@@ -154,23 +155,61 @@ yeniden tanımlanacağında — çünkü ağırlığın %69'u orada.
   neredeyse birebir aynı metnin farklı alan adlarından girdiği görüldü. Dedup yakalamamış
   (küçük farklar var). Bu, sıkı nüfusun bu kümede olduğundan kalabalık görünmesine yol açıyor.
 
-## 7. Dürüst sınır — ve bu sefer ters yönde
+## 7. Kalibrasyon: kurucu 14 satır okudu — **%33,2 bir TABAN, tavan değil**
 
 Geçen tur model tarafı kurucuya göre **cömert** çıkmıştı (uyum %66, kappa 0,36). Bu turda
-ölçüte bunu açıkça yazdık ve "şüpheliyi at" ölçütünü verdik. Sonuç:
+ölçüte bunu açıkça yazdık ve "şüpheliyi at" ölçütünü verdik. İki iç ölçüm:
 
-- Ana oturum, ajanların cevabını görmeden **64 belgelik kör örnek** okudu (8 tabakadan 8'er).
-- **Uyum %89,1 · Cohen kappa 0,778.**
-- Yedi ayrışmanın **altısında ajanlar bizden DAHA SIKI**, birinde daha gevşek.
+- Ana oturum, ajanların cevabını görmeden **64 belgelik kör örnek** okudu (8 tabakadan 8'er):
+  uyum %89,1, kappa 0,778; yedi ayrışmanın altısında ajanlar ana oturumdan **daha sıkı**.
+- Ama bu **model↔model**'dir ve insan denetiminin yerine geçmez.
 
-Yani yanlılık düzeltmesi tuttu — ama **fazla mı tuttu, bunu kendimiz söyleyemeyiz.** Model
-tarafı bir turda cömert, bir turda sıkı çıkıyorsa, kalibrasyonu belirleyen şey metin değil
-verdiğimiz talimattır. Bunu dışarıdan kesecek tek şey **kurucunun 50 satırı**.
-Pakette geldi, kurucuda, dolmadı.
+### Kurucunun okuması (yeni)
 
-Ayrışmalardan biri bizim hatamızdı ve kayda geçirdik: ölçütümüz "metni kurtarmak için
-kırpmak gerekiyorsa çöptür" diyordu; escort enjekte edilmiş bir bilim makalesinde ajan bu
-kuralı bizden daha sadık uyguladı, biz metnin niteliğine kanıp `ok_to_keep` demiştik.
+`kurucu-50.md` dolmadı. Yerine raf **14 satırlık hedefli bir sayfa** hazırladı ve kurucu
+doldurdu: `2026-09-21-kurucu-14-hukumleri.jsonl` (ekte).
+
+**Bu bir rastgele örneklem DEĞİL** — satırlar kasıtlı olarak (a) ana oturum ile ajanların
+ayrıştığı 7 satırdan, (b) en ağır tabakadan (`wiki_markup_residue`) ajanın çöp dediği 5
+satırdan, (c) 2 çapadan seçildi. **Buradan çıkan uyum oranı kappa olarak raporlanamaz.**
+
+| | uyum |
+|---|---|
+| Kurucu ↔ alt ajanlar | **13/14** |
+| Kurucu ↔ raf ana oturumu | **3/9** |
+
+**Çapa kontrolü geçti:** "bariz çöp" diye konan satır (Rusça makine çevirisi antibiyotik
+dozajı) `çöp`, "bariz iyi" diye konan satır (OPPO Vikipedi maddesi) `kalsın` geldi. Yani
+cevaplar ayırt ediyor, tek değere yapışmıyor. (İlk doldurmada 14/14 `çöp` gelmişti; raf
+sayıyı **kullanmayı reddetti** ve çapayı gösterdi, kurucu düzeltti. Bu, sayfanın çapalı
+tasarlanmasının sebebiydi.)
+
+### Bundan çıkan tek sağlam sonuç — ve sizi ilgilendiren kısım
+
+Model tarafının sapması **gevşek yönde**, sıkı yönde değil:
+
+- Kurucunun ajanlarla tek ayrışması (#3, makine çevirisi telefon incelemesi): ajan
+  `ok_to_keep`, kurucu `çöp`. Yani ajan **fazla gevşek** kalmış.
+- Kurucunun rafın ana oturumuyla 6 ayrışmasının **hepsi aynı yönde**: raf `ok_to_keep`,
+  kurucu `çöp`.
+- Ters yönde (model sıkı, kurucu gevşek) **tek bir örnek yok.**
+
+**Sonuç: §2'deki %33,2'yi bir TABAN olarak okuyun, tavan olarak değil.** Hükümleri üreten
+ajanlar bu ölçümde kurucuya yakın ama hâlâ hafifçe gevşek taraftaydı. Aralığın üst ucu
+(%40,3) alt ucundan daha olası.
+
+### Kendi hatamız
+
+Rafın ana oturumu, bu üçlünün **en gevşeğiydi** (3/9). Kendi yazdığımız ölçüt "metni kurtarmak
+için kırpmak gerekiyorsa çöptür" diyordu; ajanlar bu kurala bizden sadık kaldı, biz metnin
+niteliğine kanıp `ok_to_keep` dedik. Bu yüzden 64 belgelik kör örneğimizin dağılımını
+(%39 çöp) **düzeltme amacıyla kullanmayın** — teslim edilen 293 hüküm ajanlarındır ve
+kurucuya daha yakındır.
+
+### Hâlâ eksik olan
+
+14 satır, hedefli bir sonda; **nüfus kappa'sı değil.** `kurucu-50.md` (sıkı pakette, boş)
+duruyor. Popülasyon düzeyinde kurucu↔model uyumu isterseniz o doldurulmalı.
 
 ## 8. Özet
 
@@ -181,4 +220,6 @@ kuralı bizden daha sadık uyguladı, biz metnin niteliğine kanıp `ok_to_keep`
 - Değerli iş `wiki_markup_residue` ve `commercial_keyword_stuffing`'de (ağırlığın %69'u);
   daha dar sayı isteniyorsa **yalnız `wiki_markup_residue`'dan 150 satır daha**.
 - ≥30 şartı kabul, **tam sayımlara uygulanmaması** kaydıyla.
-- Kurucunun 50 satırı olmadan model tarafının kalibrasyonu doğrulanamaz.
+- **Kurucu 14 hedefli satır okudu** (çapa kontrolü geçti). Model tarafının sapması **gevşek
+  yönde**; ters yönde tek örnek yok. **%33,2'yi taban sayın, tavan değil.** Popülasyon
+  kappa'sı için `kurucu-50.md` hâlâ boş.

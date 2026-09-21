@@ -1,6 +1,6 @@
 # Atma raporu denetimi v3 - yanlis-atma orani (TASK-020)
 
-**Puanlama:** 2026-09-21T20:03:51+00:00 · **Cetvel:** `C:\CELIKBROS PROJECTS\derlem\var\olcum-2026-09-19\atma-denetimi-v3\denetim-sayfasi-dolu-raf-v2.csv` (SHA256 `d87892015bf19f2d6048771d669277fed8725825fec82f43b3871b184283ff49`) ·
+**Puanlama:** 2026-09-21T20:59:09+00:00 · **Cetvel:** `C:\CELIKBROS PROJECTS\derlem\var\olcum-2026-09-19\atma-denetimi-v3\denetim-sayfasi-dolu-raf-v2.csv` (SHA256 `d87892015bf19f2d6048771d669277fed8725825fec82f43b3871b184283ff49`) ·
 **Rapor:** `C:\CELIKBROS PROJECTS\derlem\var\derived\gardash_faz2_tr_dedup_20260621_06ac330e_clean_candidate_v3.txt.rejections.jsonl` (SHA256 `2becaf9d0f1fc9a8ce48a0ea6cc4a78b83b21eac22ce2e1754fbfb5548fdd778`, 93223 kayit) ·
 **Tohum:** `20260919` · katman basina en cok 50 kayit · katman kurali: first reason in `reasons` (primary reason).
 
@@ -9,26 +9,30 @@ bolumler bir sonraki puanlamada silinir. Karar ve takip notlari gorev kartina ya
 
 ## Yontem
 
-- Katman = kaydin `reasons` listesindeki ilk gerekce. Katman agirligi `w_s` = katmanin
-  rapordaki `char_count` toplaminin tum raporun toplamina orani (raporda bayt yok; karakter
-  sayisi baytin yerine gecer).
+- Katman = kaydin `reasons` listesindeki ilk gerekce (bazi cetvellerde birden fazla gerekceli
+  satirlar ayri `multi_reason` katmanina toplanir; kural cetvelin `stratum_rule` ust bilgisinden
+  okunur). Katman agirligi `w_s` = katmanin rapordaki `char_count` toplaminin tum raporun
+  toplamina orani (raporda bayt yok; karakter sayisi baytin yerine gecer).
 - Katman orani `p_s` = `good` / (`good` + `correct_drop`); `unsure` ve bos satirlar payda disi.
-  Aralik: Wilson skor araligi, %95.
-- Toplam oran = sum(`w_s` * `p_s`) / sum(`w_s`), yalnizca karara baglanmis satiri olan katmanlar
-  uzerinden. Aralik: Wilson, etkin orneklem `n_eff` = 1 / sum((`w_s`/W)^2 / `n_s`) (Kish).
-- Katki = `w_s` * `p_s`: katmanin toplam yanlis-atma payina getirdigi pay; en yuksek uc katman
-  asagida siralanir.
-- Rafin esigi: toplam oran > %10,00 ise kural gevsetme konusulur.
+  Aralik: Wilson skor araligi, %95 - tabakadaki karar sayisi tabakanin rapordaki nufusuna esit
+  ya da buyukse (tam sayim) orneklem hatasi yoktur, nokta deger raporlanir.
+- Toplam yanlis-atma orani = sum(`w_s` * `p_s`) / sum(`w_s`), yalnizca karara baglanmis
+  satiri olan katmanlar uzerinden. Aralik: Wilson, etkin orneklem `n_eff` = 1 / sum((`w_s`/W)^2 /
+  `n_s`) (Kish); tam sayim tabakalari bu toplama katilmaz (agirlikca oran ortalamasina hala
+  girerler). Butun kapsanan tabakalar tam sayimsa aralik nokta degerdir.
+- Katki = `w_s` * `p_s`: katmanin toplam yanlis-atma orani payina getirdigi pay; en yuksek
+  uc katman asagida siralanir.
+- Rafin esigi: atilan baytin %10,00'undan fazlasi iyi metinse kural gevsetme konusulur.
 
 ## Gerekce basina
 
-| Gerekce | Rapor kayit | Rapor karakter | Agirlik | Cetvel | good | correct_drop | unsure | bos | Oran | %95 aralik | Katki | Karakter agirlikli oran |
+| Gerekce | Rapor kayit | Rapor karakter | Agirlik | Cetvel | good | correct_drop | unsure | bos | Oran | %95 aralik (ya da tam sayim) | Katki | Karakter agirlikli oran |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|
 | `encoding_corruption` | 12751 | 66811388 | %7,60 | 50 | 27 | 21 | 2 | 0 | %56,25 | %42,28 - %69,30 | %4,27 | %72,58 |
 | `wiki_markup_residue` | 21938 | 160201115 | %18,21 | 50 | 18 | 32 | 0 | 0 | %36,00 | %24,14 - %49,86 | %6,56 | %46,42 |
 | `extreme_repetition` | 2117 | 44979909 | %5,11 | 50 | 11 | 39 | 0 | 0 | %22,00 | %12,75 - %35,24 | %1,13 | %17,40 |
 | `hashtag_stuffing` | 1012 | 16277620 | %1,85 | 50 | 17 | 31 | 2 | 0 | %35,42 | %23,43 - %49,56 | %0,66 | %38,90 |
-| `mixed_script_artifact` | 6 | 644808 | %0,07 | 6 | 0 | 6 | 0 | 0 | %0,00 | %0,00 - %39,03 | %0,00 | %0,00 |
+| `mixed_script_artifact` | 6 | 644808 | %0,07 | 6 | 0 | 6 | 0 | 0 | %0,00 | TAM SAYIM (%0,00) | %0,00 | %0,00 |
 | `repeated_segments` | 1334 | 49002101 | %5,57 | 50 | 13 | 36 | 1 | 0 | %26,53 | %16,21 - %40,26 | %1,48 | %19,00 |
 | `navigation_boilerplate` | 11354 | 294688466 | %33,50 | 50 | 22 | 27 | 1 | 0 | %44,90 | %31,85 - %58,68 | %15,04 | %38,83 |
 | `commercial_keyword_stuffing` | 1756 | 34860220 | %3,96 | 50 | 19 | 29 | 2 | 0 | %39,58 | %27,02 - %53,69 | %1,57 | %58,88 |
@@ -71,5 +75,5 @@ Ikinci cetvel: `C:\CELIKBROS PROJECTS\derlem\var\olcum-2026-09-19\atma-denetimi-
 
 ## Karar
 
-Kural degisikligi karari ve varsa takip karti gorev kartina (TASK-020) yazilir; bu belge
-yalnizca olcumu tasir.
+Kural degisikligi karari ve varsa takip karti gorev kartina yazilir; bu belge yalnizca
+olcumu tasir.

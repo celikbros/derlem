@@ -1,19 +1,39 @@
-"""Atma raporu yanlis-atma denetimi (TASK-020).
+"""Atma raporu yanlis-atma / yanlis-tutma denetimi (TASK-020, TASK-040).
 
 `clean-candidate-rejections-v2` raporundan (temiz_aday_v3.md) sabit tohumla
 katmanli bir denetim cetveli cikarir (`sheet`) ve doldurulmus cetvelden
-gerekce basina ve toplamda bayt agirlikli yanlis-atma oranini %95 araligiyla
-hesaplar (`score`).
+gerekce basina ve toplamda bayt agirlikli oranini %95 araligiyla hesaplar
+(`score`).
+
+Karar sozlugu: `score` iki sozlugu de tanir.
+
+- ATMA sorusu ("bu atilan metin iyi miydi?"): `good` / `correct_drop` /
+  `unsure`. Hata tarafi `good` (yanlislikla atilmis iyi metin).
+- TERS soru ("yeni kural bu metni tutuyor, durmali mi?"): `ok_to_keep` /
+  `garbage` / `unsure`. Hata tarafi `garbage` (yanlislikla tutulmus cop).
+
+Sozluk cetvelin `# allowed_verdicts:` ust bilgisinden ya da (o satir yoksa)
+sutunda gorulen karar degerlerinden kendiliginden taninir; iki sozlukten
+degerler bir arada gorulurse hata verilir. `unsure` her iki sozlukte de hata
+tarafinda sayilir (payda disi).
 
 Katman kurali: her kaydin katmani `reasons` listesindeki ILK (birincil)
 gerekcedir. Bir satir birden cok gerekce tasiyabilir; listenin sirasi
 `quality_filters._REASON_ORDER` ile sabittir, dolayisiyla katman atamasi
-belirlenimcidir. Cetvelde `reasons` sutunu tum gerekceleri tasir.
+belirlenimcidir. Cetvelde `reasons` sutunu tum gerekceleri tasir. Bazi
+cetvellerde (`# stratum_rule:` satirinda `multi_reason` geciyorsa) birden
+fazla gerekceli satirlar kendi ayri `multi_reason` katmanina toplanir; bu
+kural cetvelin ust bilgisinden okunur, okunamazsa ilk-gerekce davranisi surer.
 
 Secim kurali: katman icindeki kayitlar
 `sha256(f"{seed}:{sha256}:{source_ordinal}")` anahtarina gore siralanir ve ilk
 min(sheet_size, katman buyuklugu) kayit alinir. Python'un rastgele sayi
 ureticisine bagli degildir; ayni tohum ve ayni rapor ayni cetveli verir.
+
+Tam sayim duzeltmesi: bir tabakada hukme baglanmis (judged) satir sayisi o
+tabakanin rapordaki nufusuna esit ya da buyukse orneklem hatasi yoktur; Wilson
+araligi yerine nokta deger raporlanir ve genel oranin etkin orneklem (Kish)
+hesabina o tabaka katilmaz.
 
 Rapor hicbir zaman degistirilmez; yalnizca okunur.
 """
@@ -44,7 +64,60 @@ Z_95 = 1.959963984540054
 VERDICT_GOOD = "good"
 VERDICT_CORRECT_DROP = "correct_drop"
 VERDICT_UNSURE = "unsure"
-ALLOWED_VERDICTS = (VERDICT_GOOD, VERDICT_CORRECT_DROP, VERDICT_UNSURE)
+VERDICT_OK_TO_KEEP = "ok_to_keep"
+VERDICT_GARBAGE = "garbage"
+
+
+@dataclass(frozen=True)
+class VerdictDictionary:
+    """Bir cetvelin karar sozlugu: `mistake` = hata tarafi (payin payi, oranin
+    payi), `correct` = dogru taraf (paydayi tamamlayan), `unsure` = her iki
+    sozlukte de hata tarafinda (payda disi kalir)."""
+
+    key: str
+    mistake: str
+    correct: str
+    unsure: str
+    doc_title: str
+    rate_noun: str
+    rate_definition: str
+    threshold_subject: str
+    threshold_verdict_desc: str
+
+    @property
+    def allowed(self) -> tuple[str, str, str]:
+        return (self.mistake, self.correct, self.unsure)
+
+
+DROP_DICTIONARY = VerdictDictionary(
+    key="drop",
+    mistake=VERDICT_GOOD,
+    correct=VERDICT_CORRECT_DROP,
+    unsure=VERDICT_UNSURE,
+    doc_title="Atma raporu denetimi v3 - yanlis-atma orani (TASK-020)",
+    rate_noun="yanlis-atma orani",
+    rate_definition="`good` / (`good` + `correct_drop`)",
+    threshold_subject="atilan",
+    threshold_verdict_desc="iyi metinse kural gevsetme",
+)
+
+KEEP_DICTIONARY = VerdictDictionary(
+    key="keep",
+    mistake=VERDICT_GARBAGE,
+    correct=VERDICT_OK_TO_KEEP,
+    unsure=VERDICT_UNSURE,
+    doc_title="Yeni-tutulanlar denetimi - yanlis-tutma orani (TASK-040)",
+    rate_noun="yanlis-tutma orani",
+    rate_definition="`garbage` / (`garbage` + `ok_to_keep`)",
+    threshold_subject="tutulan",
+    threshold_verdict_desc="cop metinse kural sikilastirma",
+)
+
+VERDICT_DICTIONARIES: tuple[VerdictDictionary, ...] = (DROP_DICTIONARY, KEEP_DICTIONARY)
+
+# Geriye donuk uyumluluk: eski kod/testler ALLOWED_VERDICTS'i atma sozlugu
+# olarak kullanir.
+ALLOWED_VERDICTS = DROP_DICTIONARY.allowed
 
 # Katman sirasi: 12 kalite gerekcesi (quality_filters ile ayni sira), sonra
 # v3'un uc atma gerekcesi. Bilinmeyen bir gerekce cetvelde en sona, alfabetik gelir.
@@ -131,6 +204,8 @@ class Sheet:
     header: SheetHeader
     stratum_totals: dict[str, StratumTotals]
     rows: tuple[SheetRow, ...]
+    dictionary: VerdictDictionary = DROP_DICTIONARY
+    multi_reason_mode: bool = False
 
 
 @dataclass(frozen=True)
@@ -140,22 +215,34 @@ class StratumScore:
     report_chars: int
     weight: float
     sampled: int
-    good: int
-    correct_drop: int
+    mistake: int
+    no_mistake: int
     unsure: int
     unfilled: int
 
     @property
     def judged(self) -> int:
-        return self.good + self.correct_drop
+        return self.mistake + self.no_mistake
+
+    @property
+    def is_census(self) -> bool:
+        """Tabakadaki hukme baglanmis satir sayisi rapordaki nufusa esit ya da
+        buyukse orneklem hatasi yoktur (tam sayim)."""
+        return self.judged > 0 and self.judged >= self.report_records
 
     @property
     def rate(self) -> float | None:
-        return None if self.judged == 0 else self.good / self.judged
+        return None if self.judged == 0 else self.mistake / self.judged
 
     @property
     def interval(self) -> tuple[float, float] | None:
-        return None if self.judged == 0 else wilson_interval(self.good, self.judged)
+        """Tam sayimda nokta deger (alt=ust=oran); aksi halde Wilson araligi."""
+        if self.judged == 0:
+            return None
+        if self.is_census:
+            rate = self.rate or 0.0
+            return (rate, rate)
+        return wilson_interval(self.mistake, self.judged)
 
     @property
     def contribution(self) -> float | None:
@@ -167,12 +254,12 @@ class StratumScore:
 @dataclass(frozen=True)
 class CharWeightedStratum:
     reason: str
-    good_chars: int
+    mistake_chars: int
     judged_chars: int
 
     @property
     def rate(self) -> float | None:
-        return None if self.judged_chars == 0 else self.good_chars / self.judged_chars
+        return None if self.judged_chars == 0 else self.mistake_chars / self.judged_chars
 
 
 @dataclass(frozen=True)
@@ -191,6 +278,7 @@ class ScoreResult:
     header: SheetHeader
     sheet_path: str
     sheet_sha256: str
+    dictionary: VerdictDictionary
     strata: tuple[StratumScore, ...]
     char_weighted: tuple[CharWeightedStratum, ...]
     overall_rate: float | None
@@ -411,7 +499,7 @@ def write_sheet_markdown(sheet: Sheet, path: Path) -> None:
 # --- Cetvel okuma -------------------------------------------------------------
 
 
-def _parse_header(lines: list[str], path: Path) -> tuple[SheetHeader, dict[str, StratumTotals]]:
+def _parse_header(lines: list[str], path: Path) -> tuple[SheetHeader, dict[str, StratumTotals], str | None]:
     fields: dict[str, str] = {}
     totals: dict[str, StratumTotals] = {}
     for line in lines:
@@ -425,14 +513,23 @@ def _parse_header(lines: list[str], path: Path) -> tuple[SheetHeader, dict[str, 
             totals[name] = StratumTotals(records=int(numbers["records"]), chars=int(numbers["chars"]))
         else:
             fields[key] = value
+
+    def _field(*keys: str) -> str:
+        # Bazi ad-hoc cetveller (orn. TASK-040 ters sayfasi) rapor izini
+        # `quality_report_*` adiyla tasir; ilk bulunan anahtar kullanilir.
+        for candidate in keys:
+            if candidate in fields:
+                return fields[candidate]
+        raise KeyError(keys[0])
+
     try:
         header = SheetHeader(
             version=fields["version"],
             seed=int(fields["seed"]),
             sheet_size=int(fields["sheet_size"]),
-            report_path=fields["report_path"],
-            report_sha256=fields["report_sha256"],
-            report_records=int(fields["report_records"]),
+            report_path=_field("report_path", "quality_report_path"),
+            report_sha256=_field("report_sha256", "quality_report_sha256"),
+            report_records=int(_field("report_records", "quality_report_records_total")),
             generated_at=fields["generated_at"],
             stratum_rule=fields["stratum_rule"],
         )
@@ -440,11 +537,48 @@ def _parse_header(lines: list[str], path: Path) -> tuple[SheetHeader, dict[str, 
         raise ValueError(f"{path}: sheet header is missing {error}") from None
     if not totals:
         raise ValueError(f"{path}: sheet header has no stratum totals")
-    return header, totals
+    return header, totals, fields.get("allowed_verdicts")
 
 
 def normalize_verdict(value: str) -> str:
     return value.strip().lower()
+
+
+def _dictionary_for_allowed(values: frozenset[str]) -> VerdictDictionary | None:
+    for dictionary in VERDICT_DICTIONARIES:
+        if values == frozenset(dictionary.allowed):
+            return dictionary
+    return None
+
+
+def resolve_dictionary(*, allowed_verdicts_text: str | None, observed: set[str], path: Path) -> VerdictDictionary:
+    """Sayfanin karar sozlugunu tanir: once `# allowed_verdicts:` ust bilgisi,
+    yoksa satirlarda gorulen karar degerleri. Iki sozlukten deger bir arada
+    gorulurse (ya da hicbir sozlukle eslesmezse) hata verir."""
+    if allowed_verdicts_text:
+        declared = frozenset(item.strip() for item in allowed_verdicts_text.split("/") if item.strip())
+        dictionary = _dictionary_for_allowed(declared)
+        if dictionary is None:
+            raise ValueError(
+                f"{path}: header allowed_verdicts {allowed_verdicts_text!r} does not match a known verdict "
+                f"dictionary (drop: {' / '.join(DROP_DICTIONARY.allowed)}; keep: {' / '.join(KEEP_DICTIONARY.allowed)})"
+            )
+        return dictionary
+    distinguishing = observed - {VERDICT_UNSURE}
+    matches = [
+        dictionary for dictionary in VERDICT_DICTIONARIES
+        if distinguishing and distinguishing <= (set(dictionary.allowed) - {VERDICT_UNSURE})
+    ]
+    if len(matches) == 1:
+        return matches[0]
+    if not distinguishing:
+        raise ValueError(
+            f"{path}: cannot auto-detect the verdict dictionary (no '# allowed_verdicts:' header line and no "
+            "distinguishing verdicts filled in yet); add the header line"
+        )
+    raise ValueError(
+        f"{path}: mixed verdict dictionary - values from more than one dictionary found: {sorted(observed)}"
+    )
 
 
 def read_sheet_csv(path: Path) -> Sheet:
@@ -465,22 +599,26 @@ def _read_sheet(handle: TextIO, path: Path) -> Sheet:
             continue
         else:
             body.append(line)
-    header, totals = _parse_header(header_lines, path)
+    header, totals, allowed_verdicts_text = _parse_header(header_lines, path)
     reader = csv.reader(body)
     columns = next(reader, None)
     if columns is None or tuple(columns) != SHEET_COLUMNS:
         raise ValueError(f"{path}: unexpected sheet columns {columns!r}; expected {list(SHEET_COLUMNS)!r}")
-    rows: list[SheetRow] = []
-    invalid: list[str] = []
-    seen: set[tuple[str, int]] = set()
+    raw_rows: list[tuple[int, dict[str, str]]] = []
     for number, values in enumerate(reader, 1):
         if not values or all(not item.strip() for item in values):
             continue
         if len(values) != len(SHEET_COLUMNS):
             raise ValueError(f"{path}: data row {number} has {len(values)} columns; expected {len(SHEET_COLUMNS)}")
-        record = dict(zip(SHEET_COLUMNS, values))
+        raw_rows.append((number, dict(zip(SHEET_COLUMNS, values))))
+    observed = {normalize_verdict(record["verdict"]) for _, record in raw_rows if record["verdict"].strip()}
+    dictionary = resolve_dictionary(allowed_verdicts_text=allowed_verdicts_text, observed=observed, path=path)
+    rows: list[SheetRow] = []
+    invalid: list[str] = []
+    seen: set[tuple[str, int]] = set()
+    for number, record in raw_rows:
         verdict = normalize_verdict(record["verdict"])
-        if verdict and verdict not in ALLOWED_VERDICTS:
+        if verdict and verdict not in dictionary.allowed:
             invalid.append(f"row {number} ({record['sha256'][:12]}...): {record['verdict']!r}")
         duplicate_of = record["duplicate_of"].strip()
         row = SheetRow(
@@ -498,9 +636,16 @@ def _read_sheet(handle: TextIO, path: Path) -> Sheet:
         seen.add(row.row_key)
         rows.append(row)
     if invalid:
-        allowed = ", ".join(ALLOWED_VERDICTS)
+        allowed = ", ".join(dictionary.allowed)
         raise ValueError(f"{path}: unknown verdicts (allowed: {allowed}, or empty):\n  " + "\n  ".join(invalid))
-    return Sheet(header=header, stratum_totals=totals, rows=tuple(rows))
+    multi_reason_mode = "multi_reason" in header.stratum_rule
+    return Sheet(
+        header=header,
+        stratum_totals=totals,
+        rows=tuple(rows),
+        dictionary=dictionary,
+        multi_reason_mode=multi_reason_mode,
+    )
 
 
 # --- Puanlama -----------------------------------------------------------------
@@ -520,16 +665,26 @@ def wilson_interval(successes: int, trials: int, z: float = Z_95) -> tuple[float
     return (low, high)
 
 
+def _row_stratum(row: SheetRow, *, multi_reason_mode: bool) -> str:
+    """Etkin katman: coklu-gerekce modunda birden cok gerekceli satirlar
+    `multi_reason` katmanina, digerleri ilk (birincil) gerekceye gider."""
+    if multi_reason_mode and len(row.reasons) > 1:
+        return "multi_reason"
+    return row.reasons[0]
+
+
 def score_strata(sheet: Sheet) -> tuple[StratumScore, ...]:
+    dictionary = sheet.dictionary
     total_chars = sum(item.chars for item in sheet.stratum_totals.values())
     tallies: dict[str, dict[str, int]] = {
-        stratum: {"sampled": 0, VERDICT_GOOD: 0, VERDICT_CORRECT_DROP: 0, VERDICT_UNSURE: 0, "unfilled": 0}
+        stratum: {"sampled": 0, dictionary.mistake: 0, dictionary.correct: 0, dictionary.unsure: 0, "unfilled": 0}
         for stratum in sheet.stratum_totals
     }
     for row in sheet.rows:
-        if row.stratum not in tallies:
-            raise ValueError(f"sheet row {row.sha256} has stratum {row.stratum!r} that is not in the header")
-        tally = tallies[row.stratum]
+        stratum = _row_stratum(row, multi_reason_mode=sheet.multi_reason_mode)
+        if stratum not in tallies:
+            raise ValueError(f"sheet row {row.sha256} has stratum {stratum!r} that is not in the header")
+        tally = tallies[stratum]
         tally["sampled"] += 1
         tally[row.verdict or "unfilled"] += 1
     scores = []
@@ -542,27 +697,29 @@ def score_strata(sheet: Sheet) -> tuple[StratumScore, ...]:
             report_chars=totals.chars,
             weight=(totals.chars / total_chars if total_chars else 0.0),
             sampled=tally["sampled"],
-            good=tally[VERDICT_GOOD],
-            correct_drop=tally[VERDICT_CORRECT_DROP],
-            unsure=tally[VERDICT_UNSURE],
+            mistake=tally[dictionary.mistake],
+            no_mistake=tally[dictionary.correct],
+            unsure=tally[dictionary.unsure],
             unfilled=tally["unfilled"],
         ))
     return tuple(scores)
 
 
 def char_weighted_strata(sheet: Sheet) -> tuple[CharWeightedStratum, ...]:
-    """Katman icinde karakter agirlikli oran: iyi satirlarin karakteri /
+    """Katman icinde karakter agirlikli oran: hatali satirlarin karakteri /
     karara baglanmis satirlarin karakteri."""
-    good: dict[str, int] = {}
+    dictionary = sheet.dictionary
+    mistake: dict[str, int] = {}
     judged: dict[str, int] = {}
     for row in sheet.rows:
-        if row.verdict not in (VERDICT_GOOD, VERDICT_CORRECT_DROP):
+        if row.verdict not in (dictionary.mistake, dictionary.correct):
             continue
-        judged[row.stratum] = judged.get(row.stratum, 0) + row.char_count
-        if row.verdict == VERDICT_GOOD:
-            good[row.stratum] = good.get(row.stratum, 0) + row.char_count
+        stratum = _row_stratum(row, multi_reason_mode=sheet.multi_reason_mode)
+        judged[stratum] = judged.get(stratum, 0) + row.char_count
+        if row.verdict == dictionary.mistake:
+            mistake[stratum] = mistake.get(stratum, 0) + row.char_count
     return tuple(
-        CharWeightedStratum(reason=stratum, good_chars=good.get(stratum, 0), judged_chars=judged.get(stratum, 0))
+        CharWeightedStratum(reason=stratum, mistake_chars=mistake.get(stratum, 0), judged_chars=judged.get(stratum, 0))
         for stratum in sorted(sheet.stratum_totals, key=stratum_sort_key)
     )
 
@@ -571,13 +728,19 @@ def overall_false_drop(strata: Iterable[StratumScore]) -> tuple[float | None, tu
     """Katman agirlikli toplam oran: sum(w_s * p_s) / sum(w_s), w_s = katmanin
     rapordaki karakter payi; yalnizca karara baglanmis satiri olan katmanlar
     girer. Aralik: Wilson, etkin orneklem n_eff = 1 / sum((w_s/W)^2 / n_s)
-    (Kish) ile. Donus: (oran, aralik, n_eff, kapsanan agirlik)."""
+    (Kish) ile - tam sayim (is_census) olan tabakalar bu toplama katilmaz
+    (orneklem hatasi yok), ama agirliklarinca oran ortalamasina hala girerler.
+    Butun kapsanan tabakalar tam sayimsa n_eff = sonsuz, aralik nokta deger.
+    Donus: (oran, aralik, n_eff, kapsanan agirlik)."""
     covered = [item for item in strata if item.judged > 0]
     weight = sum(item.weight for item in covered)
     if not covered or weight <= 0:
         return None, None, None, 0.0
     rate = sum(item.weight * (item.rate or 0.0) for item in covered) / weight
-    effective_n = 1.0 / sum((item.weight / weight) ** 2 / item.judged for item in covered)
+    kish_terms = sum((item.weight / weight) ** 2 / item.judged for item in covered if not item.is_census)
+    if kish_terms <= 0:
+        return rate, (rate, rate), math.inf, weight
+    effective_n = 1.0 / kish_terms
     return rate, wilson_interval(rate * effective_n, effective_n), effective_n, weight
 
 
@@ -651,6 +814,7 @@ def score_sheet(
         header=sheet.header,
         sheet_path=sheet_path,
         sheet_sha256=sheet_sha256,
+        dictionary=sheet.dictionary,
         strata=strata,
         char_weighted=char_weighted,
         overall_rate=rate,
@@ -676,10 +840,21 @@ def _interval(value: tuple[float, float] | None) -> str:
     return "-" if value is None else f"{_pct(value[0])} - {_pct(value[1])}"
 
 
+def _interval_cell(item: StratumScore) -> str:
+    """Tabaka tablosunda aralik hucresi: tam sayimda 'TAM SAYIM', aksi halde
+    Wilson araligi; hic karar yoksa '-'."""
+    if item.judged == 0:
+        return "-"
+    if item.is_census:
+        return f"TAM SAYIM ({_pct(item.rate)})"
+    return _interval(item.interval)
+
+
 def render_score_markdown(result: ScoreResult) -> str:
     header = result.header
+    dictionary = result.dictionary
     lines = [
-        "# Atma raporu denetimi v3 - yanlis-atma orani (TASK-020)",
+        f"# {dictionary.doc_title}",
         "",
         f"**Puanlama:** {result.scored_at} · **Cetvel:** `{result.sheet_path}` (SHA256 `{result.sheet_sha256}`) ·",
         f"**Rapor:** `{header.report_path}` (SHA256 `{header.report_sha256}`, {header.report_records} kayit) ·",
@@ -690,44 +865,57 @@ def render_score_markdown(result: ScoreResult) -> str:
         "",
         "## Yontem",
         "",
-        "- Katman = kaydin `reasons` listesindeki ilk gerekce. Katman agirligi `w_s` = katmanin",
-        "  rapordaki `char_count` toplaminin tum raporun toplamina orani (raporda bayt yok; karakter",
-        "  sayisi baytin yerine gecer).",
-        "- Katman orani `p_s` = `good` / (`good` + `correct_drop`); `unsure` ve bos satirlar payda disi.",
-        "  Aralik: Wilson skor araligi, %95.",
-        "- Toplam oran = sum(`w_s` * `p_s`) / sum(`w_s`), yalnizca karara baglanmis satiri olan katmanlar",
-        "  uzerinden. Aralik: Wilson, etkin orneklem `n_eff` = 1 / sum((`w_s`/W)^2 / `n_s`) (Kish).",
-        "- Katki = `w_s` * `p_s`: katmanin toplam yanlis-atma payina getirdigi pay; en yuksek uc katman",
-        "  asagida siralanir.",
-        f"- Rafin esigi: toplam oran > {_pct(FALSE_DROP_THRESHOLD)} ise kural gevsetme konusulur.",
+        "- Katman = kaydin `reasons` listesindeki ilk gerekce (bazi cetvellerde birden fazla gerekceli",
+        "  satirlar ayri `multi_reason` katmanina toplanir; kural cetvelin `stratum_rule` ust bilgisinden",
+        "  okunur). Katman agirligi `w_s` = katmanin rapordaki `char_count` toplaminin tum raporun",
+        "  toplamina orani (raporda bayt yok; karakter sayisi baytin yerine gecer).",
+        f"- Katman orani `p_s` = {dictionary.rate_definition}; `unsure` ve bos satirlar payda disi.",
+        "  Aralik: Wilson skor araligi, %95 - tabakadaki karar sayisi tabakanin rapordaki nufusuna esit",
+        "  ya da buyukse (tam sayim) orneklem hatasi yoktur, nokta deger raporlanir.",
+        f"- Toplam {dictionary.rate_noun} = sum(`w_s` * `p_s`) / sum(`w_s`), yalnizca karara baglanmis",
+        "  satiri olan katmanlar uzerinden. Aralik: Wilson, etkin orneklem `n_eff` = 1 / sum((`w_s`/W)^2 /",
+        "  `n_s`) (Kish); tam sayim tabakalari bu toplama katilmaz (agirlikca oran ortalamasina hala",
+        "  girerler). Butun kapsanan tabakalar tam sayimsa aralik nokta degerdir.",
+        f"- Katki = `w_s` * `p_s`: katmanin toplam {dictionary.rate_noun} payina getirdigi pay; en yuksek",
+        "  uc katman asagida siralanir.",
+        f"- Rafin esigi: {dictionary.threshold_subject} baytin {_pct(FALSE_DROP_THRESHOLD)}'undan fazlasi "
+        f"{dictionary.threshold_verdict_desc} konusulur.",
         "",
         "## Gerekce basina",
         "",
-        "| Gerekce | Rapor kayit | Rapor karakter | Agirlik | Cetvel | good | correct_drop | unsure | bos | Oran | %95 aralik | Katki | Karakter agirlikli oran |",
+        f"| Gerekce | Rapor kayit | Rapor karakter | Agirlik | Cetvel | {dictionary.mistake} | {dictionary.correct} | "
+        "unsure | bos | Oran | %95 aralik (ya da tam sayim) | Katki | Karakter agirlikli oran |",
         "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|",
     ]
     by_reason = {item.reason: item for item in result.char_weighted}
     for item in result.strata:
         lines.append(
             f"| `{item.reason}` | {item.report_records} | {item.report_chars} | {_pct(item.weight)} | {item.sampled} | "
-            f"{item.good} | {item.correct_drop} | {item.unsure} | {item.unfilled} | {_pct(item.rate)} | "
-            f"{_interval(item.interval)} | {_pct(item.contribution)} | {_pct(by_reason[item.reason].rate)} |"
+            f"{item.mistake} | {item.no_mistake} | {item.unsure} | {item.unfilled} | {_pct(item.rate)} | "
+            f"{_interval_cell(item)} | {_pct(item.contribution)} | {_pct(by_reason[item.reason].rate)} |"
         )
     total_sampled = sum(item.sampled for item in result.strata)
-    total_good = sum(item.good for item in result.strata)
-    total_correct = sum(item.correct_drop for item in result.strata)
+    total_mistake = sum(item.mistake for item in result.strata)
+    total_no_mistake = sum(item.no_mistake for item in result.strata)
     total_unsure = sum(item.unsure for item in result.strata)
     total_unfilled = sum(item.unfilled for item in result.strata)
+    if result.effective_n is None:
+        n_eff_text = "-"
+    elif math.isinf(result.effective_n):
+        n_eff_text = "sonsuz (butun kapsanan tabakalar tam sayim)"
+    else:
+        n_eff_text = f"{result.effective_n:.1f}".replace(".", ",")
     lines += [
         "",
         "## Toplam",
         "",
         "| Olcu | Deger |",
         "|---|---|",
-        f"| Cetvel satiri | {total_sampled} (good {total_good} · correct_drop {total_correct} · unsure {total_unsure} · bos {total_unfilled}) |",
+        f"| Cetvel satiri | {total_sampled} ({dictionary.mistake} {total_mistake} · {dictionary.correct} "
+        f"{total_no_mistake} · unsure {total_unsure} · bos {total_unfilled}) |",
         f"| Kapsanan agirlik (karari olan katmanlar) | {_pct(result.covered_weight)} |",
-        f"| **Bayt agirlikli yanlis-atma orani** | **{_pct(result.overall_rate)}** |",
-        f"| %95 aralik (Wilson, n_eff = {'-' if result.effective_n is None else f'{result.effective_n:.1f}'.replace('.', ',')}) | {_interval(result.overall_interval)} |",
+        f"| **Bayt agirlikli {dictionary.rate_noun}** | **{_pct(result.overall_rate)}** |",
+        f"| %95 aralik (Wilson, n_eff = {n_eff_text}) | {_interval(result.overall_interval)} |",
         f"| Karakter agirlikli oran (katman icinde de karakterle) | {_pct(result.overall_char_weighted_rate)} |",
     ]
     if result.overall_rate is not None:
@@ -748,7 +936,7 @@ def render_score_markdown(result: ScoreResult) -> str:
         for rank, item in enumerate(result.top_contributors, 1):
             lines.append(f"| {rank} | `{item.reason}` | {_pct(item.rate)} | {_pct(item.contribution)} |")
     else:
-        lines.append("Hicbir katmanda `good` karari yok.")
+        lines.append(f"Hicbir katmanda `{dictionary.mistake}` karari yok.")
     lines += ["", "## Degerlendirici uyumu", ""]
     if result.agreement is None:
         lines.append("Ikinci cetvel verilmedi; uyum sayisi yok.")
@@ -768,8 +956,8 @@ def render_score_markdown(result: ScoreResult) -> str:
         "",
         "## Karar",
         "",
-        "Kural degisikligi karari ve varsa takip karti gorev kartina (TASK-020) yazilir; bu belge",
-        "yalnizca olcumu tasir.",
+        "Kural degisikligi karari ve varsa takip karti gorev kartina yazilir; bu belge yalnizca",
+        "olcumu tasir.",
     ]
     return "\n".join(lines) + "\n"
 

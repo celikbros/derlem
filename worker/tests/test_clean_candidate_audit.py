@@ -6,6 +6,9 @@ import pytest
 
 from derlem_worker.clean_candidate_audit import (
     ALLOWED_VERDICTS,
+    DROP_DICTIONARY,
+    KEEP_DICTIONARY,
+    SHEET_COLUMNS,
     STRATUM_ORDER,
     Agreement,
     compute_agreement,
@@ -14,6 +17,7 @@ from derlem_worker.clean_candidate_audit import (
     main,
     read_sheet_csv,
     render_score_markdown,
+    resolve_dictionary,
     score_sheet,
     wilson_interval,
     write_sheet_csv,
@@ -157,9 +161,14 @@ def test_scorer_reproduces_hand_computed_rate(tmp_path: Path) -> None:
     assert by_reason["encoding_corruption"].unsure == 1
     assert by_reason["near_duplicate"].rate == pytest.approx(1 / 4)
     assert by_reason["encoding_corruption"].interval == pytest.approx(wilson_interval(2, 3))
+    assert by_reason["encoding_corruption"].is_census is False
+    # B (near_duplicate) has a 4-record population in the report and all 4 were judged here
+    # -> full census: point value, no sampling error, excluded from the n_eff (Kish) sum.
+    assert by_reason["near_duplicate"].is_census is True
+    assert by_reason["near_duplicate"].interval == pytest.approx((0.25, 0.25))
     assert [item.reason for item in result.top_contributors] == ["encoding_corruption", "near_duplicate"]
-    # n_eff = 1 / (0.8^2/3 + 0.2^2/4) ; overall interval is Wilson at that n.
-    n_eff = 1 / (0.64 / 3 + 0.04 / 4)
+    # n_eff = 1 / (0.8^2/3) ; B's term is dropped because it is a full census.
+    n_eff = 1 / (0.64 / 3)
     assert result.effective_n == pytest.approx(n_eff)
     assert result.overall_interval == pytest.approx(wilson_interval(expected * n_eff, n_eff))
     assert result.covered_weight == pytest.approx(1.0)
@@ -170,6 +179,8 @@ def test_scorer_reproduces_hand_computed_rate(tmp_path: Path) -> None:
     assert "**%58,33**" in document
     assert "`encoding_corruption`" in document
     assert "esigi ile karsilastirma | **ustunde**" in document
+    assert "Bayt agirlikli yanlis-atma orani" in document
+    assert "TAM SAYIM" in document
 
 
 def test_wilson_interval_matches_known_value() -> None:
@@ -245,3 +256,215 @@ def test_cli_sheet_and_score_end_to_end(tmp_path: Path, capsys: pytest.CaptureFi
     summary = json.loads(capsys.readouterr().out)
     assert summary["overall_rate"] == 0.0
     assert out.read_text(encoding="utf-8").count("| `") >= 4
+
+
+# --- Ters soru (yeni-tutulanlar) sozlugu ---------------------------------------
+
+
+def _write_raw_sheet(
+    path: Path,
+    *,
+    header_lines: list[str],
+    stratum_lines: list[str],
+    rows: list[dict[str, str]],
+) -> None:
+    """Elle ust bilgili bir cetvel yazar (ters sozluk / multi_reason gibi
+    `draw_sheet` tarafindan uretilmeyen durumlari test etmek icin)."""
+    lines = list(header_lines) + list(stratum_lines)
+    with path.open("w", encoding="utf-8-sig", newline="") as handle:
+        for line in lines:
+            handle.write(line + "\r\n")
+        handle.write(",".join(SHEET_COLUMNS) + "\r\n")
+        for row in rows:
+            values = [row.get(column, "") for column in SHEET_COLUMNS]
+            handle.write(",".join(values) + "\r\n")
+
+
+def _keep_header_lines(*, stratum_rule: str, report_records: int) -> list[str]:
+    return [
+        "# version: test-sheet-v1",
+        "# seed: 1",
+        "# sheet_size: 50",
+        "# report_path: r",
+        "# report_sha256: s",
+        f"# report_records: {report_records}",
+        "# generated_at: 2026-09-21T00:00:00+00:00",
+        f"# stratum_rule: {stratum_rule}",
+        "# allowed_verdicts: garbage / ok_to_keep / unsure",
+    ]
+
+
+def _row(sha: str, reasons: str, char_count: int, ordinal: int, verdict: str) -> dict[str, str]:
+    return {
+        "sha256": sha,
+        "reasons": reasons,
+        "char_count": str(char_count),
+        "source_ordinal": str(ordinal),
+        "preview": "onizleme",
+        "duplicate_of": "",
+        "duplicate_of_preview": "",
+        "verdict": verdict,
+    }
+
+
+def test_score_reads_keep_dictionary_via_header_and_uses_false_keep_terminology(tmp_path: Path) -> None:
+    csv_path = tmp_path / "keep.csv"
+    header = _keep_header_lines(stratum_rule="first reason in `reasons`", report_records=2)
+    stratum_lines = ["# stratum: encoding_corruption records=2 chars=2000"]
+    rows = [
+        _row("a" * 8, "encoding_corruption", 1000, 1, "ok_to_keep"),
+        _row("b" * 8, "encoding_corruption", 1000, 2, "garbage"),
+    ]
+    _write_raw_sheet(csv_path, header_lines=header, stratum_lines=stratum_lines, rows=rows)
+
+    sheet = read_sheet_csv(csv_path)
+    assert sheet.dictionary is KEEP_DICTIONARY
+    result = score_sheet(sheet, sheet_path=str(csv_path), sheet_sha256="s", scored_at="2026-09-21T00:00:00+00:00")
+    assert result.overall_rate == pytest.approx(0.5)
+
+    document = render_score_markdown(result)
+    assert "yanlis-tutma orani" in document
+    assert "yanlis-atma orani" not in document
+    assert "Yeni-tutulanlar denetimi" in document
+
+
+def test_dictionary_auto_detected_from_column_content_without_header_field(tmp_path: Path) -> None:
+    csv_path = tmp_path / "keep_no_header.csv"
+    header = [line for line in _keep_header_lines(stratum_rule="first reason in `reasons`", report_records=2)
+              if not line.startswith("# allowed_verdicts")]
+    stratum_lines = ["# stratum: encoding_corruption records=2 chars=2000"]
+    rows = [
+        _row("a" * 8, "encoding_corruption", 1000, 1, "ok_to_keep"),
+        _row("b" * 8, "encoding_corruption", 1000, 2, "garbage"),
+    ]
+    _write_raw_sheet(csv_path, header_lines=header, stratum_lines=stratum_lines, rows=rows)
+
+    sheet = read_sheet_csv(csv_path)
+    assert sheet.dictionary is KEEP_DICTIONARY
+
+    # And the drop dictionary is likewise inferred from good/correct_drop content alone.
+    resolved = resolve_dictionary(allowed_verdicts_text=None, observed={"good", "correct_drop"}, path=csv_path)
+    assert resolved is DROP_DICTIONARY
+
+
+def test_mixed_verdict_dictionary_is_rejected(tmp_path: Path) -> None:
+    csv_path = tmp_path / "mixed.csv"
+    header = [line for line in _keep_header_lines(stratum_rule="first reason in `reasons`", report_records=2)
+              if not line.startswith("# allowed_verdicts")]
+    stratum_lines = ["# stratum: encoding_corruption records=2 chars=2000"]
+    rows = [
+        _row("a" * 8, "encoding_corruption", 1000, 1, "good"),
+        _row("b" * 8, "encoding_corruption", 1000, 2, "garbage"),
+    ]
+    _write_raw_sheet(csv_path, header_lines=header, stratum_lines=stratum_lines, rows=rows)
+
+    with pytest.raises(ValueError, match="mixed verdict dictionary"):
+        read_sheet_csv(csv_path)
+
+
+def test_dictionary_cannot_be_auto_detected_without_distinguishing_verdicts(tmp_path: Path) -> None:
+    csv_path = tmp_path / "ambiguous.csv"
+    header = [line for line in _keep_header_lines(stratum_rule="first reason in `reasons`", report_records=2)
+              if not line.startswith("# allowed_verdicts")]
+    stratum_lines = ["# stratum: encoding_corruption records=2 chars=2000"]
+    rows = [
+        _row("a" * 8, "encoding_corruption", 1000, 1, "unsure"),
+        _row("b" * 8, "encoding_corruption", 1000, 2, ""),
+    ]
+    _write_raw_sheet(csv_path, header_lines=header, stratum_lines=stratum_lines, rows=rows)
+
+    with pytest.raises(ValueError, match="cannot auto-detect"):
+        read_sheet_csv(csv_path)
+
+
+def test_stratum_rule_without_multi_reason_keeps_first_reason_behaviour(tmp_path: Path) -> None:
+    report = tmp_path / "r.rejections.jsonl"
+    _write_report(report, {"encoding_corruption": 3})
+    sheet = draw_sheet(iter_rejection_records(report), seed=1, sheet_size=50, report_path="r", report_sha256="s")
+    csv_path = tmp_path / "sheet.csv"
+    write_sheet_csv(sheet, csv_path)
+    _fill(csv_path, lambda line: "good")
+    loaded = read_sheet_csv(csv_path)
+    # draw_sheet's stratum_rule never mentions multi_reason -> today's behaviour survives.
+    assert "multi_reason" not in loaded.header.stratum_rule
+    assert loaded.multi_reason_mode is False
+
+
+def test_multi_reason_stratum_and_full_census_exclusion_from_n_eff(tmp_path: Path) -> None:
+    """Ters sayfa sekli: `stratum_rule` multi_reason'i belirtir (coklu gerekceli
+    satirlar kendi katmanina gider) ve bir tabaka tam sayimdir (n_eff disinda
+    kalir, aralik nokta deger)."""
+    csv_path = tmp_path / "ters.csv"
+    header = _keep_header_lines(
+        stratum_rule="first reason in `reasons`; rows with more than one reason form the `multi_reason` stratum",
+        report_records=15,
+    )
+    stratum_lines = [
+        "# stratum: reason_a records=2 chars=2000",
+        "# stratum: reason_b records=10 chars=6000",
+        "# stratum: multi_reason records=3 chars=2000",
+    ]
+    rows = [
+        # reason_a: population 2, both judged here -> full census.
+        _row("a1" * 4, "reason_a", 1000, 1, "ok_to_keep"),
+        _row("a2" * 4, "reason_a", 1000, 2, "garbage"),
+        # reason_b: population 10, only 3 judged here -> not census.
+        _row("b1" * 4, "reason_b", 100, 3, "garbage"),
+        _row("b2" * 4, "reason_b", 100, 4, "garbage"),
+        _row("b3" * 4, "reason_b", 100, 5, "ok_to_keep"),
+        # multi_reason: population 3, only 2 judged here -> not census. The
+        # first listed reason ("reason_a"/"reason_b") must NOT decide the
+        # stratum; both reasons together push the row into `multi_reason`.
+        _row("m1" * 4, "reason_a|reason_c", 500, 6, "garbage"),
+        _row("m2" * 4, "reason_b|reason_c", 500, 7, "ok_to_keep"),
+    ]
+    _write_raw_sheet(csv_path, header_lines=header, stratum_lines=stratum_lines, rows=rows)
+
+    sheet = read_sheet_csv(csv_path)
+    assert sheet.multi_reason_mode is True
+    result = score_sheet(sheet, sheet_path=str(csv_path), sheet_sha256="s", scored_at="2026-09-21T00:00:00+00:00")
+
+    by_reason = {item.reason: item for item in result.strata}
+    assert set(by_reason) == {"reason_a", "reason_b", "multi_reason"}
+    assert by_reason["multi_reason"].sampled == 2
+    assert by_reason["reason_a"].is_census is True
+    assert by_reason["reason_a"].interval == pytest.approx((0.5, 0.5))
+    assert by_reason["reason_b"].is_census is False
+    assert by_reason["multi_reason"].is_census is False
+
+    # Hand-computed: weights 0.2 / 0.6 / 0.2 (2000 / 6000 / 2000 of 10000 chars).
+    # rates: a=1/2, b=2/3, multi=1/2.
+    expected_rate = 0.2 * 0.5 + 0.6 * (2 / 3) + 0.2 * 0.5
+    assert result.overall_rate == pytest.approx(expected_rate)
+    assert expected_rate == pytest.approx(0.6)
+
+    # n_eff: reason_a is a full census and is excluded from the Kish sum.
+    kish_terms = (0.6 ** 2) / 3 + (0.2 ** 2) / 2
+    expected_n_eff = 1 / kish_terms
+    assert result.effective_n == pytest.approx(expected_n_eff)
+    assert result.overall_interval == pytest.approx(
+        wilson_interval(expected_rate * expected_n_eff, expected_n_eff)
+    )
+
+    document = render_score_markdown(result)
+    assert "TAM SAYIM" in document
+    assert "yanlis-tutma orani" in document
+
+
+def test_full_census_across_all_strata_gives_infinite_n_eff_and_point_interval(tmp_path: Path) -> None:
+    csv_path = tmp_path / "all_census.csv"
+    header = _keep_header_lines(stratum_rule="first reason in `reasons`", report_records=2)
+    stratum_lines = ["# stratum: encoding_corruption records=2 chars=2000"]
+    rows = [
+        _row("a" * 8, "encoding_corruption", 1000, 1, "ok_to_keep"),
+        _row("b" * 8, "encoding_corruption", 1000, 2, "garbage"),
+    ]
+    _write_raw_sheet(csv_path, header_lines=header, stratum_lines=stratum_lines, rows=rows)
+
+    sheet = read_sheet_csv(csv_path)
+    result = score_sheet(sheet, sheet_path=str(csv_path), sheet_sha256="s", scored_at="2026-09-21T00:00:00+00:00")
+
+    assert result.effective_n == float("inf")
+    assert result.overall_interval == pytest.approx((0.5, 0.5))
+    document = render_score_markdown(result)
+    assert "sonsuz" in document

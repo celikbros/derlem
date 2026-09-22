@@ -400,7 +400,29 @@ Set-Location ..
 
 ### 3. Servisleri çalıştırma
 
-Üç ayrı terminal açın:
+**Tek terminal (önerilen).** Üçünü birlikte başlatır, Ctrl+C ile üçünü birlikte kapatır:
+
+```powershell
+.\scripts\dev-up.ps1
+```
+
+Çıktılar `var\run\{api,worker,web}.log` dosyalarına yazılır; canlı izlemek için ayrı bir
+pencerede `Get-Content -Wait var\run\api.log`. Seçenekler: `-NoWeb` (yalnız API + worker),
+`-SkipBuild` (API'yi yeniden derlemeden başlat).
+
+Terminal zorla kapandıysa ortada süreç kalabilir; ayakta kalanları bulup kapatmak için:
+
+```powershell
+.\scripts\dev-down.ps1
+```
+
+(`-WhatIf` verilirse yalnız listeler, öldürmez.)
+
+`dev-up.ps1`, API'yi `go run` ile değil `go build` + doğrudan ikili olarak çalıştırır:
+`go run`, terminal kapatıldığında derlediği çocuk süreci ortada bırakıyor ve 18401 portu
+dinlenmeye devam ediyor.
+
+**Elle, üç ayrı terminal** (betik kullanılmıyorsa):
 
 ```powershell
 go run ./cmd/api

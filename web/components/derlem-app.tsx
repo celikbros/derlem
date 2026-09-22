@@ -498,7 +498,12 @@ export function DerlemApp() {
                   {filteredSources.map((source) => (
                     <tr key={source.id} className={selected?.id === source.id ? "selected-row" : undefined}>
                       <td>
-                        <button className="source-link" type="button" onClick={() => setSelected(source)}>
+                        <button
+                          className="source-link"
+                          type="button"
+                          title={`${source.name} (${source.id})`}
+                          onClick={() => setSelected(source)}
+                        >
                           <strong>{source.name}</strong>
                           <span>{source.domain}</span>
                         </button>

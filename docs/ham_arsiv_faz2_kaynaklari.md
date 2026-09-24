@@ -18,10 +18,17 @@ altında.** Silmeden önce model rafı bizim kopyalarımızı bağımsız olarak
 Veri atölyesi Derlem olduğu için kurucu kararıyla arşiv buraya alındı.
 
 Silinen klasörle birlikte `gardash_tr_dedup.jsonl` (13,8 GB, kaynak etiketli sürüm,
-`38b81204…c6f8a07`) da gitti. **Yeniden üretilebilir:** betik GitHub'da
-`celikbros/Gardash` → `scripts/rebuild_faz2_corpus.py`, ama içindeki yollar artık
-geçersiz. Faz-2'nin kullanılan sürümü (`.lf.txt`, `9826d58e…aa07b5`,
-13.569.773.056 B) Derlem'in object store'unda sağlam ve yedekte.
+`38b81204…c6f8a07`) da gitti. Onu üreten betik (`scripts/rebuild_faz2_corpus.py`)
+yalnız `celikbros/Gardash` deposundaydı; **o depo 2026-09-24'te silindi** ve betiğin bilinen
+başka kopyası yok (model rafı diski taradı; mektup
+[2026-09-24-raf-derlem-tek-depo-ve-gardash-kaybi.md](mektuplar/2026-09-24-raf-derlem-tek-depo-ve-gardash-kaybi.md)).
+GitHub silinen depoyu 90 gün geri getirebiliyor; **Derlem için gerekmiyor**, çünkü betiğin
+üreteceği şey — satır başına kaynak etiketi — ham arşivden hash ile yeniden kurulabiliyor ve
+kuruldu: TASK-016 ana korpusun 6.027.720 tekil satırının **tamamını** ham kaynaklara bağladı
+(eşleşmeyen 0), S2 kapsam listesi aynı yöntemle satır başına karar verdi. Kaybolan tek şey
+"ham dosyalardan ana korpus bayt bayt yeniden üretilir" kanıtı; ana korpusun kendisi
+(`.lf.txt`, `9826d58e…aa07b5`, 13.569.773.056 B) object store'da sağlam ve yedekte, ve
+bütün adaylar ondan türüyor.
 
 ## Arşivin yeri ve içeriği
 

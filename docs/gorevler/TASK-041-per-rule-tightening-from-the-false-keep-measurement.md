@@ -46,9 +46,19 @@ gain is symbolic (tightening `extreme_repetition`, 93.8 % garbage, moves the ove
 
 - Re-tighten the seven rules; each change ships with the two counts on the owner's and the
   shelf's labelled rows (recovered good / newly admitted garbage), as in TASK-040.
-- The owner's line, from the 14-row anchor: **encyclopedia stays, sponsored or commercial
-  review goes.** Sponsor and affiliate markers ("Sponsorlu Bağlantılar", price tables, spec
-  lists, buy-now calls to action) are a usable structural signal for `optics` and `commercial`.
+- **Format first, genre second** (corrected 2026-09-24). An earlier draft of this card read
+  the owner's 14-row anchor as "encyclopedia stays, sponsored review goes". The shelf found the
+  counter-example in the same 14 rows: the Mehmet Ağar biography is a genuine encyclopedic
+  article and the owner marked it **garbage** — every apostrophe in it is a backtick, so it
+  teaches a wrong Turkish orthographic rule. Commercial product and review pages were 3/3
+  garbage; encyclopedia articles were 1 keep / 1 garbage. Genre is a signal, never a verdict:
+  the format gates (prose share, systematic character corruption, sponsor/CTA pattern) run
+  first. Sponsor and affiliate markers ("Sponsorlu Bağlantılar", price tables, spec lists,
+  buy-now calls to action) remain a usable structural signal for `optics` and `commercial`.
+- **Which shelf verdicts to trust.** Use the shelf's sub-agent verdicts (13/14 on the owner's
+  anchor). The shelf's own main session scored 3/9 on the same anchor and is the most lenient
+  of the three judges; its 64-row blind sample must not drive any rule change (the shelf's own
+  instruction, 2026-09-22).
 - `wiki_markup_residue` needs a **Wikipedia namespace filter** first (shelf 2026-09-21 §6.1):
   user talk pages, revision-diff pages and discussion archives pass the prose counter because
   they are many short sentences; what they lack is a single body. Cheaper than any threshold

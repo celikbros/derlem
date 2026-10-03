@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **DRAFT** — from the 2026-09-19 plan ([plan_2026_09.md](../plan_2026_09.md), Faz 1); no new feature — may start when its dependencies are done |
+| Status | **ON HOLD — 2026-09-29:** the owner chose to skip freezing v5 and base the next corpus on `epfml/FineWeb2-HQ` (plan_2026_09.md, owner decisions). This card's steps apply unchanged to that candidate; the rehearsal numbers below stay valid. Blocked additionally by the open decision on the pretrain review gate (zero-tolerance today). Was: **DRAFT** — from the 2026-09-19 plan ([plan_2026_09.md](../plan_2026_09.md), Faz 1); no new feature — may start when its dependencies are done |
 | Kind | delivery |
 | Moratorium | allowed — this is Faz 0 (real deliveries 0 → 1) |
 | Estimate | 1.5 day(s) |

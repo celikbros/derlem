@@ -26,10 +26,12 @@ from derlem_worker.pii import PII_KEYS, count_pii_in_text
 from derlem_worker.quality_filters import (
     QUALITY_FILTER_STATUS_NOT_EVALUATED,
     QUALITY_POLICY_NONE,
+    QUALITY_POLICY_TR_WEB_V4,
     SUPPORTED_QUALITY_POLICIES,
     quality_filter_status,
     quality_rejection_reasons,
 )
+from derlem_worker.quality_v4 import judge_id as tr_web_v4_judge_id
 from derlem_worker.sampling import _bounded_lines, _document_from_line
 from derlem_worker.selection import (
     HashOnlyOutput,
@@ -133,6 +135,9 @@ class CleanCandidateReport:
     # uretilmis eski adaylarin yeniden uretilebilirligi buna baglidir.
     interpreter_version: str = ""
     zlib_runtime_version: str = ""
+    # TASK-046 (2026-10-13): tr-web-v4'te karar kaydinin yargic kimligi
+    # ("tr-web-v4@<kural kodunun sha'si>"); diger politikalarda None.
+    quality_judge: str | None = None
 
 
 def is_held_out(line_bytes: bytes, rule: str) -> bool:
@@ -540,6 +545,24 @@ def load_source(database_url: str, storage_root: Path, source_id: str) -> dict[s
     return source
 
 
+def _line_url(line: str) -> str | None:
+    """Satir bir JSON kaydiysa adresi: ust duzey `url` ya da `provenance.url`
+    (ortak belge kaydi). Duz metin satirinda None. Yalniz tr-web-v4 okur."""
+    if not line.startswith("{"):
+        return None
+    try:
+        value = json.loads(line)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(value, dict):
+        return None
+    url = value.get("url")
+    if not isinstance(url, str):
+        provenance = value.get("provenance")
+        url = provenance.get("url") if isinstance(provenance, dict) else None
+    return url if isinstance(url, str) and url.strip() else None
+
+
 def default_held_out_path(output_path: Path) -> Path:
     return output_path.with_name(f"{output_path.stem}_heldout{output_path.suffix}")
 
@@ -631,6 +654,10 @@ def derive_clean_candidate(
     effective_quality_policy = (
         QUALITY_POLICY_NONE if quality_status == QUALITY_FILTER_STATUS_NOT_EVALUATED else quality_policy
     )
+    # tr-web-v4 (TASK-046): her gerekce karar kaydinda KENDI satiridir ve yargic
+    # kimligi kural kodunun sha'sini tasir; v1-v3 bugunku tek satirlik bicimde kalir.
+    v4_policy = effective_quality_policy == QUALITY_POLICY_TR_WEB_V4
+    quality_judge = tr_web_v4_judge_id() if quality_policy == QUALITY_POLICY_TR_WEB_V4 else None
 
     # Tekillestirme kaydi iki akis (egitim adayi ve held-out) icin ortaktir:
     # held-out bir satirin birebir/normalize kopyasi egitime gidemez.
@@ -733,10 +760,18 @@ def derive_clean_candidate(
                                 line_bytes=line_bytes, text=text, details=dropped,
                             ))
                         continue
-                quality_reasons = quality_rejection_reasons(text, effective_quality_policy)
+                quality_reasons = quality_rejection_reasons(
+                    text, effective_quality_policy, url=(_line_url(stripped) if v4_policy else None),
+                )
                 if quality_reasons:
                     removed_quality_lines += 1
-                    if selection is not None:
+                    if selection is not None and v4_policy:
+                        for reason in quality_reasons:
+                            selection.decide(
+                                ordinal, line_digest.hexdigest(), "quality_rule", "reject",
+                                str(quality_judge), reason,
+                            )
+                    elif selection is not None:
                         selection.decide(
                             ordinal, line_digest.hexdigest(), "quality_rule", "reject",
                             effective_quality_policy, ",".join(quality_reasons),
@@ -869,6 +904,7 @@ def derive_clean_candidate(
         quality_filter_status=quality_status,
         interpreter_version=platform.python_version(),
         zlib_runtime_version=zlib.ZLIB_RUNTIME_VERSION,
+        quality_judge=quality_judge,
     )
 
 

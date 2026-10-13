@@ -13,6 +13,7 @@ from derlem_worker.quality_filters import (
     QUALITY_POLICY_TR_WEB_V1,
     QUALITY_POLICY_TR_WEB_V2,
     QUALITY_POLICY_TR_WEB_V3,
+    QUALITY_POLICY_TR_WEB_V4,
     SUPPORTED_QUALITY_POLICIES,
     quality_filter_status,
     quality_rejection_reasons,
@@ -33,6 +34,7 @@ def test_supported_policies_and_none_policy() -> None:
             QUALITY_POLICY_TR_WEB_V1,
             QUALITY_POLICY_TR_WEB_V2,
             QUALITY_POLICY_TR_WEB_V3,
+            QUALITY_POLICY_TR_WEB_V4,
         }
     )
     assert quality_rejection_reasons("#etiket " * 100, QUALITY_POLICY_NONE) == ()
@@ -287,13 +289,14 @@ def test_tr_web_policies_declare_turkish_only() -> None:
         QUALITY_POLICY_TR_WEB_V1: frozenset({"tr"}),
         QUALITY_POLICY_TR_WEB_V2: frozenset({"tr"}),
         QUALITY_POLICY_TR_WEB_V3: frozenset({"tr"}),
+        QUALITY_POLICY_TR_WEB_V4: frozenset({"tr"}),
     }
     assert QUALITY_POLICY_NONE not in QUALITY_POLICY_SUPPORTED_LANGUAGES
 
 
 @pytest.mark.parametrize(
     "policy",
-    (QUALITY_POLICY_TR_WEB_V1, QUALITY_POLICY_TR_WEB_V2, QUALITY_POLICY_TR_WEB_V3),
+    (QUALITY_POLICY_TR_WEB_V1, QUALITY_POLICY_TR_WEB_V2, QUALITY_POLICY_TR_WEB_V3, QUALITY_POLICY_TR_WEB_V4),
 )
 def test_quality_filter_status_follows_declared_language(policy: str) -> None:
     assert quality_filter_status(policy, "tr") == QUALITY_FILTER_STATUS_APPLIED

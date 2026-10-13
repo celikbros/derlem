@@ -5,7 +5,7 @@ import re
 import unicodedata
 import zlib
 
-from derlem_worker import quality_body, quality_v3
+from derlem_worker import quality_body, quality_v3, quality_v4
 from derlem_worker.pii import normalize_language_tag
 from derlem_worker.quality_body import body
 
@@ -42,12 +42,23 @@ QUALITY_POLICY_TR_WEB_V2 = "tr-web-v2"
 # Olculen sonuc: kurucunun "iyi" dedigi 7 belgenin 7'si korundu, B sayfasinin
 # 50 satirindan 43'u yeniden atildi.
 QUALITY_POLICY_TR_WEB_V3 = "tr-web-v3"
+# tr-web-v4 = TASK-046 (2026-10-13). v3 hukumleri DONDURULDU: v4 v3'un kod
+# yolunu aynen cagirir ve yalniz iki yeni gerekce ekler -- `machine_translation`
+# (URL imzasi + islev profili + "Bu," calkasi + Kiril kalintisi) ve
+# `commercial_page` (fiyat / satis cagrisi / urun karti / kurumsal dil /
+# sponsor / magaza gezinti izi / listeleme sablonu; aile sayar). Gerekce:
+# FineWeb2-HQ'nun karma kor okumasinda copun iki ana nedeni bunlar, v3 o veride
+# belgelerin %0,6'sini atiyor. Esikler ve olcum: quality_v4.py,
+# machine_translation.py, commercial_page.py; var/olcum-2026-10-13/task-046/.
+# `url` yalniz bu politikada kullanilir (ortak kaydin provenance.url'si).
+QUALITY_POLICY_TR_WEB_V4 = quality_v4.POLICY_NAME
 SUPPORTED_QUALITY_POLICIES = frozenset(
     {
         QUALITY_POLICY_NONE,
         QUALITY_POLICY_TR_WEB_V1,
         QUALITY_POLICY_TR_WEB_V2,
         QUALITY_POLICY_TR_WEB_V3,
+        QUALITY_POLICY_TR_WEB_V4,
     }
 )
 
@@ -59,6 +70,7 @@ QUALITY_POLICY_SUPPORTED_LANGUAGES: dict[str, frozenset[str]] = {
     QUALITY_POLICY_TR_WEB_V1: frozenset({"tr"}),
     QUALITY_POLICY_TR_WEB_V2: frozenset({"tr"}),
     QUALITY_POLICY_TR_WEB_V3: frozenset({"tr"}),
+    QUALITY_POLICY_TR_WEB_V4: frozenset({"tr"}),
 }
 
 QUALITY_FILTER_STATUS_APPLIED = "applied"
@@ -259,7 +271,8 @@ class _LexiconStats:
 _EMPTY_LEXICON_STATS = _LexiconStats(hits=0, distinct=0)
 
 
-def quality_rejection_reasons(text: str, policy: str) -> tuple[str, ...]:
+def quality_rejection_reasons(text: str, policy: str, *, url: str | None = None) -> tuple[str, ...]:
+    """Politikanin gerekceleri. `url` yalniz tr-web-v4'te okunur; v1-v3 onu yok sayar."""
     if policy == QUALITY_POLICY_NONE:
         return ()
     if policy == QUALITY_POLICY_TR_WEB_V1:
@@ -268,7 +281,20 @@ def quality_rejection_reasons(text: str, policy: str) -> tuple[str, ...]:
         return _tr_web_v2_rejection_reasons(text)
     if policy == QUALITY_POLICY_TR_WEB_V3:
         return _tr_web_v3_rejection_reasons(text)
+    if policy == QUALITY_POLICY_TR_WEB_V4:
+        return _tr_web_v4_rejection_reasons(text, url)
     raise ValueError(f"Unsupported quality policy: {policy!r}")
+
+
+# ---------------------------------------------------------------------------
+# tr-web-v4 (TASK-046). v3 DONDURULMUS: aynen cagrilir, iki gerekce eklenir.
+# ---------------------------------------------------------------------------
+
+V4_REASON_ORDER = _REASON_ORDER + quality_v4.NEW_REASONS
+
+
+def _tr_web_v4_rejection_reasons(text: str, url: str | None) -> tuple[str, ...]:
+    return _tr_web_v3_rejection_reasons(text) + quality_v4.new_reasons(text, url)
 
 
 # ---------------------------------------------------------------------------
@@ -742,7 +768,9 @@ __all__ = [
     "QUALITY_POLICY_TR_WEB_V1",
     "QUALITY_POLICY_TR_WEB_V2",
     "QUALITY_POLICY_TR_WEB_V3",
+    "QUALITY_POLICY_TR_WEB_V4",
     "SUPPORTED_QUALITY_POLICIES",
+    "V4_REASON_ORDER",
     "quality_filter_status",
     "quality_rejection_reasons",
 ]

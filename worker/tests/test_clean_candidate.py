@@ -503,7 +503,6 @@ def test_tr_web_v3_is_offered_by_the_command_line(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------
 
 from datetime import UTC, datetime  # noqa: E402
-import os  # noqa: E402
 import shutil  # noqa: E402
 
 from derlem_worker.clean_candidate import derive_selection_list, selection_artifact_paths  # noqa: E402

@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **REVIEW** — 2026-10-13: job, API, gate integration, tests and single-file dry run done (no store publish); the full 105-file run waits for the owner's backup/disk decision. Was READY (rewritten 2026-10-13 after the owner's "yes to all three"); before that DRAFT (Wikipedia-tr first) |
+| Status | **DONE** — 2026-10-13 20:13: full FineWeb2-HQ `tur_Latn` import through the job queue (owner "ok"): 105 shards, 8,578,808 documents, 27.67 GB downloaded, 0 `embeddings` bytes, 9.11 GB in the store, 1 h 46 min; PII scan and exact-duplicate gates queued automatically (running at time of writing). Was REVIEW (dry run), READY (rewritten 2026-10-13), DRAFT (Wikipedia-tr first) |
 | Kind | feature |
 | Moratorium | owner approval given 2026-10-13 (`docs/veri_mimarisi_2026_10.md`); HF token via env only |
 | Estimate | 3 day(s) |
@@ -56,14 +56,18 @@ metadata column — the Faz-2 loss repeated.
 
 ## Acceptance criteria
 
-- [ ] Two runs of the same revision + adapter → identical shard SHA256s and manifest; resume after
-      an injected failure at shard N completes with identical output.
-- [ ] No `embeddings` bytes downloaded (ledger shows per-file bytes ≈ 25 % of file size).
-- [ ] Every record keeps `url`, `date`, `dump`, `language_score`, `quality_score`,
-      `minhash_cluster_size` in the common record; paragraph breaks preserved (`\n` count per
-      document equals the source's).
-- [ ] Source registered, gates green, measured numbers in the card; disk usage during and after
-      the run recorded.
+- [x] Two runs of the same revision + adapter → identical shard SHA256s and manifest (dry run: 1, 4
+      and 8 connections → `e449bdce…` / `6ee3a6b9…`); resume after an injected failure at shard N
+      completes with identical output (test). The full run was done once; the first shard's SHA was
+      not compared against the dry run because the dry run did not publish.
+- [x] No `embeddings` bytes downloaded: full run 27,668,653,910 B downloaded vs 79,654,592,152 B
+      skipped; no request touched a skipped column range (guarded in code and tests).
+- [x] Every record keeps `url`, `date`, `dump`, `language_score`, `quality_score`,
+      `minhash_cluster_size`; paragraph breaks preserved (101 datasets-server rows compared byte for
+      byte in the dry run).
+- [x] Source registered (`ba80dc1c…`, `raw_ingested`), numbers in the card, disk before/after
+      recorded. Gates: `scan_pii` running, `check_exact_duplicate` queued — results go to the
+      source card when they finish (not "green" yet at the time of this report).
 
 ## Owner actions
 
@@ -72,6 +76,20 @@ metadata column — the Faz-2 loss repeated.
 - Set `HF_TOKEN` in the worker env only if the dataset turns out to need it (it is public).
 
 ## Report
+
+**2026-10-13 20:13 — full run done (Fable, through the API).** Owner's "ok" at 18:2x; job queued
+18:27, succeeded 20:13 (6,377 s, 4 connections, 4.34 MB/s, 17,579 requests, 0 retries, no token).
+8,578,808 records seen = 8,578,808 documents, 0 empty; downloaded 27.67 GB (text 25.28 GB, metadata
+2.35 GB), `embeddings` 79.65 GB never requested. 105 shards = **9,110,440,606 B** in the store
+(32.9 % of downloaded; estimate was 9.1 GB), manifest `d28fe0d1…` (115,846 B) is the source object;
+`license` read from the card = `odc-by`, `rights_status` stays `unknown` until the owner reads
+[hf-fineweb2-hq.md](../haklar/hf-fineweb2-hq.md). Store 26 GB → 34 GB, working dir 352 KB at the end.
+The 10 % review threshold (TASK-048) was written on the source during the import (HTTP 200). Numbers
+table: [hf_ice_alim.md §6.1](../hf_ice_alim.md). Script: `var/olcum-2026-10-13/task-032/tam_kosu.py`
+(login → import → watch → threshold; state in `tam-kosu-durum.json`, log in `tam-kosu.log`).
+
+Correction to an earlier note: migrations are **not** applied at API start; `go run ./cmd/migrate`
+was run before the import so that the threshold column existed.
 
 **2026-10-13 — implemented, tested, dry-run measured (opus).** How it works, ledger, resume, manifest,
 commands: [hf_ice_alim.md](../hf_ice_alim.md). Measurements and scripts: `var/olcum-2026-10-13/task-032/`

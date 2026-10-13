@@ -192,6 +192,28 @@ belge_kaydi_v1.md'deki 1.000 belgelik kestirim 9,2 GB), 8.578.808 kayıt. Süre:
 tek dosyadan ölçekleme, kestirim. Disk: depo ≈ 9,1 GB parça + manifest; çalışma
 dizininde en çok bir parça (≈ 90 MB) + deponun geçici kopyası; ham indirme diske yazılmaz.
 
+### 6.1 Tam koşu (2026-10-13, iş kuyruğundan, `var/olcum-2026-10-13/task-032/tam_kosu.py`)
+
+Kurucu "ok" dedi; alım `POST /api/v1/sources/import-hf` ile 18:27'de (Europe/Istanbul) kuyruğa alındı,
+20:13'te bitti. Kaynak `ba80dc1c-b961-409d-a11f-60db7dcb7018` ("FineWeb2-HQ tur_Latn"), iş
+`14c9d292-14e0-4148-a7bc-974d297a4da2`.
+
+| Ölçüm | Değer | Kestirim (§6) |
+|---|---:|---:|
+| Süre | 6.377 s (1 sa 46 dk), 4 bağlantı | 70 dk |
+| Hız | 4,34 MB/s (kuru koşuda 6,49) | — |
+| İndirilen | 27.668.653.910 B: metin 25.280.533.704 + üstveri 2.353.487.717 + altbilgi/liste | ≈ 27,2 GB |
+| Atlanan (`embeddings`) | 79.654.592.152 B, hiç istek gitmedi | — |
+| Range isteği | 17.579; yeniden deneme 0; 429 yok; `HF_TOKEN` yok (public) | ≈ 17.400 |
+| Kayıt | 8.578.808 görüldü = 8.578.808 belge; boş metin 0; datasets-server `num_rows` ile birebir | 8.578.808 |
+| Parça | 105 parça (dosya başına 1), **9.110.440.606 B** depoda (indirilenin %32,9'u); en küçük 49,9 MB, en büyük 107,2 MB | ≈ 9,1 GB |
+| Manifest | `d28fe0d1…` (115.846 B), kaynağın nesnesi; `license` karttan `odc-by`; `rights_status` `unknown` (kurucu kararı sonra) | — |
+| Disk | depo 26 GB → 34 GB; çalışma dizini bitişte 352 KB; C: 166 GB boş | — |
+
+Hız kuru koşunun altında kaldı (4,34 / 6,49 MB/s); fark CDN'in o saatteki bağlantı başına hızı, ölçüm
+tekrarlanmadı. Alım bitince `scan_pii` ve `check_exact_duplicate` kuyruğa girdi; eşik (`%10`,
+TASK-048) alım sürerken `PUT …/pretrain-review-threshold` ile yazıldı (HTTP 200).
+
 ## 7. Sınırlar ve açık kalanlar
 
 - Sürüm freeze/ihracatı parça kaynaklarını okumuyor (kapalı tutuldu); `releases.py`'nin

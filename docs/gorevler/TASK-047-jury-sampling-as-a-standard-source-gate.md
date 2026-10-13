@@ -48,9 +48,9 @@ anchor.
       (purged 2026-10-13, TASK-043); its parent, the Faz-2 corpus, measured **48.0 % [41.2–54.9]**
       (manual v5 value 53 % [43–63] on 100 docs overlaps). Test-retest κ 0.91 / 0.84 (binary 0.92 /
       0.86), in line with the 0.88–0.92 measured in TASK-040.
-- [ ] Source card shows the four numbers; comparison view lists all pretrain sources — code and
-      web done; the numbers reach the cards when the owner runs `score … --apply-db` (the agent's
-      database write was blocked).
+- [x] Source card shows the four numbers; comparison view lists all pretrain sources — the owner
+      ran `score … --apply-db` for both runs on 2026-10-14 (`applied_to_db: true`;
+      `source_metadata.quality_numbers` present on `ba80dc1c…` and `06ac330e…`).
 - [ ] Cost per 200-document run measured — not yet: the verdicts came from Claude Code sessions
       (8 sonnet readers, 2 passes, 4 × 100 rows), not from the in-job API path; the per-run and
       daily caps are implemented and tested, the API path waits for `ANTHROPIC_API_KEY` and the

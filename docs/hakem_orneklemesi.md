@@ -162,6 +162,25 @@ Kaynak kartında "Kalite sayıları" bölümü (dört sayı, aralık, ölçüm k
 test-tekrar, koşu, kararlar, maliyet); Kaynaklar görünümünün altında açılır "Kalite
 karşılaştırması": bütün pretrain kaynakları yan yana.
 
+## Ölçüm (2026-10-13, `var/olcum-2026-10-13/task-047/`)
+
+Karma 400'lük kör dosya (200 FineWeb2-HQ + 200 Faz-2 ana korpus, karışık sıra) iki bağımsız geçişte
+dörder sonnet oturumuna okutuldu (oturum başına 100 satır; yalnız kılavuz; cevap anahtarı yasak).
+`jury split` ile koşulara bölündü, `jury score … --retest` ile puanlandı.
+
+| | FineWeb2-HQ `tur_Latn` | Faz-2 ana korpus |
+|---|---:|---:|
+| Hakem çöp (çöp + emin değilim) | **%46,5** [39,7–53,4] | **%48,0** [41,2–54,9] |
+| Yalnız çöp | %44,0 | %47,5 |
+| Test-tekrar κ (üç sınıf / ikili) | 0,91 / 0,92 | 0,84 / 0,86 |
+| Kural atma (`tr-web-v3`) | %0,5 | %1,5 |
+| PII isabeti | %0,5 | %3,5 |
+| Başlıca çöp nedenleri | makine çevirisi 42, SEO/ticari 25 | diğer 23, SEO/ticari 21, menü-spot 20, liste-katalog 17 |
+
+10-04 elle ölçümü (FineWeb2-HQ %43) aralığın içinde; v5 silindiği için karşılaştırma ebeveyniyle
+yapıldı. Kararlar `derlem.decision.v1` Parquet olarak koşu dizinlerinde; kartlara yazım
+(`--apply-db`) kurucuda.
+
 ## Sınırlar
 
 - PII ve kural oranları n=200 örneklem üzerindedir; seyrek olaylarda aralık geniştir

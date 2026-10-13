@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **IMPLEMENTED** — 2026-10-13; waiting for the jury run (verdicts) and the owner's budget approval. Requested 2026-10-13, owner: "I need to check each dataset's quality automatically" |
+| Status | **MEASURED** — 2026-10-13: jury run done on FineWeb2-HQ (junk 46.5 % [39.7–53.4], test-retest κ 0.91) and the parent corpus (48.0 % [41.2–54.9], κ 0.84); the manual 2026-10-04 number for FineWeb2-HQ (43 %) is inside the interval. Pending: `--apply-db` (owner runs it; blocked for the agent), owner anchor sheet (20 rows), budget approval + API key for in-job judging. Implemented 2026-10-13; requested 2026-10-13 |
 | Kind | feature (quality pipeline) |
 | Moratorium | owner approval given 2026-10-13 |
 | Estimate | 2 day(s) |
@@ -43,16 +43,49 @@ anchor.
 
 ## Acceptance criteria
 
-- [ ] FineWeb2-HQ and v5 re-measured through the job reproduce the manual 2026-10-04 numbers
-      within their intervals (43 % / 53 %).
-- [ ] Source card shows the four numbers; comparison view lists all pretrain sources.
-- [ ] Cost per 200-document run measured and written; daily cap enforced.
+- [x] FineWeb2-HQ re-measured through the sampler + rubric: **46.5 % [39.7–53.4]** (strict
+      cop-only 44.0 %), manual 2026-10-04 value 43 % is inside the interval. v5 no longer exists
+      (purged 2026-10-13, TASK-043); its parent, the Faz-2 corpus, measured **48.0 % [41.2–54.9]**
+      (manual v5 value 53 % [43–63] on 100 docs overlaps). Test-retest κ 0.91 / 0.84 (binary 0.92 /
+      0.86), in line with the 0.88–0.92 measured in TASK-040.
+- [ ] Source card shows the four numbers; comparison view lists all pretrain sources — code and
+      web done; the numbers reach the cards when the owner runs `score … --apply-db` (the agent's
+      database write was blocked).
+- [ ] Cost per 200-document run measured — not yet: the verdicts came from Claude Code sessions
+      (8 sonnet readers, 2 passes, 4 × 100 rows), not from the in-job API path; the per-run and
+      daily caps are implemented and tested, the API path waits for `ANTHROPIC_API_KEY` and the
+      owner's budget approval.
 
 ## Owner actions
 
 - Approve the model call budget per run and per day.
 
 ## Report
+
+**2026-10-13 — jury run and scoring (Fable + 8 sonnet readers).** The mixed 400-row blind file
+(`var/olcum-2026-10-13/task-047/karma-400/juri-kor.jsonl`, 200 FineWeb2-HQ + 200 parent corpus,
+shuffled) was read in two independent passes by four sonnet sessions each (100 rows per session,
+rubric `juri-siki-v1@50e993d6` only; answer key forbidden). Pass 1: 211 kalsın / 183 çöp / 6 emin
+değilim; pass 2: 209 / 183 / 8. `jury split` → per-run verdict files, `jury score … --retest` →
+`kalite-sayilari.json` + `kararlar.parquet` (400 decision rows per run: pass + retest).
+
+| | FineWeb2-HQ `tur_Latn` (n=200 of 8,578,808) | Faz-2 parent (n=200 of 6,027,965) |
+|---|---:|---:|
+| Jury junk (çöp + emin değilim) | **46.5 %** [39.7–53.4] | **48.0 %** [41.2–54.9] |
+| Strict (çöp only) | 44.0 % [37.3–50.9] | 47.5 % [40.7–54.4] |
+| Test-retest κ (3-class / binary) | 0.91 / 0.92 | 0.84 / 0.86 |
+| Rule drop (`tr-web-v3`) | 0.5 % (1/200) | 1.5 % (3/200) |
+| PII hit | 0.5 % (1/200) | 3.5 % (7/200) |
+| Top junk reasons | makine-çevirisi **42**, seo-ticari 25, diğer 6, liste-katalog 5, menü-spot 5 | diğer 23, seo-ticari 21, menü-spot 20, liste-katalog 17, forum-yığını 8, makine-çevirisi 3 |
+| Rule × jury | rule kept 92 of the 93 jury-junk docs | rule kept 95 of 96; 2 of 3 rule drops were jury-keep |
+
+Reading: the two corpora are equally dirty by this rubric, but for different reasons — FineWeb2-HQ's
+junk is machine translation (42 of 93 junk verdicts, 21 % of all documents) and commercial pages;
+the parent's is menu piles, lists, forums and commercial pages. `tr-web-v3` sees almost none of it on
+either (TASK-046 is the answer). Decisions: `fineweb2-hq-200/kararlar.parquet` sha `dbd80df9…`,
+`ana-korpus-200/kararlar.parquet` sha `78e7f5ef…`. Owner anchor: `fineweb2-hq-200/kurucu-20.md` (20
+hard rows: undecided, pass-disagreement, rule-conflict). The numbers are **not yet on the cards**:
+the agent's `--apply-db` was blocked; the owner runs the two `score … --apply-db` commands.
 
 **Status: IMPLEMENTED — waiting for the jury run and the owner's budget approval.** Design and
 usage: [docs/hakem_orneklemesi.md](../hakem_orneklemesi.md).

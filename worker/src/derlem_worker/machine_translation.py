@@ -219,7 +219,7 @@ THRESHOLD_SETS: dict[str, MachineTranslationThresholds] = {
 """Kurucunun sececegi iki hedef cifti (TASK-046 / TASK-049). Olculen degerler; elle
 oynanmaz -- yeni bir cift yeni olcum ister."""
 
-MT_TARGET = "A"
+MT_TARGET = "B"
 """POLITIKA SABITI: hangi hedef cifti uygulanir ("A" ya da "B"). Tek degisiklik
 noktasi budur. Bu dosya `quality_v4.RULE_SOURCE_FILES` icinde oldugundan secim
 yargic kimligine (`tr-web-v4@<sha>`) girer: A ile B ayni kimligi tasiyamaz."""

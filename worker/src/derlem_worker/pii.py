@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
 import re
@@ -58,7 +59,10 @@ class PIIScanner:
         language: str,
         progress_callback: ProgressCallback | None = None,
         progress_interval_bytes: int = PROGRESS_INTERVAL_BYTES,
+        store_root: Path | None = None,
     ) -> PIIReport:
+        """Satir satir tarar. ``store_root`` verilir ve nesne bir alim manifestiyse
+        (TASK-032) manifestin parcalarindaki belge metinleri taranir."""
         if progress_interval_bytes <= 0:
             raise ValueError("progress_interval_bytes must be positive")
         # Dil zorunlu ve varsayilani yok: bilinmeyen dili 'tr' saymak ayni yalani
@@ -70,7 +74,17 @@ class PIIScanner:
         lines_read = 0
         next_progress_at = progress_interval_bytes
         last_reported_bytes = -1
-        with path.open("rb") as source:
+        manifest = None
+        if store_root is not None:
+            from derlem_worker.import_manifest import load_import_manifest, manifest_text_units
+
+            manifest = load_import_manifest(path)
+        with ExitStack() as stack:
+            if manifest is not None:
+                total_bytes = int(manifest["totals"]["text_utf8_bytes"]) + int(manifest["totals"]["documents"])
+                source = manifest_text_units(manifest, store_root)
+            else:
+                source = stack.enter_context(path.open("rb"))
             for raw_line in source:
                 bytes_processed += len(raw_line)
                 lines_read += 1

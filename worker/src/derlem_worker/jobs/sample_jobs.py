@@ -64,6 +64,7 @@ class SampleJobsMixin:
                 max_document_bytes=self.config.max_document_bytes,
                 seed=object_sha256,
                 progress_callback=update_sampling_progress,
+                store_root=self.config.storage_root,
             )
             publish_progress = dict(latest_progress)
             publish_progress["samples_selected"] = len(report.samples)

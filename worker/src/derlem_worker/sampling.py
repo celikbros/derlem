@@ -79,6 +79,7 @@ def sample_line_documents(
     seed: str,
     progress_callback: ProgressCallback | None = None,
     progress_interval_bytes: int = PROGRESS_INTERVAL_BYTES,
+    store_root: Path | None = None,
 ) -> SamplingReport:
     if sample_size <= 0 or max_document_bytes <= 0 or progress_interval_bytes <= 0:
         raise ValueError("Sampling limits must be positive")
@@ -108,9 +109,10 @@ def sample_line_documents(
             }
         )
 
-    for ordinal, raw_line, oversized in _bounded_lines(
+    for ordinal, raw_line, oversized in source_document_lines(
         path,
         max_document_bytes,
+        store_root=store_root,
         progress_callback=report_progress,
         progress_interval_bytes=progress_interval_bytes,
     ):
@@ -233,6 +235,38 @@ def score_document_risk(text: str, raw_line: str | None = None) -> tuple[int, tu
                 score += 2
 
     return min(score, 10), tuple(reasons)
+
+
+def source_document_lines(
+    path: Path,
+    max_bytes: int,
+    *,
+    store_root: Path | None = None,
+    progress_callback: ByteProgressCallback | None = None,
+    progress_interval_bytes: int = PROGRESS_INTERVAL_BYTES,
+):
+    """Kaynak nesnesinin belgeleri ``_bounded_lines`` sozlesmesiyle.
+
+    Nesne bir alim manifestiyse (TASK-032, ``store_root`` gerekli) belgeler
+    depodaki Parquet parcalarindan gelir: her belge tek satirlik
+    ``{"id","text"}`` JSON'u, sira numarasi belgenin ``source_ordinal``'i.
+    Degilse dosya satir satir okunur (bugunku yol, degismedi).
+    """
+    if store_root is not None:
+        from derlem_worker.import_manifest import load_import_manifest, manifest_document_lines
+
+        manifest = load_import_manifest(path)
+        if manifest is not None:
+            return manifest_document_lines(
+                manifest,
+                store_root,
+                max_bytes,
+                progress_callback=progress_callback,
+                progress_interval_bytes=progress_interval_bytes,
+            )
+    return _bounded_lines(
+        path, max_bytes, progress_callback=progress_callback, progress_interval_bytes=progress_interval_bytes
+    )
 
 
 def _bounded_lines(

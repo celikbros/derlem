@@ -21,13 +21,22 @@ from derlem_worker.storage import ContentAddressedStore, IngestOutcome, StoredOb
 from derlem_worker.jobs.queue import LOGGER
 from derlem_worker.jobs.distill_jobs import DistillJobsMixin
 from derlem_worker.jobs.gate_jobs import GateJobsMixin
+from derlem_worker.jobs.hf_import_jobs import HFImportJobsMixin
 from derlem_worker.jobs.ingest_jobs import IngestJobsMixin
 from derlem_worker.jobs.queue import QueueMixin
 from derlem_worker.jobs.release_jobs import ReleaseJobsMixin
 from derlem_worker.jobs.sample_jobs import SampleJobsMixin
 
 
-class Worker(QueueMixin, IngestJobsMixin, GateJobsMixin, SampleJobsMixin, ReleaseJobsMixin, DistillJobsMixin):
+class Worker(
+    QueueMixin,
+    IngestJobsMixin,
+    GateJobsMixin,
+    SampleJobsMixin,
+    ReleaseJobsMixin,
+    DistillJobsMixin,
+    HFImportJobsMixin,
+):
     def __init__(self, config: Config, worker_id: str | None = None) -> None:
         self.config = config
         self.worker_id = worker_id or f"{socket.gethostname()}-{os.getpid()}"
@@ -231,6 +240,18 @@ class Worker(QueueMixin, IngestJobsMixin, GateJobsMixin, SampleJobsMixin, Releas
                     job.payload.get("release_id"),
                     job.payload.get("format"),
                     export_sha256,
+                )
+            elif job.job_type == "import_hf_dataset":
+                result = self._import_hf_dataset(job)
+                with psycopg.connect(self.config.database_url) as connection:
+                    self._assert_job_ownership(connection, job)
+                    self._complete_hf_import(connection, job, result)
+                LOGGER.info(
+                    "job_succeeded job_id=%s manifest_sha256=%s shards=%s documents=%s",
+                    job.id,
+                    result.manifest_sha256,
+                    result.manifest["totals"]["shards"],
+                    result.manifest["totals"]["documents"],
                 )
             elif job.job_type == "distill_source":
                 result = self._distill_source(job)

@@ -210,6 +210,28 @@ def _snapshot_verified_object(
             pass
 
 
+def _refuse_import_manifest_source(path: Path, source_id: str) -> None:
+    """HF alim kaynagi (nesnesi derlem.import-manifest.v1) freeze/ihracatta kapali kalir.
+
+    Freeze kapilari (yakin kopya, decontamination) ve ihracat nesneyi satir satir
+    okur; manifest satirlarini belge sanmamalari icin acikca durdurulur. Parca
+    okuyan freeze yolu ayri is (docs/hf_ice_alim.md, acik kalanlar).
+    """
+    from derlem_worker.import_manifest import load_import_manifest
+
+    if load_import_manifest(path) is not None:
+        raise ReleaseGateError(
+            "Imported document-shard sources are not yet supported by release freeze/export",
+            {
+                "source_gate": {
+                    "status": "blocked",
+                    "reason": "document_shards_source_not_supported",
+                    "source_id": source_id,
+                }
+            },
+        )
+
+
 class ReleaseJobsMixin:
     def _freeze_release(self, job: Job) -> str:
         release_id = str(job.payload.get("release_id", "")).strip()
@@ -446,6 +468,7 @@ class ReleaseJobsMixin:
                     ),
                 )
             )
+            _refuse_import_manifest_source(release_paths[-1][1], str(source["source_id"]))
             if source["data_origin"] in {"model", "hybrid"}:
                 if (
                     source["production_run_manifest_storage_key"] is None

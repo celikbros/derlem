@@ -63,7 +63,7 @@ func main() {
 		FailureWindow:       cfg.LoginFailureWindow,
 		LockoutDuration:     cfg.LoginLockoutDuration,
 	}, cfg.JWTSecret)
-	api := httpapi.NewServer(pool, objectStore, tokens, sessions, loginLimiter, logger, cfg.WebOrigin, cfg.StagingRoot, cfg.ImportRoot, cfg.MaxUploadBytes)
+	api := httpapi.NewServer(pool, objectStore, tokens, sessions, loginLimiter, logger, cfg.WebOrigin, cfg.StagingRoot, cfg.ImportRoot, cfg.MaxUploadBytes).WithAdaptersRoot(cfg.AdaptersRoot)
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           api.Handler(),

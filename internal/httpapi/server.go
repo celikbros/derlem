@@ -28,6 +28,7 @@ type Server struct {
 	webOrigin      string
 	stagingRoot    string
 	importRoot     string
+	adaptersRoot   string
 	maxUploadBytes int64
 }
 
@@ -50,6 +51,13 @@ func NewServer(pool *pgxpool.Pool, objectStore storage.Store, tokens *auth.Token
 		importRoot:     importRoot,
 		maxUploadBytes: maxUploadBytes,
 	}
+}
+
+// WithAdaptersRoot, HF alim uyarlayicilarinin (adapters/*.yaml) koku (TASK-032).
+// Uyarlayici yolu IMPORT_ROOT ya da bu kok altinda olmalidir.
+func (s *Server) WithAdaptersRoot(root string) *Server {
+	s.adaptersRoot = root
+	return s
 }
 
 func (s *Server) Handler() http.Handler {

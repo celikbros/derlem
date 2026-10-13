@@ -11,6 +11,7 @@ from derlem_worker.sampling import (
     _bounded_lines,
     _document_from_line,
     sample_line_documents,
+    source_document_lines,
 )
 from derlem_worker.jobs.queue import Job
 
@@ -51,6 +52,7 @@ class GateJobsMixin:
         with psycopg.connect(self.config.database_url) as progress_connection:
             report = self.pii_scanner.scan_file(
                 object_path,
+                store_root=self.config.storage_root,
                 # Dil kaynak kaydindan gelir; tarayici desteklemedigi dilde
                 # "clear" yerine not_evaluated doner.
                 language=str(row["language"]),
@@ -343,9 +345,10 @@ class GateJobsMixin:
                         },
                     )
 
-                for ordinal, raw_line, oversized in _bounded_lines(
+                for ordinal, raw_line, oversized in source_document_lines(
                     object_path,
                     self.config.max_document_bytes,
+                    store_root=self.config.storage_root,
                     progress_callback=report_fingerprint_progress,
                 ):
                     lines_read = ordinal

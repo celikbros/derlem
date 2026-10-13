@@ -33,6 +33,10 @@ class Config:
     extraction_max_docx_uncompressed_bytes: int
     extraction_max_pdf_pages: int
     extraction_max_output_chars: int
+    # TASK-032: HF alimi. Uyarlayici yollari IMPORT_ROOT ya da ADAPTERS_ROOT altinda
+    # olmalidir; Range okumasi icin paralel baglanti sayisi (1-8).
+    adapters_root: Path = Path("adapters").resolve()
+    hf_import_connections: int = 4
 
 
 def load_config() -> Config:
@@ -75,6 +79,8 @@ def load_config() -> Config:
         extraction_max_output_chars=_positive_int_env(
             "EXTRACTION_MAX_OUTPUT_CHARS", DEFAULT_MAX_OUTPUT_CHARS
         ),
+        adapters_root=Path(os.environ.get("ADAPTERS_ROOT", "./adapters")).resolve(),
+        hf_import_connections=min(8, _positive_int_env("HF_IMPORT_CONNECTIONS", 4)),
     )
 
 

@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **IMPLEMENTED — execute bekliyor** (2026-10-13). Tool, plan, drill change and tests are in; the live database has only seen a READ ONLY dry-run. The owner runs `--execute` (command in Report). Opened DRAFT 2026-09-22 |
+| Status | **DONE** — 2026-10-13 17:26 (owner ran `--execute`): 16 sources, 7 smoke releases, 20.3 M rows deleted; 1,608 objects / 47.48 GB quarantined outside the repo; store now 214 objects = 214 DB rows, no orphans; record in `deploy/purged_objects.jsonl` + `audit_events` (`sources_purged`). Opened DRAFT 2026-09-22 |
 | Kind | ops (storage lifecycle) |
 | Moratorium | allowed — housekeeping, no product surface |
 | Estimate | 0.5 day (actual ~1 day: scope grew, see below) |
@@ -77,11 +77,15 @@ candidates exist only in the store.
 
 ## Acceptance criteria
 
-- [ ] Retirement appears in the audit trail (a review row), not only in a file.
-- [ ] Drill passes with retired objects absent and still fails on an unlisted missing object
-      (control run).
-- [ ] v1, v3 and v4 candidates retired and purged; freed bytes measured; the backup mirror no
-      longer carries them.
+- [x] Retirement appears in the audit trail — as an `audit_events` row (`sources_purged`,
+      2026-10-13 17:26 Europe/Istanbul), not a review row (scope changed by the owner: rows are
+      deleted, so a review row could not survive).
+- [x] Drill passes with purged objects absent and still fails on an unlisted missing object
+      (permanent test `test_sha_removed_from_the_list_turns_the_drill_red`).
+- [x] v1, v3, v4 **and v5** candidates, three held-outs, nine smoke sources and seven smoke
+      releases purged; 47,480,123,757 B moved to quarantine (disk frees when the owner deletes
+      the folder). The backup mirror still carries the July objects (v1 + smoke); pruning the
+      mirror is a separate owner decision (`backup_restore.md`, deliberate-deletion rule).
 
 ## Owner actions
 
@@ -90,7 +94,17 @@ candidates exist only in the store.
 
 ## Report
 
-2026-10-13 — implemented; **execute pending (owner runs it)**.
+**2026-10-13 17:26 — executed by the owner** (the agent-blocked run; the owner ran the exact
+command). First run: 16 sources + 7 releases + 20,308,352 rows deleted in one transaction, 1,608
+objects moved to `C:\CELIKBROS PROJECTS\derlem-cop-2026-10-13-nesneler`, `deploy/purged_objects.jsonl`
+1,608 lines (sum 47,480,123,757 B), one `sources_purged` audit row. The first attempt had been
+refused because the candidates' local manifests had been quarantined early (restored, then
+re-quarantined after the run; `manifest_sha256` is in the log). A second `--execute` by the owner
+was refused ("plan kaynağı veritabanında yok") and overwrote `execute.txt`, so the execute report
+file shows the refusal; the log and the audit row are the record. After: 11 sources, 0 releases,
+214 objects on disk = 214 `storage_objects` rows, 0 orphans, `var/storage` 26 GB (was 57 GB).
+
+2026-10-13 — implemented (dry-run only at that point).
 
 **What was built**
 

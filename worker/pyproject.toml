@@ -26,5 +26,9 @@ derlem-worker = "derlem_worker.main:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+# TASK-047: hakem kilavuzu paketle gelir; SHA'si judge id'ye girer.
+[tool.setuptools.package-data]
+derlem_worker = ["rubrics/*.md"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

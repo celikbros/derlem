@@ -23,9 +23,11 @@ from derlem_worker.jobs.distill_jobs import DistillJobsMixin
 from derlem_worker.jobs.gate_jobs import GateJobsMixin
 from derlem_worker.jobs.hf_import_jobs import HFImportJobsMixin
 from derlem_worker.jobs.ingest_jobs import IngestJobsMixin
+from derlem_worker.jobs.jury_jobs import JuryJobsMixin
 from derlem_worker.jobs.queue import QueueMixin
 from derlem_worker.jobs.release_jobs import ReleaseJobsMixin
 from derlem_worker.jobs.sample_jobs import SampleJobsMixin
+from derlem_worker.jury import JuryError
 
 
 class Worker(
@@ -36,6 +38,7 @@ class Worker(
     ReleaseJobsMixin,
     DistillJobsMixin,
     HFImportJobsMixin,
+    JuryJobsMixin,
 ):
     def __init__(self, config: Config, worker_id: str | None = None) -> None:
         self.config = config
@@ -259,6 +262,12 @@ class Worker(
                     "job_succeeded job_id=%s provider=%s document_count=%s",
                     job.id, result["provider"], result["document_count"],
                 )
+            elif job.job_type == "jury_sample":
+                result = self._jury_sample(job)
+                LOGGER.info(
+                    "job_succeeded job_id=%s run_id=%s jury_status=%s calls=%s",
+                    job.id, result["run_id"], result["jury_status"], result["calls"],
+                )
             else:
                 raise ValueError(f"Unsupported job type: {job.job_type}")
         except Exception as error:  # Worker boundary: failure must be persisted.
@@ -269,7 +278,9 @@ class Worker(
                     connection,
                     job,
                     error,
-                    permanent=isinstance(error, ReleaseGateError),
+                    # Hakem isi: butce asimi ve hakem hatasi yeniden denenmez
+                    # (yeniden deneme ucretli cagrilari tekrarlar; TASK-047).
+                    permanent=isinstance(error, (ReleaseGateError, JuryError)),
                 )
         finally:
             # Derived extraction files are attempt-local and can always be

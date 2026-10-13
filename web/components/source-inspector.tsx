@@ -24,6 +24,7 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import { JobStatus } from "@/components/jobs-panel";
 import { EvidenceHash } from "@/components/evidence-hash";
+import { QualityNumbersSection } from "@/components/quality-numbers";
 import { messageFrom, requestJSON } from "@/lib/client-api";
 import { piiStatusText } from "@/lib/pii";
 import { isSectionLabel, readableParagraphs } from "@/lib/readable-document";
@@ -983,6 +984,8 @@ export function SourceInspector({
           </div>
         )}
       </section>
+
+      <QualityNumbersSection source={source} />
 
       {canIngestSource && !source.object_sha256 && (
         <section className="inspector-section">

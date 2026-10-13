@@ -4458,3 +4458,41 @@ dialog::backdrop {
     grid-template-columns: 1fr;
   }
 }
+
+/* TASK-047: kalite sayilari (kaynak karti) ve pretrain karsilastirmasi */
+.quality-interval {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.quality-provenance {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 10px;
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+
+.quality-provenance dt {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.quality-provenance dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.quality-comparison {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.quality-comparison > summary {
+  cursor: pointer;
+  padding: 10px 12px;
+  font-weight: 700;
+}

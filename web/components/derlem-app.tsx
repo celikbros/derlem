@@ -31,6 +31,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "re
 import { ContributionsPanel } from "@/components/contributions-panel";
 import { GuidePanel } from "@/components/guide-panel";
 import { JobsPanel } from "@/components/jobs-panel";
+import { QualityComparison } from "@/components/quality-numbers";
 import { ReleasePanel } from "@/components/release-panel";
 import { SimilarityReviewPanel } from "@/components/similarity-review-panel";
 import { SourceInspector } from "@/components/source-inspector";
@@ -525,6 +526,7 @@ export function DerlemApp() {
                 </div>
               )}
             </div>
+            {activeView === "sources" && !focusedReview && <QualityComparison sources={sources} onSelect={setSelected} />}
           </div>
 
           {selected && <SourceInspector source={selected} user={user} reviewMode={focusedReview} onClose={() => setSelected(null)} onNotice={setNotice} onRefresh={loadSources} onChanged={(updated) => { setSelected(updated); setSources((current) => current.map((source) => source.id === updated.id ? updated : source)); }} />}

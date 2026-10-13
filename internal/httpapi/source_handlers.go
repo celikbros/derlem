@@ -329,11 +329,14 @@ func (s *Server) reviewSource(w http.ResponseWriter, r *http.Request) {
 	}
 	var gateError *repository.GateError
 	if errors.As(err, &gateError) {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
-			"error": map[string]any{
-				"code": "review_gate_blocked", "message": "Kaynak inceleme kapılarından geçemedi.", "reasons": gateError.Reasons,
-			},
-		})
+		body := map[string]any{
+			"code": "review_gate_blocked", "message": "Kaynak inceleme kapılarından geçemedi.", "reasons": gateError.Reasons,
+		}
+		if gateError.Detail != "" {
+			// TASK-048: ölçülen ret oranı ve eşik (boşsa gövde eskisiyle aynı).
+			body["detail"] = gateError.Detail
+		}
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"error": body})
 		return
 	}
 	if err != nil {

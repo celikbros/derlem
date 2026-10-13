@@ -1,45 +1,75 @@
-# TASK-032 — In-app `import_hf_dataset` job: pinned revision, licence required, one record = one document, shard-resumable — Wikipedia-tr first
+# TASK-032 — In-app `import_hf_dataset` job: pinned revision, adapter-driven columns, selective parquet read, shard-resumable — FineWeb2-HQ first
 
 | Field | Value |
 |---|---|
-| Status | **DRAFT** — from the 2026-09-19 plan ([plan_2026_09.md](../plan_2026_09.md), Faz 4); needs the owner's approval before work starts |
+| Status | **READY** — rewritten 2026-10-13 after the owner's "yes to all three" (download without embeddings, build the architecture with this import, write the two rules after); was DRAFT (Wikipedia-tr first) |
 | Kind | feature |
-| Moratorium | **owner approval required** — owner ordering #2; new worker dependencies; HF token via env only |
+| Moratorium | owner approval given 2026-10-13 (`docs/veri_mimarisi_2026_10.md`); HF token via env only |
 | Estimate | 3 day(s) |
-| Depends on | TASK-013, TASK-022, TASK-024, TASK-030 |
-| Owner | (unassigned) |
+| Depends on | TASK-044 (common document record + adapter); licence note `docs/haklar/hf-fineweb2-hq.md` (done) |
+| Owner | (unassigned) — opus |
 
 ## Goal
 
-Import a Hugging Face dataset revision inside Derlem as a registered source with machine-readable licence, preserved document boundaries and reproducible bytes.
+Import a pinned Hugging Face dataset revision as a registered Derlem source: adapter-defined
+columns, **only the columns we need** (no `embeddings`), one record = one document with paragraph
+breaks preserved, per-shard SHA with resume, a production manifest, then the standard gates.
 
 ## Why
 
-The only large volume lever (TASK-013 options 2–3). Rights (TASK-030), boundaries (TASK-022) and the overlap pilot (TASK-024) were done first so the new volume inherits neither the `celik_gold` problem nor the parent's flat lines.
+The owner chose FineWeb2-HQ `tur_Latn` as the base of the next corpus (decision B, 2026-09-29;
+measured 2026-10-04 in [fineweb2_hq_degerlendirmesi_2026_10.md](../fineweb2_hq_degerlendirmesi_2026_10.md)).
+Full download is 107.3 GB of which 74.7 % is a 768-dim embedding column we do not use; selective
+column reading over HTTP Range was tried on one file and works (two requests per row group,
+byte-exact). Text + metadata ≈ 27.3 GB; disk has 57 GB. Today's intake would also drop every
+metadata column — the Faz-2 loss repeated.
 
 ## Scope
 
-- Worker job `import_hf_dataset(dataset_id, config, split, revision)`: streaming download to `IMPORT_ROOT` by shard with per-shard SHA and resume; one document per record with paragraph breaks preserved in JSONL (never split); production manifest (repo, config, split, revision SHA, text field, record count, licence id, dataset-card snapshot SHA); register via the existing intake with `lineage_ref` = manifest, `license_id` from the card, `rights_status` per the licence note; gates follow.
-- API endpoint + minimal admin/data_manager form fields (`DisallowUnknownFields`); progress counters like exports.
-- Boundary rule per the policy note [belge_sinirlari_politikasi.md](../belge_sinirlari_politikasi.md) (TASK-022, §4): one record = one document, never split or merged; the text field only (title stays metadata); paragraph breaks kept as `\n` in the stored JSONL object and joined to a single space only by the txt export.
-- Dry run of one record first (measured), then the full config.
-- Tests with a local fixture dataset (no network): revision pinning, boundary preservation, resume after injected failure with identical SHA; control run. Docs `docs/hf_ice_alim.md`.
+- Worker job `import_hf_dataset(adapter_path)`: the adapter yaml (TASK-044) names dataset,
+  revision, config, split, columns to read, column map, skipped columns, boundary rule.
+- Parquet path: list files at the pinned revision (HF tree API, sizes + SHA/etag), read each
+  file's footer, then read only the mapped columns row-group by row-group over HTTP Range
+  (pyarrow); write common-record Parquet shards (TASK-044 schema) straight into `IMPORT_ROOT`,
+  one shard per source file; per-shard SHA256 and row count in a progress ledger; **resume** skips
+  shards whose SHA matches the ledger. No full-file download ever.
+- JSONL/CSV/TSV path for small datasets (mevzuat, instruction sets): same adapter contract,
+  whole-file download with size + SHA check.
+- Registration via the existing intake: source with `lineage_ref` = manifest (dataset, revision,
+  config, split, columns, record count, bytes per column class, licence id, card snapshot SHA),
+  `rights_status` and `license_evidence_ref` from the licence note; gates follow automatically.
+- Production manifest written next to the shards; two runs of the same revision + adapter must
+  produce identical shard SHAs (determinism test with a local fixture dataset served from a
+  temp HTTP server — no network in tests).
+- Progress counters like exports (shards done / total, bytes, MB/s); API endpoint
+  `POST /api/v1/sources/import-hf` (admin only, `DisallowUnknownFields`), minimal form later.
+- Dry run: one row group first (measured), then one file, then all 105.
+- Measured in the card: bytes downloaded vs. full size, documents, download minutes and MB/s
+  (single vs. parallel connections — the 1.9 MB/s single-connection figure must be beaten or
+  explained), ingest minutes, gate results, net-new share against the family-excluded corpus.
 
 ## Out of scope
 
-- Reusing `mc4_scraper.py` as-is.
-- mC4-tr (separate go/no-go after Wikipedia-tr is measured).
-- Quality-filter changes (need TASK-020's number).
+- The two new quality rules (TASK-046) — they run on the imported data, they do not gate the import.
+- mC4-tr remainder, FineWeb-2 (non-HQ): separate go/no-go after this run is measured.
+- Tokenized export (TASK-033).
 
 ## Acceptance criteria
 
-- [ ] Two runs of the same repo+revision → same object SHA256; source registered with `lineage_ref` containing the revision SHA and `license_id` set; zero documents shorter than the record boundary.
-- [ ] Resume test: kill after N shards → rerun completes with identical output SHA.
-- [ ] Measured in the card: bytes, documents, download and ingest minutes, MB/s, drop rates per reason, external duplicates against the family-excluded corpus, net-new tokens (into TASK-013).
+- [ ] Two runs of the same revision + adapter → identical shard SHA256s and manifest; resume after
+      an injected failure at shard N completes with identical output.
+- [ ] No `embeddings` bytes downloaded (ledger shows per-file bytes ≈ 25 % of file size).
+- [ ] Every record keeps `url`, `date`, `dump`, `language_score`, `quality_score`,
+      `minhash_cluster_size` in the common record; paragraph breaks preserved (`\n` count per
+      document equals the source's).
+- [ ] Source registered, gates green, measured numbers in the card; disk usage during and after
+      the run recorded.
 
 ## Owner actions
 
-- Approve the card, the dependencies and the first dataset/revision; set the HF token in the worker env if needed; decide disk location and whether HF raw downloads are outside backup scope; go/no-go per dataset with disk numbers.
+- Decide backup scope for the raw import (recommendation: outside — reproducible from
+  revision + adapter + manifest).
+- Set `HF_TOKEN` in the worker env only if the dataset turns out to need it (it is public).
 
 ## Report
 

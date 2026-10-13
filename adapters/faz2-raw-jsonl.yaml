@@ -1,0 +1,20 @@
+# Faz-2 ham arsivi (var/raw-derlem/ham-derlem/*.jsonl) -> derlem.document.v1
+# Kayit alanlari her dosyada ayni: yalniz {"text", "source"} (docs/belge_sinirlari_politikasi.md 1).
+# revision = arsivin SHA256SUMS dosyasinin SHA256'si: sekiz dosyanin hepsini birden sabitler.
+# "source" etiketi (wikipedia, mc4, ttk_belleten, ...) Faz-2 birlestirmesinde kaybolan
+# bilgidir; burada extra'da korunur.
+dataset: derlem/faz2-ham-derlem
+revision: 15c06ce913ab41cbceaf4d5a7b036f073ee19fa35a05881e314ad8e4ff20fc33
+format: jsonl
+target: derlem.document.v1
+document_boundary: record
+columns_read:
+  - text
+  - source
+columns_skipped: []
+map:
+  text: text
+constants:
+  language.declared: tr
+extra:
+  - source

@@ -14,6 +14,12 @@ from derlem_worker.sampling import _bounded_lines, _document_from_line
 from derlem_worker.canonical import CanonicalSampleError, parse_canonical_sample
 
 
+# TASK-044: duz metin JSONL kaydi belge kaydinin dort grubunu ekli olarak tasir.
+# Satir kaynaklarinda (Faz-2 ve oncesi) bu bilgi hic olmadi: alanlar null. Mevcut
+# alanlar ve TXT ihracati bayt bayt degismez (docs/canonical_exports.md).
+DOCUMENT_RECORD_EXPORT_FIELDS = ("language", "provenance", "rights", "signals")
+
+
 QUALITY_BASIS = "active-pinned-campaign-or-legacy-review-v1"
 QUALITY_RUBRIC = "multidimensional-v1"
 QUALITY_DIMENSIONS = (
@@ -721,9 +727,34 @@ def build_release_export(
             source_id = str(source["source_id"])
             source_sha256 = str(source["source_sha256"])
             source_records = 0
-            for ordinal, raw_line, oversized in _bounded_lines(
-                Path(str(source["path"])),
-                max_document_bytes,
+            if source.get("document_shards") is not None:
+                for encoded, text in _document_shard_export_records(
+                    release, source, export_format, max_document_bytes
+                ):
+                    input_bytes_processed += len(text.encode("utf-8")) + 1
+                    semantic_statistics.add((text,))
+                    output.write(encoded)
+                    digest.update(encoded)
+                    byte_size += len(encoded)
+                    record_count += 1
+                    source_records += 1
+                    record_type_counts["text"] = record_type_counts.get("text", 0) + 1
+                    if progress_callback is not None and record_count % progress_interval == 0:
+                        token_estimate = semantic_statistics.estimate()
+                        progress_callback(
+                            {
+                                "input_bytes_processed": input_bytes_processed,
+                                "records_written": record_count,
+                                "sources_completed": source_index - 1,
+                                "source_count": len(sorted_sources),
+                                "output_bytes_written": byte_size,
+                                "estimated_tokens": token_estimate.estimated_token_count,
+                            }
+                        )
+            for ordinal, raw_line, oversized in (
+                ()
+                if source.get("document_shards") is not None
+                else _bounded_lines(Path(str(source["path"])), max_document_bytes)
             ):
                 if oversized:
                     raise ReleaseGateError(
@@ -818,6 +849,7 @@ def build_release_export(
                         record = {
                             "id": stable_id,
                             "text": text,
+                            **{name: None for name in DOCUMENT_RECORD_EXPORT_FIELDS},
                             "metadata": {
                                 "content_purpose": str(release["content_purpose"]),
                                 "document_sha256": document_sha256,
@@ -883,6 +915,97 @@ def build_release_export(
         record_type_counts=record_type_counts,
         token_estimate=semantic_statistics.estimate(),
     )
+
+
+def _document_shard_export_records(
+    release: dict[str, object],
+    source: dict[str, object],
+    export_format: str,
+    max_document_bytes: int,
+) -> Iterator[tuple[bytes, str]]:
+    """derlem.document.v1 parcalarindan ihracat kayitlari (sira numarasi sirasinda).
+
+    Kimlik kurali satir kaynaklariyla aynidir (kaynak SHA + sira no + metin SHA);
+    doc_id metnin SHA'si degilse ihracat durur.
+    """
+    from derlem_worker.document_record import read_documents
+
+    source_id = str(source["source_id"])
+    source_sha256 = str(source["source_sha256"])
+    last_ordinal = 0
+    for shard in source["document_shards"]:  # type: ignore[union-attr]
+        for document in read_documents(Path(str(shard))):
+            ordinal = int(document["source_ordinal"])
+            text = str(document["text"])
+            document_sha256 = hashlib.sha256(text.encode("utf-8")).hexdigest()
+            if document["doc_id"] != document_sha256:
+                raise ReleaseGateError(
+                    f"Document {ordinal} doc_id does not match its text",
+                    {
+                        "export": {
+                            "status": "blocked",
+                            "reason": "document_id_mismatch",
+                            "source_id": source_id,
+                            "source_ordinal": ordinal,
+                        }
+                    },
+                )
+            if ordinal <= last_ordinal:
+                raise ReleaseGateError(
+                    f"Document shard order broken at {ordinal}",
+                    {
+                        "export": {
+                            "status": "blocked",
+                            "reason": "document_order",
+                            "source_id": source_id,
+                            "source_ordinal": ordinal,
+                        }
+                    },
+                )
+            last_ordinal = ordinal
+            if len(text.encode("utf-8")) > max_document_bytes:
+                raise ReleaseGateError(
+                    f"Document at ordinal {ordinal} exceeds the export limit",
+                    {
+                        "export": {
+                            "status": "blocked",
+                            "reason": "document_too_large",
+                            "source_id": source_id,
+                            "source_ordinal": ordinal,
+                            "max_document_bytes": max_document_bytes,
+                        }
+                    },
+                )
+            if export_format == "txt":
+                single_line_text = text.replace("\r\n", "\n").replace("\r", "\n").replace("\n", " ")
+                yield (single_line_text + "\n").encode("utf-8"), text
+                continue
+            stable_id = hashlib.sha256(
+                f"{source_sha256}:{ordinal}:{document_sha256}".encode("ascii")
+            ).hexdigest()
+            provenance = document["provenance"]
+            record = {
+                "id": stable_id,
+                "text": text,
+                "language": document["language"],
+                "provenance": provenance,
+                "rights": document["rights"],
+                "signals": document["signals"],
+                "metadata": {
+                    "content_purpose": str(release["content_purpose"]),
+                    "document_sha256": document_sha256,
+                    "domain": str(source["domain"]),
+                    "external_id": provenance.get("external_id"),
+                    "language": str(source["language"]),
+                    "license": str(source["license"]),
+                    "source_id": source_id,
+                    "source_ordinal": ordinal,
+                    "source_sha256": source_sha256,
+                },
+            }
+            yield (
+                json.dumps(record, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
+            ).encode("utf-8"), text
 
 
 def build_export_manifest(

@@ -2,7 +2,7 @@
 
 **Surum:** `derlem.export-manifest.v2`
 
-**Durum:** Calisan MVP
+**Durum:** Calisan MVP · JSONL kaydi belge ustverisi tasir (TASK-044, 2026-10-13)
 
 **Formatlar:** JSONL, TXT
 
@@ -24,6 +24,7 @@ kaydi geriye uyumlu belge bicimini korur:
 ```json
 {
   "id": "stable-document-id",
+  "language": null,
   "metadata": {
     "content_purpose": "pretrain",
     "document_sha256": "...",
@@ -35,12 +36,38 @@ kaydi geriye uyumlu belge bicimini korur:
     "source_ordinal": 42,
     "source_sha256": "..."
   },
+  "provenance": null,
+  "rights": null,
+  "signals": null,
   "text": "Belge metni"
 }
 ```
 
 Alanlar alfabetik ve kompakt JSON serilestirmesiyle yazilir. UTF-8 karakterler
 ASCII kacislarina donusturulmez. Her kayit `LF` ile biter.
+
+### Belge ustverisi (TASK-044, 2026-10-13)
+
+Duz metin kaydi ortak belge kaydinin ([belge_kaydi_v1.md](belge_kaydi_v1.md),
+`derlem.document.v1`) dort grubunu **ekli olarak** tasir: `provenance`
+(dataset, revision, file, row, external_id, url, crawl_date, dump), `language`
+(declared, detected, score), `signals` (puanlayici adi -> sayi) ve `rights`
+(license_id, evidence_ref, scope).
+
+- **Satir kaynaklari** (Faz-2 ve oncesi: satir = belge nesnesi) bu bilgiyi hic
+  tasimadi: dort alan `null`. Mevcut alanlarin hicbiri degismez; dort alan
+  cikarilinca kayit bayt bayt eski kayittir (testte eski koddan alinmis SHA ile
+  dogrulanir). Ayni release'in JSONL ciktisinin SHA'si bu yuzden TASK-044
+  oncesi ciktidan farklidir (kayit basina 4 `null` alan); `ready` export'lar
+  degismez nesnelerdir ve yeniden uretilmez.
+- **Belge parcasi kaynaklari** (Parquet, `derlem.document.v1`; kaynak sozlugunde
+  `document_shards`): dort grup kayittaki degerleriyle yazilir; `external_id`
+  metadata'da `provenance.external_id`'dir. Kimlik kurali ayni (kaynak SHA'si,
+  sira numarasi, metin SHA'si). `doc_id` metnin SHA256'si degilse export
+  `document_id_mismatch` ile durur.
+- **Yapisal kayitlar** (`derlem.canonical-export-record.v1`) degismedi.
+- **TXT** degismedi: bayt bayt ayni; belge parcasi kaynaginda da ayni
+  duzlestirme kurali uygulanir.
 
 Yapisal kayitlar `derlem.canonical-export-record.v1` zarfi icinde kaynak
 `derlem.canonical-sample.v1` sample'ini degistirmeden tasir. `messages`, `tools`,

@@ -9,8 +9,12 @@ description = "Derlem data processing worker"
 requires-python = ">=3.12"
 dependencies = [
     "psycopg[binary]>=3.2,<4",
+    # Tam surum: belge parcalarinin (Parquet) bayt belirlenimciligi yazicinin
+    # surumune baglidir (footer'daki created_by); surum degisikligi bilinclidir.
+    "pyarrow==25.0.1",
     "pypdf>=5,<7",
     "python-docx>=1.1,<2",
+    "pyyaml>=6.0.3,<7",
 ]
 
 [project.optional-dependencies]

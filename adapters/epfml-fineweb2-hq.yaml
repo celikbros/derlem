@@ -1,0 +1,41 @@
+# FineWeb2-HQ, Turkce (tur_Latn) -> derlem.document.v1
+# Sutun adlari ve turleri: var/olcum-2026-10-03/fineweb2-hq/ornek-1000.jsonl ve RAPOR.md 7
+# (13 sutun; embeddings dosyanin %74,7'si, metin degil). Lisans notu: docs/haklar/hf-fineweb2-hq.md.
+dataset: epfml/FineWeb2-HQ
+revision: c0c06e94fd3a44ae9e802b2b0fc533817601eb5e
+config: tur_Latn
+split: train
+format: parquet
+target: derlem.document.v1
+document_boundary: record            # bir kayit = bir belge, asla bolunmez; paragraf sonlari korunur
+columns_read:
+  - text
+  - id
+  - url
+  - date
+  - dump
+  - language
+  - language_score
+  - quality_score
+  - minhash_cluster_size
+  - file_path
+  - language_script
+  - top_langs
+columns_skipped:
+  - embeddings                       # 768 boyutlu vektor; bilerek okunmaz
+map:
+  text: text
+  provenance.external_id: id
+  provenance.url: url
+  provenance.crawl_date: date
+  provenance.dump: dump
+  language.declared: language        # kaynagin kendi etiketi ("tur"), oldugu gibi
+  language.score: language_score
+  signals.quality_score:
+    value: quality_score
+    scorer: fineweb2-hq-xlmr-mlp
+  signals.minhash_cluster_size: minhash_cluster_size
+extra:                               # eslenmeyen her sey; atilmaz
+  - file_path
+  - language_script
+  - top_langs

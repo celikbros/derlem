@@ -1,0 +1,17 @@
+# Talimat setleri: derlem.canonical-sample.v1 kaydi oldugu gibi taninir (gecis).
+# Kayit donusturulmez, satir bayt bayt tasinir; her kayit canonical.py ile dogrulanir,
+# gecersiz kayit sayilir ve raporlanir. Eslenmeyen alan yoktur: sema bilinmeyen alani
+# reddeder, ek bilgi kaydin kendi "metadata" alanindadir.
+# Bu ornek depodaki data_samples/example_canonical_conversations.jsonl'i sabitler;
+# yeni bir talimat seti icin dataset/revision/content_purpose degisir, gerisi ayni.
+dataset: derlem/data_samples/example_canonical_conversations
+revision: 5bdb5668ab6079481de09ee52727c3a32b21c22ace4882c4c3f8b13e7c61a970
+format: jsonl
+target: derlem.canonical-sample.v1
+content_purpose: instruction
+document_boundary: record
+columns_read:
+  - schema_version
+  - record_type
+  - sample_id
+  - content_purpose

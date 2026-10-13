@@ -496,3 +496,221 @@ def test_tr_web_v3_policy_is_selectable_and_keeps_what_v2_dropped(tmp_path: Path
 
 def test_tr_web_v3_is_offered_by_the_command_line(tmp_path: Path) -> None:
     assert QUALITY_POLICY_TR_WEB_V3 in SUPPORTED_QUALITY_POLICIES
+
+
+# --------------------------------------------------------------------------
+# TASK-044: secim listesi modu (metin yerine doc_id listesi + karar anlik goruntusu)
+# --------------------------------------------------------------------------
+
+from datetime import UTC, datetime  # noqa: E402
+import os  # noqa: E402
+import shutil  # noqa: E402
+
+from derlem_worker.clean_candidate import derive_selection_list, selection_artifact_paths  # noqa: E402
+from derlem_worker.document_record import read_decisions, read_selection  # noqa: E402
+from derlem_worker.quality_filters import QUALITY_POLICY_TR_WEB_V3 as _TR_WEB_V3  # noqa: E402
+from derlem_worker.selection import SelectionError, materialize, selection_from_text_copy  # noqa: E402
+
+
+def _selection_fixture(tmp_path: Path) -> tuple[Path, Path]:
+    base, variant = _near_duplicate_pair()
+    held = _held_out_line("S")
+    scope = "Kapsam dışı kaynaktan gelen ve listede adı geçen uzunca bir Türkçe satır burada durur."
+    foreign = "The quick brown fox jumps over the lazy dog and keeps running across the wide open field."
+    lines = [
+        "Temiz bir Türkçe belge; eğitim adayında kalır ve seçim listesine girer.",
+        "mail test@example.com iceren satir cikmali",
+        "",
+        "oversized " + ("x" * 9000),
+        "R�yada dua g�rmek hay�rl� �eylerin habercisidir, diye yazar eski tabirnameler.",
+        base,
+        "  temiz bir   türkçe belge; eğitim adayında kalır ve seçim listesine girer.  ",
+        held,
+        variant,
+        scope,
+        foreign,
+        "Son temiz satır: satır sonu CRLF olsa da metin aynı kalır ve kopya ile birebir eşleşir.",
+    ]
+    source = tmp_path / "parent.txt"
+    source.write_bytes(("\r\n".join(lines) + "\r\n").encode("utf-8"))
+    drop_list = tmp_path / "atilacak.jsonl"
+    drop_list.write_text(
+        json.dumps({"sha256": hashlib.sha256(scope.encode("utf-8")).hexdigest(), "reason": "source_not_in_scope_s2"}) + "\n"
+        + json.dumps({"sha256": hashlib.sha256(foreign.encode("utf-8")).hexdigest(), "reason": "language_not_turkish", "lang": "en"}) + "\n",
+        encoding="utf-8",
+    )
+    return source, drop_list
+
+
+def _v5_like_options(drop_list: Path) -> dict:
+    return dict(
+        source=None,
+        max_document_bytes=8192,
+        quality_policy=_TR_WEB_V3,
+        held_out_rule=HELD_OUT_RULE_AFACAN_V1,
+        near_dedup=True,
+        drop_list_path=drop_list,
+        drop_list_method="s2-scope+fasttext-test",
+        drop_list_reason="scope_or_language",
+    )
+
+
+def test_selection_list_materializes_to_the_text_copy_byte_for_byte(tmp_path: Path) -> None:
+    source, drop_list = _selection_fixture(tmp_path)
+    copy_dir = tmp_path / "copy"
+    copy_dir.mkdir()
+    text_copy = copy_dir / "aday.txt"
+    report = derive_clean_candidate(
+        source, text_copy, quality_rejections_path=copy_dir / "rej.jsonl", **_v5_like_options(drop_list),
+    )
+
+    list_dir = tmp_path / "list"
+    list_dir.mkdir()
+    would_be = list_dir / "aday.txt"
+    decided_at = datetime(2026, 10, 13, 9, 0, tzinfo=UTC)
+    manifest = derive_selection_list(source, would_be, run_id="run-test", decided_at=decided_at, **_v5_like_options(drop_list))
+
+    assert not would_be.exists() and not default_held_out_path(would_be).exists()
+    assert manifest["expected_materialization"]["train"]["sha256"] == report.output_sha256
+    assert manifest["expected_materialization"]["held_out"]["sha256"] == report.held_out_sha256
+    assert manifest["parent"]["sha256"] == hashlib.sha256(source.read_bytes()).hexdigest()
+
+    out = tmp_path / "out" / "aday.txt"
+    held_out = tmp_path / "out" / "aday_heldout.txt"
+    result = materialize(Path(manifest["manifest_path"]), output_path=out, held_out_output_path=held_out, verify_parent=True)
+
+    assert out.read_bytes() == text_copy.read_bytes()
+    assert held_out.read_bytes() == default_held_out_path(text_copy).read_bytes()
+    assert result["outputs"]["train"]["sha256"] == report.output_sha256
+    assert report.written_lines == 3 and report.held_out_lines == 1
+
+    # Karar anlik goruntusu: secilmeyen her belge bir satir; turleri rapor sayilariyla ayni.
+    artifacts = selection_artifact_paths(would_be.resolve())
+    decisions = list(read_decisions(artifacts["decisions"]))
+    by_type = {}
+    for decision in decisions:
+        by_type[decision["decision_type"]] = by_type.get(decision["decision_type"], 0) + 1
+    assert by_type == {
+        "empty_text": report.skipped_blank_lines,
+        "pii": report.removed_pii_lines,
+        "quality_rule": report.removed_quality_lines,
+        "duplicate": report.removed_duplicate_lines,
+        "near_duplicate": report.removed_near_duplicate_lines,
+        "rights_scope": 1,
+        "language": 1,
+        "held_out": report.held_out_lines,
+    }
+    assert {decision["run_id"] for decision in decisions} == {"run-test"}
+    assert {decision["decided_at"] for decision in decisions} == {decided_at}
+    assert manifest["oversized_ordinals"] == [4]
+    selection = list(read_selection(artifacts["selection"]))
+    covered = {row["source_ordinal"] for row in selection} | {row["source_ordinal"] for row in decisions}
+    assert covered | set(manifest["oversized_ordinals"]) == set(range(1, report.total_lines + 1))
+    for row in selection:
+        line = source.read_bytes().split(b"\r\n")[row["source_ordinal"] - 1]
+        assert row["doc_id"] == hashlib.sha256(line).hexdigest()
+    pii = next(decision for decision in decisions if decision["decision_type"] == "pii")
+    assert pii["reason"] == "email" and "test@example.com" not in json.dumps(manifest)
+
+
+def test_selection_list_is_deterministic_apart_from_run_identity(tmp_path: Path) -> None:
+    source, drop_list = _selection_fixture(tmp_path)
+    shas = []
+    for name in ("a", "b"):
+        (tmp_path / name).mkdir()
+        manifest = derive_selection_list(source, tmp_path / name / "aday.txt", **_v5_like_options(drop_list))
+        shas.append(manifest["selection"]["sha256"])
+    assert shas[0] == shas[1]
+
+
+def test_materialize_refuses_a_parent_line_that_does_not_match_its_doc_id(tmp_path: Path) -> None:
+    source, drop_list = _selection_fixture(tmp_path)
+    manifest = derive_selection_list(source, tmp_path / "aday.txt", **_v5_like_options(drop_list))
+    tampered = tmp_path / "tampered.txt"
+    payload = source.read_bytes()
+    tampered.write_bytes(payload.replace(b"Temiz bir", b"Kirli bir", 1))
+    assert tampered.stat().st_size == source.stat().st_size
+    out = tmp_path / "out.txt"
+
+    with pytest.raises(SelectionError, match="does not match its doc_id"):
+        materialize(Path(manifest["manifest_path"]), parent_path=tampered, output_path=out)
+    assert not out.exists() and list(tmp_path.glob("out.txt.*")) == []
+
+
+def test_materialize_refuses_output_whose_sha_differs_from_the_manifest(tmp_path: Path) -> None:
+    source, drop_list = _selection_fixture(tmp_path)
+    manifest = derive_selection_list(source, tmp_path / "aday.txt", **_v5_like_options(drop_list))
+    manifest_path = Path(manifest["manifest_path"])
+    stored = json.loads(manifest_path.read_text(encoding="utf-8"))
+    stored["expected_materialization"]["train"]["sha256"] = "0" * 64
+    manifest_path.write_text(json.dumps(stored), encoding="utf-8")
+    out = tmp_path / "out.txt"
+
+    with pytest.raises(SelectionError, match="does not match the manifest"):
+        materialize(manifest_path, output_path=out)
+    assert not out.exists() and list(tmp_path.glob("out.txt.*")) == []
+
+
+def test_materialize_refuses_a_swapped_selection_list(tmp_path: Path) -> None:
+    source, drop_list = _selection_fixture(tmp_path)
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    first = derive_selection_list(source, tmp_path / "a" / "aday.txt", **_v5_like_options(drop_list))
+    other_source = tmp_path / "other.txt"
+    other_source.write_text("Başka bir ana kaynak satırı, yeterince uzun bir belge.\n", encoding="utf-8")
+    second = derive_selection_list(other_source, tmp_path / "b" / "aday.txt", source=None, max_document_bytes=8192)
+    shutil.copyfile(second["selection"]["path"], first["selection"]["path"])
+
+    with pytest.raises(SelectionError, match="selection list sha256"):
+        materialize(Path(first["manifest_path"]))
+
+
+def test_existing_text_copy_is_expressed_as_a_selection_list_over_its_parent(tmp_path: Path) -> None:
+    source, drop_list = _selection_fixture(tmp_path)
+    text_copy = tmp_path / "aday.txt"
+    report = derive_clean_candidate(source, text_copy, **_v5_like_options(drop_list))
+
+    manifest = selection_from_text_copy(
+        source, text_copy, held_out_path=default_held_out_path(text_copy), output_dir=tmp_path / "secim",
+        name="aday", max_document_bytes=8192,
+    )
+    assert manifest["expected_materialization"]["train"]["sha256"] == report.output_sha256
+    out = tmp_path / "out.txt"
+    materialize(Path(manifest["manifest_path"]), output_path=out)
+    assert out.read_bytes() == text_copy.read_bytes()
+
+    not_subsequence = tmp_path / "ters.txt"
+    not_subsequence.write_bytes(b"".join(reversed(text_copy.read_bytes().splitlines(keepends=True))))
+    with pytest.raises(SelectionError, match="subsequence"):
+        selection_from_text_copy(source, not_subsequence, held_out_path=None, output_dir=tmp_path / "ters",
+                                 name="ters", max_document_bytes=8192)
+
+
+SLICE_ENV = "DERLEM_SLICE_100K"
+
+
+def test_selection_list_equals_text_copy_on_the_100k_slice(tmp_path: Path) -> None:
+    """Gercek veri: 100k dilim (var/olcum-2026-09-17/dilim-100k_v3.txt), v5 ayarlariyla.
+
+    Depoda olmayan veri ister; yol DERLEM_SLICE_100K ile acikca verilmezse atlanir
+    (atlama sebebi cikti satirinda gorunur). Olcum betigi bunu ayrica kosar.
+    """
+    slice_path = os.environ.get(SLICE_ENV, "").strip()
+    if not slice_path:
+        pytest.skip(f"{SLICE_ENV} not set: 100k slice equality is measured by the TASK-044 script")
+    drop_list = Path(os.environ.get("DERLEM_V5_DROP_LIST", "var/olcum-2026-09-21/v5/v5-atilacak-liste.jsonl"))
+    options = dict(
+        source=None, max_document_bytes=262144, quality_policy=_TR_WEB_V3, held_out_rule=HELD_OUT_RULE_AFACAN_V1,
+        near_dedup=True, drop_list_path=drop_list,
+        drop_list_method="s2-scope-2026-09-21+fasttext-lid176-ftz-min200-p0.5-window2000",
+        drop_list_reason="scope_or_language",
+    )
+    text_copy = tmp_path / "copy" / "dilim.txt"
+    text_copy.parent.mkdir()
+    report = derive_clean_candidate(Path(slice_path), text_copy, **options)
+    (tmp_path / "list").mkdir()
+    manifest = derive_selection_list(Path(slice_path), tmp_path / "list" / "dilim.txt", **options)
+    out = tmp_path / "out.txt"
+    materialize(Path(manifest["manifest_path"]), output_path=out)
+    assert hashlib.sha256(out.read_bytes()).hexdigest() == report.output_sha256
+    assert out.read_bytes() == text_copy.read_bytes()

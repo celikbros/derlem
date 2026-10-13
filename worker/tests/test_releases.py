@@ -985,3 +985,157 @@ def _release_job_source() -> dict[str, object]:
         "approved_document_count": 1,
         "flagged_document_count": 0,
     }
+
+
+# --------------------------------------------------------------------------
+# TASK-044: jsonl zarfi provenance/language/signals/rights tasir (eklemeli)
+# --------------------------------------------------------------------------
+
+from derlem_worker.releases import DOCUMENT_RECORD_EXPORT_FIELDS  # noqa: E402
+
+# TASK-044 oncesi kodla (releases.py, 56ad064) ayni fikstur icin uretilen baytlarin SHA'si.
+LEGACY_JSONL_SHA256 = "a8ea97121a7d3617325329e8381ea980caaf602bb1852b4ee0a7b28ee3e4cad8"
+LEGACY_TXT_SHA256 = "ff288e0ccbfbc06f4c3aca57d5e1b749848dd4898e047d6ba064b785fc4723e5"
+
+
+def _legacy_fixture(tmp_path: Path) -> tuple[dict, list[dict]]:
+    a = tmp_path / "a.jsonl"
+    b = tmp_path / "b.txt"
+    a.write_text(
+        '{"id":"doc-1","text":"Merhaba dünya\\nikinci paragraf"}\n'
+        '{"text":"  boşluklu  "}\n'
+        "\n",
+        encoding="utf-8",
+    )
+    b.write_text("İkinci belge\r\nüçüncü satır\n", encoding="utf-8")
+    release = {"content_purpose": "pretrain"}
+    sources = [
+        {"source_id": "a", "source_sha256": "1" * 64, "path": a, "language": "tr", "domain": "general", "license": "internal"},
+        {"source_id": "b", "source_sha256": "2" * 64, "path": b, "language": "tr", "domain": "web", "license": "cc-by"},
+    ]
+    return release, sources
+
+
+def test_export_envelope_is_backward_compatible_for_line_sources(tmp_path: Path) -> None:
+    release, sources = _legacy_fixture(tmp_path)
+    txt = tmp_path / "out.txt"
+    jsonl = tmp_path / "out.jsonl"
+
+    txt_result = build_release_export(release, sources, "txt", txt, max_document_bytes=1024)
+    build_release_export(release, sources, "jsonl", jsonl, max_document_bytes=1024)
+
+    # TXT bayt bayt ayni.
+    assert txt_result.sha256 == LEGACY_TXT_SHA256 == hashlib.sha256(txt.read_bytes()).hexdigest()
+    # JSONL: dort yeni alan var ve null; onlar cikarilinca eski baytlar birebir.
+    legacy_lines = []
+    for line in jsonl.read_text(encoding="utf-8").splitlines():
+        record = json.loads(line)
+        for name in DOCUMENT_RECORD_EXPORT_FIELDS:
+            assert name in record and record[name] is None
+            del record[name]
+        legacy_lines.append(json.dumps(record, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n")
+    assert hashlib.sha256("".join(legacy_lines).encode("utf-8")).hexdigest() == LEGACY_JSONL_SHA256
+
+
+def _document_shard_source(tmp_path: Path, documents: list[dict]) -> dict:
+    from derlem_worker.document_record import write_document_shards
+
+    shards = write_document_shards(documents, tmp_path / "shards", rows_per_shard=2)
+    return {
+        "source_id": "fw",
+        "source_sha256": "3" * 64,
+        "document_shards": [shard.path for shard in shards],
+        "language": "tr",
+        "domain": "web",
+        "license": "odc-by-1.0",
+    }
+
+
+def test_document_shard_source_exports_provenance_language_signals_rights(tmp_path: Path) -> None:
+    from derlem_worker.document_record import make_document
+
+    documents = [
+        make_document(
+            text="Başlık\n\nParagraf bir.\nParagraf iki.",
+            source_ordinal=1,
+            provenance={"dataset": "epfml/FineWeb2-HQ", "revision": "c0c06e94", "file": "f.parquet", "row": 0,
+                        "external_id": "<urn:uuid:1>", "url": "http://ornek.example/1", "crawl_date": "2017-11-20T19:13:53Z",
+                        "dump": "CC-MAIN-2017-47"},
+            language={"declared": "tur", "score": 0.99},
+            signals={"fineweb2-hq-xlmr-mlp": 0.5, "minhash_cluster_size": 4},
+            rights={"license_id": "odc-by-1.0", "evidence_ref": "docs/haklar/hf-fineweb2-hq.md", "scope": "non_commercial"},
+        ),
+        make_document(text="İkinci belge", source_ordinal=3),
+        make_document(text="Üçüncü belge\r\nCRLF", source_ordinal=4),
+    ]
+    source = _document_shard_source(tmp_path, documents)
+    release = {"content_purpose": "pretrain"}
+    jsonl = tmp_path / "out.jsonl"
+    txt = tmp_path / "out.txt"
+
+    result = build_release_export(release, [source], "jsonl", jsonl, max_document_bytes=1024)
+    build_release_export(release, [source], "txt", txt, max_document_bytes=1024)
+
+    records = [json.loads(line) for line in jsonl.read_text(encoding="utf-8").splitlines()]
+    assert result.record_count == 3 and result.source_record_counts == {"fw": 3}
+    first = records[0]
+    assert first["text"] == documents[0]["text"]
+    assert first["provenance"]["url"] == "http://ornek.example/1"
+    assert first["provenance"]["dump"] == "CC-MAIN-2017-47"
+    assert first["language"] == {"declared": "tur", "detected": None, "score": 0.99}
+    assert first["signals"] == {"fineweb2-hq-xlmr-mlp": 0.5, "minhash_cluster_size": 4.0}
+    assert first["rights"]["scope"] == "non_commercial"
+    assert first["metadata"]["document_sha256"] == documents[0]["doc_id"]
+    assert first["metadata"]["external_id"] == "<urn:uuid:1>"
+    assert [record["metadata"]["source_ordinal"] for record in records] == [1, 3, 4]
+    assert records[1]["provenance"]["url"] is None and records[1]["signals"] == {}
+    # Kimlik kurali satir kaynaklariyla ayni.
+    assert first["id"] == hashlib.sha256(f"{'3' * 64}:1:{documents[0]['doc_id']}".encode("ascii")).hexdigest()
+    # TXT: belge basina tek satir, paragraf sonlari bosluk (satir kaynagiyla ayni kural).
+    assert txt.read_text(encoding="utf-8") == "Başlık  Paragraf bir. Paragraf iki.\nİkinci belge\nÜçüncü belge CRLF\n"
+
+
+def test_document_shard_export_equals_line_source_export_for_the_same_text(tmp_path: Path) -> None:
+    from derlem_worker.adapters import AdapterReport, line_source_documents
+
+    lines = ["Birinci satır belgesi.", "İkinci satır belgesi."]
+    line_file = tmp_path / "parent.txt"
+    line_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    report = AdapterReport(adapter="backfill", adapter_sha256="", target="derlem.document.v1")
+    documents = list(line_source_documents(
+        line_file, report=report, max_document_bytes=1024, source_id="s", dataset="faz2", revision="r",
+    ))
+    shard_source = _document_shard_source(tmp_path, documents)
+    line_source = {**shard_source, "path": line_file}
+    del line_source["document_shards"]
+    release = {"content_purpose": "pretrain"}
+
+    for export_format in ("txt", "jsonl"):
+        from_lines = build_release_export(release, [line_source], export_format, tmp_path / f"l.{export_format}", max_document_bytes=1024)
+        from_shards = build_release_export(release, [shard_source], export_format, tmp_path / f"s.{export_format}", max_document_bytes=1024)
+        if export_format == "txt":
+            assert from_lines.sha256 == from_shards.sha256
+        else:
+            line_records = [json.loads(line) for line in (tmp_path / "l.jsonl").read_text(encoding="utf-8").splitlines()]
+            shard_records = [json.loads(line) for line in (tmp_path / "s.jsonl").read_text(encoding="utf-8").splitlines()]
+            for left, right in zip(line_records, shard_records, strict=True):
+                assert left["id"] == right["id"] and left["text"] == right["text"]
+                assert left["metadata"] == right["metadata"]
+                assert left["provenance"] is None and right["provenance"]["dataset"] == "faz2"
+
+
+def test_document_shard_export_blocks_a_doc_id_that_is_not_the_text_hash(tmp_path: Path) -> None:
+    import pyarrow.parquet as pq
+
+    from derlem_worker.document_record import DOCUMENT_SCHEMA, _table_from_rows, make_document
+
+    record = make_document(text="Gerçek metin", source_ordinal=1)
+    record["doc_id"] = "0" * 64
+    shard = tmp_path / "bozuk.parquet"
+    pq.write_table(_table_from_rows(DOCUMENT_SCHEMA, [record]), shard)
+    source = {"source_id": "x", "source_sha256": "4" * 64, "document_shards": [shard],
+              "language": "tr", "domain": "web", "license": "l"}
+
+    with pytest.raises(ReleaseGateError) as caught:
+        build_release_export({"content_purpose": "pretrain"}, [source], "jsonl", tmp_path / "o.jsonl", max_document_bytes=1024)
+    assert caught.value.gate_results["export"]["reason"] == "document_id_mismatch"

@@ -20,6 +20,7 @@ import psycopg
 from psycopg.rows import dict_row
 
 from derlem_worker.config import load_config
+from derlem_worker.document_record import file_sha256
 from derlem_worker.fingerprints import FINGERPRINT_VERSION, document_fingerprint
 from derlem_worker.pii import PII_KEYS, count_pii_in_text
 from derlem_worker.quality_filters import (
@@ -30,6 +31,13 @@ from derlem_worker.quality_filters import (
     quality_rejection_reasons,
 )
 from derlem_worker.sampling import _bounded_lines, _document_from_line
+from derlem_worker.selection import (
+    HashOnlyOutput,
+    SelectionRecorder,
+    new_run_id,
+    run_started_at,
+    write_selection_manifest,
+)
 from derlem_worker.similarity import (
     DEFAULT_MAX_CANDIDATES,
     RELEASE_NEAR_DUP_BAND_BITS,
@@ -63,6 +71,9 @@ REJECTION_PREVIEW_CHARS = 200
 # (ornegin fastText dil tanima, 3.13 ortaminda) disarida hesaplanan karar, satir
 # baytlarinin SHA256'si uzerinden uretime verilir; listenin SHA'si manifeste yazilir.
 DROP_LIST_DEFAULT_REASON = "drop_list"
+PII_JUDGE = "derlem_worker.pii.count_pii_in_text"
+# Secim listesi kosusunda gerekcesi bilinmeyen atilacak-satir kaydinin karar turu.
+DROP_LIST_FALLBACK_DECISION_TYPES = frozenset({"language", "rights_scope", "quality_rule", "pii"})
 
 
 @dataclass(frozen=True)
@@ -282,6 +293,19 @@ def main() -> None:
     parser.add_argument("--drop-list-method", help="Method identifier recorded in the manifest (required with --drop-list)")
     parser.add_argument("--drop-list-reason", default=DROP_LIST_DEFAULT_REASON, help="Reason code written to the rejection report")
     parser.add_argument("--force", action="store_true", help="Overwrite existing output/manifest paths")
+    parser.add_argument(
+        "--selection-list",
+        action="store_true",
+        help="Write a selection list (doc_ids) + decision snapshot (Parquet) + manifest instead of a text copy "
+        "(TASK-044); text is produced later by 'python -m derlem_worker.selection materialize'",
+    )
+    parser.add_argument("--run-id", help="Run id written to every decision row (selection-list mode; default: uuid4)")
+    parser.add_argument(
+        "--drop-list-decision-type",
+        choices=sorted(DROP_LIST_FALLBACK_DECISION_TYPES),
+        default="language",
+        help="Decision type for drop-list entries whose reason is not a known one (selection-list mode)",
+    )
     args = parser.parse_args()
 
     if bool(args.source_id) == bool(args.input_path):
@@ -313,6 +337,34 @@ def main() -> None:
             args.output_dir, args.output_path, None, args.limit_lines,
             input_path=input_path, quality_policy=args.quality_policy, v3=v3,
         )
+
+    if args.selection_list:
+        if args.limit_lines is not None:
+            parser.error("--selection-list does not take --limit-lines")
+        artifacts = selection_artifact_paths(output_path)
+        rejections_path = args.quality_rejections_path.resolve() if args.quality_rejections_path else None
+        if rejections_path is not None and args.quality_policy == QUALITY_POLICY_NONE and not v3:
+            parser.error("--quality-rejections-path requires a non-default --quality-policy")
+        for target in (*artifacts.values(), rejections_path):
+            if target is not None:
+                ensure_writable_target(target, args.force)
+        manifest = derive_selection_list(
+            input_path,
+            output_path,
+            source=source,
+            max_document_bytes=max_document_bytes,
+            quality_policy=args.quality_policy,
+            quality_rejections_path=rejections_path,
+            held_out_rule=args.held_out_rule,
+            near_dedup=args.near_dedup,
+            drop_list_path=args.drop_list,
+            drop_list_method=args.drop_list_method,
+            drop_list_reason=args.drop_list_reason,
+            drop_list_decision_type=args.drop_list_decision_type,
+            run_id=args.run_id,
+        )
+        print(json.dumps(manifest, ensure_ascii=False, indent=2))
+        return
 
     manifest_path = output_path.with_suffix(output_path.suffix + ".manifest.json")
     quality_rejections_path: Path | None = None
@@ -350,6 +402,112 @@ def main() -> None:
     )
     write_json_atomic(manifest_path, asdict(report))
     print(json.dumps({"output": str(output_path), "manifest": str(manifest_path), "report": asdict(report)}, ensure_ascii=False, indent=2))
+
+
+def selection_artifact_paths(output_path: Path) -> dict[str, Path]:
+    """Secim listesi kosusunun dosyalari, metin-kopya yolunun yaninda (ayni govde adi)."""
+    stem = output_path.stem
+    return {
+        "selection": output_path.with_name(f"{stem}.selection.parquet"),
+        "decisions": output_path.with_name(f"{stem}.decisions.parquet"),
+        "manifest": output_path.with_name(f"{stem}.selection.manifest.json"),
+    }
+
+
+def derive_selection_list(
+    input_path: Path,
+    output_path: Path,
+    *,
+    source: dict[str, Any] | None,
+    max_document_bytes: int,
+    quality_policy: str = QUALITY_POLICY_NONE,
+    quality_rejections_path: Path | None = None,
+    held_out_rule: str = HELD_OUT_RULE_NONE,
+    near_dedup: bool = False,
+    drop_list_path: Path | None = None,
+    drop_list_method: str | None = None,
+    drop_list_reason: str = DROP_LIST_DEFAULT_REASON,
+    drop_list_decision_type: str = "language",
+    run_id: str | None = None,
+    decided_at: datetime | None = None,
+) -> dict[str, Any]:
+    """Metin-kopya kosusunun aynisi, metin yazmadan: secim listesi + karar anlik goruntusu + manifest.
+
+    ``output_path`` metin-kopyanin olacagi yoldur; dosyalar onun yanina yazilir,
+    kendisi yazilmaz. Manifest metin-kopyanin SHA'sini (``expected_materialization``)
+    tasir; materialize bu SHA'yi uretmeden ciktiyi yayimlamaz.
+    """
+    if drop_list_decision_type not in DROP_LIST_FALLBACK_DECISION_TYPES:
+        raise ValueError(f"unsupported drop-list decision type: {drop_list_decision_type}")
+    input_path = input_path.resolve(strict=True)
+    output_path = output_path.resolve()
+    artifacts = selection_artifact_paths(output_path)
+    run_id = run_id or new_run_id()
+    decided_at = decided_at or run_started_at()
+    parent_sha256, parent_byte_size = file_sha256(input_path)
+    if source is not None and str(source.get("object_sha256") or parent_sha256) != parent_sha256:
+        raise RuntimeError("Source object sha256 does not match the input bytes")
+    recorder = SelectionRecorder(
+        selection_path=artifacts["selection"],
+        decisions_path=artifacts["decisions"],
+        run_id=run_id,
+        decided_at=decided_at,
+        drop_list_decision_type=drop_list_decision_type,
+    )
+    try:
+        report = derive_clean_candidate(
+            input_path,
+            output_path,
+            source=source,
+            max_document_bytes=max_document_bytes,
+            quality_policy=quality_policy,
+            quality_rejections_path=quality_rejections_path,
+            held_out_rule=held_out_rule,
+            near_dedup=near_dedup,
+            drop_list_path=drop_list_path,
+            drop_list_method=drop_list_method,
+            drop_list_reason=drop_list_reason,
+            selection=recorder,
+        )
+        selection_info, decisions_info = recorder.close()
+    except BaseException:
+        recorder.abort()
+        raise
+    expected = {
+        "train": {
+            "sha256": report.output_sha256,
+            "byte_size": report.output_byte_size,
+            "lines": report.written_lines,
+        }
+    }
+    if report.held_out_sha256 is not None:
+        expected["held_out"] = {
+            "sha256": report.held_out_sha256,
+            "byte_size": report.held_out_byte_size,
+            "lines": report.held_out_lines,
+        }
+    report_dict = asdict(report)
+    report_dict["output_path"] = None
+    report_dict["held_out_path"] = None
+    report_dict["selection_list"] = True
+    manifest = write_selection_manifest(
+        artifacts["manifest"],
+        report=report_dict,
+        parent_path=input_path,
+        parent_sha256=parent_sha256,
+        parent_byte_size=parent_byte_size,
+        selection=selection_info,
+        decisions=decisions_info,
+        recorder_counts=dict(recorder.selected),
+        decision_counts=dict(recorder.decision_counts),
+        oversized_ordinals=list(recorder.oversized_ordinals),
+        expected=expected,
+        run_id=run_id,
+        decided_at=decided_at.isoformat(),
+        method=f"{report.algorithm_version}+selection-list",
+    )
+    manifest["manifest_path"] = str(artifacts["manifest"])
+    return manifest
 
 
 def load_source(database_url: str, storage_root: Path, source_id: str) -> dict[str, Any]:
@@ -430,7 +588,13 @@ def derive_clean_candidate(
     drop_list_path: Path | None = None,
     drop_list_method: str | None = None,
     drop_list_reason: str = DROP_LIST_DEFAULT_REASON,
+    selection: SelectionRecorder | None = None,
 ) -> CleanCandidateReport:
+    """Metin-kopya turevi; ``selection`` verilirse metin yazilmaz (TASK-044).
+
+    Secim listesi kosusunda karar mantigi ayni koddur; yalniz egitim/held-out
+    ciktilari diske yazilmaz, SHA'lari hesaplanir ve her karar ``selection``a gider.
+    """
     if quality_policy not in SUPPORTED_QUALITY_POLICIES:
         raise ValueError(f"Unsupported quality policy: {quality_policy}")
     if held_out_rule not in SUPPORTED_HELD_OUT_RULES:
@@ -494,9 +658,18 @@ def derive_clean_candidate(
     kept_short_or_unfingerprinted_lines = 0
     quality_reason_document_counts: Counter[str] = Counter()
 
-    output = _AtomicOutput(output_path)
+    if selection is None:
+        output = _AtomicOutput(output_path)
+    else:
+        output = HashOnlyOutput()
     rejections = _AtomicOutput(quality_rejections_path) if quality_rejections_path is not None else None
-    held_out = _AtomicOutput(held_out_path) if held_out_path is not None else None
+    if selection is None:
+        held_out = _AtomicOutput(held_out_path) if held_out_path is not None else None
+    else:
+        held_out = HashOnlyOutput() if held_out_path is not None else None
+    near_judge = (
+        f"{SIMHASH_VERSION}-hamming{near_index.hamming_threshold}" if near_index is not None else ""
+    )
     outputs = [item for item in (output, rejections, held_out) if item is not None]
     try:
         with ExitStack() as stack:
@@ -508,12 +681,19 @@ def derive_clean_candidate(
                 total_lines += 1
                 if oversized:
                     removed_oversized_lines += 1
+                    if selection is not None:
+                        selection.oversized(ordinal)
                     continue
                 assert raw_line is not None
 
                 stripped = raw_line.strip()
                 if not stripped:
                     skipped_blank_lines += 1
+                    if selection is not None:
+                        selection.decide(
+                            ordinal, hashlib.sha256(raw_line.encode("utf-8")).hexdigest(),
+                            "empty_text", "reject", "clean-candidate", "blank_line",
+                        )
                     continue
 
                 counts = count_pii_in_text(raw_line)
@@ -527,6 +707,12 @@ def derive_clean_candidate(
                     pii_line_counts[key] += 1
                 if has_pii:
                     removed_pii_lines += 1
+                    if selection is not None:
+                        selection.decide(
+                            ordinal, hashlib.sha256(raw_line.encode("utf-8")).hexdigest(),
+                            "pii", "reject", PII_JUDGE,
+                            ",".join(key for key in PII_KEYS if int(counts.get(key, 0)) > 0),
+                        )
                     continue
 
                 line_bytes = raw_line.encode("utf-8")
@@ -536,6 +722,11 @@ def derive_clean_candidate(
                     dropped = drop_list.get(line_digest.digest())
                     if dropped is not None:
                         removed_drop_list_lines += 1
+                        if selection is not None:
+                            selection.decide(
+                                ordinal, line_digest.hexdigest(), selection.drop_list_type(dropped), "reject",
+                                str(drop_list_method), str(dropped.get("reason") or drop_list_reason),
+                            )
                         if rejections is not None:
                             rejections.write(_rejection_record(
                                 ordinal=ordinal, reasons=(drop_list_reason,), full=True,
@@ -545,6 +736,11 @@ def derive_clean_candidate(
                 quality_reasons = quality_rejection_reasons(text, effective_quality_policy)
                 if quality_reasons:
                     removed_quality_lines += 1
+                    if selection is not None:
+                        selection.decide(
+                            ordinal, line_digest.hexdigest(), "quality_rule", "reject",
+                            effective_quality_policy, ",".join(quality_reasons),
+                        )
                     quality_reason_document_counts.update(quality_reasons)
                     if rejections is not None:
                         rejections.write(_rejection_record(
@@ -561,6 +757,11 @@ def derive_clean_candidate(
                     earlier = seen_fingerprints.get(key)
                     if earlier is not None:
                         removed_duplicate_lines += 1
+                        if selection is not None:
+                            selection.decide(
+                                ordinal, line_digest.hexdigest(), "duplicate", "reject",
+                                FINGERPRINT_VERSION, f"normalized_duplicate_of={earlier}",
+                            )
                         if rejections is not None and v3:
                             rejections.write(_rejection_record(
                                 ordinal=ordinal, reasons=("normalized_duplicate",), full=True,
@@ -576,6 +777,11 @@ def derive_clean_candidate(
                         partner = near_index.find_partner(signature)
                         if partner is not None:
                             removed_near_duplicate_lines += 1
+                            if selection is not None:
+                                selection.decide(
+                                    ordinal, line_digest.hexdigest(), "near_duplicate", "reject",
+                                    near_judge, f"near_duplicate_of={partner}",
+                                )
                             if rejections is not None:
                                 rejections.write(_rejection_record(
                                     ordinal=ordinal, reasons=("near_duplicate",), full=True,
@@ -588,9 +794,16 @@ def derive_clean_candidate(
                 if held_out is not None and _is_held_out_hex(line_digest.hexdigest()):
                     held_out.write(encoded)
                     held_out_lines += 1
+                    if selection is not None:
+                        selection.decide(
+                            ordinal, line_digest.hexdigest(), "held_out", "held_out", held_out_rule, None,
+                        )
+                        selection.select(ordinal, line_digest.hexdigest(), "held_out")
                 else:
                     output.write(encoded)
                     written_lines += 1
+                    if selection is not None:
+                        selection.select(ordinal, line_digest.hexdigest(), "train")
 
             for item in outputs:
                 item.sync()

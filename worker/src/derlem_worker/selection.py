@@ -8,11 +8,17 @@ manifestteki beklenen SHA ile bayt bayt dogrulanir.
 Komutlar:
 
     python -m derlem_worker.clean_candidate ... --selection-list   (secim listesi kosusu)
-    python -m derlem_worker.selection materialize --manifest M [--parent P] [--output O] [--held-out-output H]
+    python -m derlem_worker.selection materialize --manifest M [--parent P] [--store-root S] [--output O] [--held-out-output H]
     python -m derlem_worker.selection from-text-copy --parent P --train T [--held-out H] --output-dir D --name N
 
 ``from-text-copy`` mevcut bir metin-kopya turevini (v1-v5) ana kaynak uzerinde secim
 listesi olarak ifade eder: turev, ana kaynagin sirali alt dizisidir.
+
+Ana kaynak bir alim manifestiyse (derlem.import-manifest.v1, TASK-049) manifestin
+``parent.kind`` alani ``import_manifest``tir; materialize belgeleri manifestte
+listelenen parcalardan (her biri SHA256 ile dogrulanir) aday satiri olarak uretir
+(``import_manifest.CANDIDATE_LINE_FORMAT``) ve satir dosyasindaki korumalarin
+aynisini uygular.
 """
 
 from __future__ import annotations
@@ -47,6 +53,8 @@ from derlem_worker.sampling import _bounded_lines
 
 SELECTION_MANIFEST_VERSION = "derlem.selection-manifest.v1"
 MATERIALIZE_METHOD = "parent-lines-by-ordinal-sha256-verified-v1"
+MATERIALIZE_METHOD_SHARDS = "import-manifest-candidate-lines-by-ordinal-sha256-verified-v1"
+PARENT_KIND_IMPORT_MANIFEST = "import_manifest"
 # Atilacak-satir listesindeki kayit gerekcesi -> karar turu. Listede olmayan
 # gerekce kosunun --drop-list-decision-type degerini alir.
 DROP_LIST_REASON_DECISION_TYPES = {
@@ -182,15 +190,21 @@ def write_selection_manifest(
     run_id: str | None,
     decided_at: str | None,
     method: str,
+    parent_extra: dict[str, Any] | None = None,
+    policies: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    parent: dict[str, Any] = {
+        "path": str(parent_path),
+        "sha256": parent_sha256,
+        "byte_size": parent_byte_size,
+    }
+    if parent_extra:
+        parent.update(parent_extra)
+    shard_parent = parent.get("kind") == PARENT_KIND_IMPORT_MANIFEST
     manifest = {
         "schema_version": SELECTION_MANIFEST_VERSION,
         "method": method,
-        "parent": {
-            "path": str(parent_path),
-            "sha256": parent_sha256,
-            "byte_size": parent_byte_size,
-        },
+        "parent": parent,
         "max_document_bytes": report.get("max_document_bytes"),
         "selection": {
             "schema_version": SELECTION_SCHEMA_VERSION,
@@ -213,9 +227,11 @@ def write_selection_manifest(
         },
         "oversized_ordinals": oversized_ordinals,
         "expected_materialization": expected,
-        "materialize_method": MATERIALIZE_METHOD,
+        "materialize_method": MATERIALIZE_METHOD_SHARDS if shard_parent else MATERIALIZE_METHOD,
         "report": report,
     }
+    if policies is not None:
+        manifest["policies"] = policies
     _write_json_atomic(path, manifest)
     return manifest
 
@@ -294,6 +310,41 @@ class _VerifiedOutput:
             self.temp_path = None
 
 
+def _parent_lines(manifest: dict[str, Any], parent: Path, store_root: Path | None, max_document_bytes: int):
+    """Ana kaynagin ``(sira_no, satir | None, sinir_asimi)`` akisi.
+
+    Satir dosyasinda dosyanin satirlari; alim manifestinde manifestin listeledigi
+    parcalarin belgeleri aday satiri olarak (secim kosusuyla ayni fonksiyon). Parca
+    listesi manifesttekiyle ayni olmali: alim manifesti nesnesi (boyutu ve istenirse
+    SHA'si yukarida dogrulandi) parcalari baska sirada ya da baska SHA ile veriyorsa
+    uretim durur.
+    """
+    info = manifest["parent"]
+    if info.get("kind") != PARENT_KIND_IMPORT_MANIFEST:
+        return _bounded_lines(parent, max_document_bytes)
+    from derlem_worker.import_manifest import (
+        CANDIDATE_LINE_FORMAT,
+        load_import_manifest,
+        manifest_candidate_lines,
+    )
+
+    if info.get("line_format") != CANDIDATE_LINE_FORMAT:
+        raise SelectionError(f"unsupported candidate line format: {info.get('line_format')!r}")
+    root = store_root or (Path(info["store_root"]) if info.get("store_root") else None)
+    if root is None:
+        raise SelectionError("import-manifest parent needs a store root")
+    import_manifest = load_import_manifest(parent)
+    if import_manifest is None:
+        raise SelectionError("parent is not a derlem.import-manifest.v1 object")
+    listed = [(shard["sha256"], shard["byte_size"], shard["row_count"]) for shard in info.get("shards") or []]
+    actual = [(shard["sha256"], shard["byte_size"], shard["row_count"]) for shard in import_manifest["shards"]]
+    if not listed or actual[: len(listed)] != listed:
+        raise SelectionError("import manifest shards differ from the selection manifest's shard list")
+    limited = dict(import_manifest)
+    limited["shards"] = import_manifest["shards"][: len(listed)]
+    return manifest_candidate_lines(limited, root.resolve(strict=True), max_document_bytes)
+
+
 def materialize(
     manifest_path: Path,
     *,
@@ -301,13 +352,16 @@ def materialize(
     output_path: Path | None = None,
     held_out_output_path: Path | None = None,
     verify_parent: bool = False,
+    store_root: Path | None = None,
 ) -> dict[str, Any]:
     """Secim listesinden metni uretir; ``output_path`` None ise yalniz SHA hesaplar.
 
     Korumalar: secim dosyasinin SHA'si manifestle ayni; her secilen satirin
     SHA256'si doc_id ile ayni; sira numaralari artan ve ana kaynakta mevcut;
     uretilen metnin SHA'si ve boyutu manifestin beklentisiyle ayni. Biri tutmazsa
-    cikti yayimlanmaz.
+    cikti yayimlanmaz. Ana kaynak alim manifestiyse (TASK-049) satirlar parcalardan
+    gelir (``store_root`` verilmezse manifestteki depo koku); her parca okunmadan
+    once SHA256 ile dogrulanir.
     """
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if manifest.get("schema_version") != SELECTION_MANIFEST_VERSION:
@@ -336,7 +390,7 @@ def materialize(
         selected = read_selection(selection_path)
         current = next(selected, None)
         last = 0
-        for ordinal, raw_line, oversized in _bounded_lines(parent, max_document_bytes):
+        for ordinal, raw_line, oversized in _parent_lines(manifest, parent, store_root, max_document_bytes):
             if current is None:
                 break
             want = int(current["source_ordinal"])
@@ -365,7 +419,7 @@ def materialize(
             output.discard()
         raise
     return {
-        "method": MATERIALIZE_METHOD,
+        "method": manifest.get("materialize_method", MATERIALIZE_METHOD),
         "manifest": str(manifest_path),
         "parent": str(parent),
         "outputs": results,
@@ -501,6 +555,10 @@ def main() -> None:
     m.add_argument("--output", type=Path, help="Train text output; omitted = hash only, nothing written")
     m.add_argument("--held-out-output", type=Path, help="Held-out text output; omitted = hash only")
     m.add_argument("--verify-parent", action="store_true", help="Also hash the whole parent and compare")
+    m.add_argument(
+        "--store-root", type=Path,
+        help="Object store root for an import-manifest parent (default: the store_root in the manifest)",
+    )
 
     f = commands.add_parser("from-text-copy", help="Express an existing text-copy derivative as a selection list")
     f.add_argument("--parent", type=Path, required=True)
@@ -519,6 +577,7 @@ def main() -> None:
             output_path=args.output,
             held_out_output_path=args.held_out_output,
             verify_parent=args.verify_parent,
+            store_root=args.store_root,
         )
     else:
         source_report = None

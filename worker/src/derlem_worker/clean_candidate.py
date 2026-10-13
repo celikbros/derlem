@@ -19,9 +19,16 @@ import zlib
 import psycopg
 from psycopg.rows import dict_row
 
+from derlem_worker import machine_translation
 from derlem_worker.config import load_config
 from derlem_worker.document_record import file_sha256
 from derlem_worker.fingerprints import FINGERPRINT_VERSION, document_fingerprint
+from derlem_worker.import_manifest import (
+    CANDIDATE_LINE_FORMAT,
+    load_import_manifest,
+    manifest_candidate_lines,
+    manifest_shards_covering,
+)
 from derlem_worker.pii import PII_KEYS, count_pii_in_text
 from derlem_worker.quality_filters import (
     QUALITY_FILTER_STATUS_NOT_EVALUATED,
@@ -138,6 +145,16 @@ class CleanCandidateReport:
     # TASK-046 (2026-10-13): tr-web-v4'te karar kaydinin yargic kimligi
     # ("tr-web-v4@<kural kodunun sha'si>"); diger politikalarda None.
     quality_judge: str | None = None
+    # TASK-049 (2026-10-13): tr-web-v4'te uygulanan makine cevirisi hedef cifti
+    # ("A" / "B", machine_translation.MT_TARGET); yargic kimligi bunu zaten kapsar,
+    # bu alan okunur ad icindir. Diger politikalarda None.
+    machine_translation_target: str | None = None
+    # TASK-049: girdi bir alim manifestiyse (derlem.import-manifest.v1) belgeler
+    # parcalardan aday satiri olarak okunur (import_manifest.CANDIDATE_LINE_FORMAT);
+    # input_kind "import_manifest", import_manifest okunan parcalarin ozeti.
+    # Satir dosyasinda ikisi de None.
+    input_kind: str | None = None
+    import_manifest: dict[str, Any] | None = None
 
 
 def is_held_out(line_bytes: bytes, rule: str) -> bool:
@@ -306,6 +323,17 @@ def main() -> None:
     )
     parser.add_argument("--run-id", help="Run id written to every decision row (selection-list mode; default: uuid4)")
     parser.add_argument(
+        "--decided-at",
+        help="Timezone-aware ISO timestamp written to every decision row (selection-list mode; default: run start). "
+        "With --run-id it makes the decisions file reproducible byte for byte",
+    )
+    parser.add_argument(
+        "--store-root",
+        type=Path,
+        help="Object store root for an --input-path that is a derlem.import-manifest.v1 object "
+        "(documents are read from its shards); --source-id uses the configured store",
+    )
+    parser.add_argument(
         "--drop-list-decision-type",
         choices=sorted(DROP_LIST_FALLBACK_DECISION_TYPES),
         default="language",
@@ -328,24 +356,37 @@ def main() -> None:
         parser.error("--max-document-bytes must be positive")
 
     v3 = args.held_out_rule != HELD_OUT_RULE_NONE or args.near_dedup or args.drop_list is not None
+    decided_at: datetime | None = None
+    if args.decided_at:
+        decided_at = datetime.fromisoformat(args.decided_at)
+        if decided_at.tzinfo is None:
+            parser.error("--decided-at must carry a timezone (e.g. 2026-10-13T00:00:00+00:00)")
+        if not args.selection_list:
+            parser.error("--decided-at goes with --selection-list")
     source: dict[str, Any] | None = None
+    store_root: Path | None = None
     if args.source_id:
+        if args.store_root:
+            parser.error("--store-root goes with --input-path; --source-id uses the configured store")
         source = load_source(config.database_url, config.storage_root, args.source_id)
         input_path = Path(str(source["object_path"]))
-        output_path = resolve_output_path(
-            args.output_dir, args.output_path, source, args.limit_lines,
-            quality_policy=args.quality_policy, v3=v3,
-        )
+        store_root = config.storage_root
     else:
         input_path = args.input_path.resolve(strict=True)
-        output_path = resolve_output_path(
-            args.output_dir, args.output_path, None, args.limit_lines,
-            input_path=input_path, quality_policy=args.quality_policy, v3=v3,
-        )
+        store_root = args.store_root.resolve(strict=True) if args.store_root else None
+    # Parcali kaynak (TASK-049): aday satiri JSON'dur, dosya adi .jsonl.
+    import_manifest_input = load_import_manifest(input_path) is not None
+    if import_manifest_input and store_root is None:
+        parser.error("--input-path is an import manifest; pass --store-root (its documents live in shards)")
+    suffix = ".jsonl" if import_manifest_input else ".txt"
+    output_path = resolve_output_path(
+        args.output_dir, args.output_path, source, args.limit_lines,
+        input_path=(None if source else input_path), quality_policy=args.quality_policy, v3=v3, suffix=suffix,
+    )
 
     if args.selection_list:
-        if args.limit_lines is not None:
-            parser.error("--selection-list does not take --limit-lines")
+        if args.limit_lines is not None and not import_manifest_input:
+            parser.error("--selection-list takes --limit-lines only for an import-manifest slice (measurement)")
         artifacts = selection_artifact_paths(output_path)
         rejections_path = args.quality_rejections_path.resolve() if args.quality_rejections_path else None
         if rejections_path is not None and args.quality_policy == QUALITY_POLICY_NONE and not v3:
@@ -367,6 +408,9 @@ def main() -> None:
             drop_list_reason=args.drop_list_reason,
             drop_list_decision_type=args.drop_list_decision_type,
             run_id=args.run_id,
+            decided_at=decided_at,
+            store_root=store_root,
+            limit_lines=args.limit_lines,
         )
         print(json.dumps(manifest, ensure_ascii=False, indent=2))
         return
@@ -404,6 +448,7 @@ def main() -> None:
         drop_list_path=args.drop_list,
         drop_list_method=args.drop_list_method,
         drop_list_reason=args.drop_list_reason,
+        store_root=store_root,
     )
     write_json_atomic(manifest_path, asdict(report))
     print(json.dumps({"output": str(output_path), "manifest": str(manifest_path), "report": asdict(report)}, ensure_ascii=False, indent=2))
@@ -435,12 +480,19 @@ def derive_selection_list(
     drop_list_decision_type: str = "language",
     run_id: str | None = None,
     decided_at: datetime | None = None,
+    store_root: Path | None = None,
+    limit_lines: int | None = None,
 ) -> dict[str, Any]:
     """Metin-kopya kosusunun aynisi, metin yazmadan: secim listesi + karar anlik goruntusu + manifest.
 
     ``output_path`` metin-kopyanin olacagi yoldur; dosyalar onun yanina yazilir,
     kendisi yazilmaz. Manifest metin-kopyanin SHA'sini (``expected_materialization``)
     tasir; materialize bu SHA'yi uretmeden ciktiyi yayimlamaz.
+
+    ``input_path`` bir alim manifestiyse (TASK-049) ``store_root`` gerekir; belgeler
+    parcalardan aday satiri olarak okunur ve manifestin ``parent`` bolumu parcalari
+    listeler (materialize ayni parcalardan uretir). ``limit_lines`` yalniz olcum
+    dilimi icindir ve manifestte ``document_limit`` olarak durur.
     """
     if drop_list_decision_type not in DROP_LIST_FALLBACK_DECISION_TYPES:
         raise ValueError(f"unsupported drop-list decision type: {drop_list_decision_type}")
@@ -473,6 +525,8 @@ def derive_selection_list(
             drop_list_method=drop_list_method,
             drop_list_reason=drop_list_reason,
             selection=recorder,
+            store_root=store_root,
+            limit_lines=limit_lines,
         )
         selection_info, decisions_info = recorder.close()
     except BaseException:
@@ -495,6 +549,20 @@ def derive_selection_list(
     report_dict["output_path"] = None
     report_dict["held_out_path"] = None
     report_dict["selection_list"] = True
+    report_dict["document_limit"] = limit_lines
+    parent_extra: dict[str, Any] | None = None
+    if report.import_manifest is not None:
+        summary = report.import_manifest
+        parent_extra = {
+            "kind": "import_manifest",
+            "schema": summary["schema"],
+            "line_format": summary["line_format"],
+            "store_root": summary["store_root"],
+            "document_limit": limit_lines,
+            "documents_read": summary["documents_read"],
+            "last_source_ordinal": summary["last_source_ordinal"],
+            "shards": summary["shards"],
+        }
     manifest = write_selection_manifest(
         artifacts["manifest"],
         report=report_dict,
@@ -510,9 +578,29 @@ def derive_selection_list(
         run_id=run_id,
         decided_at=decided_at.isoformat(),
         method=f"{report.algorithm_version}+selection-list",
+        parent_extra=parent_extra,
+        policies=policy_ids(report),
     )
     manifest["manifest_path"] = str(artifacts["manifest"])
     return manifest
+
+
+def policy_ids(report: CleanCandidateReport) -> dict[str, Any]:
+    """Kosunun karar politikalarinin kimlikleri (karar kaydindaki ``judge`` degerleri)."""
+    return {
+        "pii": PII_JUDGE,
+        "quality_rule": report.quality_judge or report.quality_filter_version,
+        "quality_filter_status": report.quality_filter_status,
+        "machine_translation_target": report.machine_translation_target,
+        "duplicate": report.fingerprint_version,
+        "near_duplicate": (
+            f"{report.near_dedup_method}-hamming{report.near_dedup_hamming_threshold}"
+            if report.near_dedup_method else None
+        ),
+        "held_out": report.held_out_rule,
+        "drop_list": report.drop_list_method,
+        "max_document_bytes": report.max_document_bytes,
+    }
 
 
 def load_source(database_url: str, storage_root: Path, source_id: str) -> dict[str, Any]:
@@ -612,11 +700,17 @@ def derive_clean_candidate(
     drop_list_method: str | None = None,
     drop_list_reason: str = DROP_LIST_DEFAULT_REASON,
     selection: SelectionRecorder | None = None,
+    store_root: Path | None = None,
 ) -> CleanCandidateReport:
     """Metin-kopya turevi; ``selection`` verilirse metin yazilmaz (TASK-044).
 
     Secim listesi kosusunda karar mantigi ayni koddur; yalniz egitim/held-out
     ciktilari diske yazilmaz, SHA'lari hesaplanir ve her karar ``selection``a gider.
+
+    Girdi bir alim manifestiyse (derlem.import-manifest.v1, TASK-049) belgeler
+    ``store_root`` altindaki parcalardan, parca sirasinda, aday satiri olarak gelir
+    (``import_manifest.manifest_candidate_lines``); asagidaki dongu -- PII, kalite,
+    tekrar, yakin kopya, held-out, sinir asimi -- satir dosyasiyla AYNI koddur.
     """
     if quality_policy not in SUPPORTED_QUALITY_POLICIES:
         raise ValueError(f"Unsupported quality policy: {quality_policy}")
@@ -629,6 +723,11 @@ def derive_clean_candidate(
     output_path = output_path.resolve()
     if input_path == output_path:
         raise RuntimeError("Output path must not be the same as input path")
+    # Alim manifesti satir dosyasi degildir: satirlari belge sayilirsa manifest JSON'u
+    # aday olurdu. Parcalar store_root altinda; yoksa kosu durur.
+    import_manifest = load_import_manifest(input_path)
+    if import_manifest is not None and store_root is None:
+        raise ValueError("input is a derlem.import-manifest.v1 object; pass store_root to read its shards")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if quality_rejections_path is not None:
         if quality_policy == QUALITY_POLICY_NONE and not v3:
@@ -658,6 +757,7 @@ def derive_clean_candidate(
     # kimligi kural kodunun sha'sini tasir; v1-v3 bugunku tek satirlik bicimde kalir.
     v4_policy = effective_quality_policy == QUALITY_POLICY_TR_WEB_V4
     quality_judge = tr_web_v4_judge_id() if quality_policy == QUALITY_POLICY_TR_WEB_V4 else None
+    mt_target = machine_translation.MT_TARGET if quality_policy == QUALITY_POLICY_TR_WEB_V4 else None
 
     # Tekillestirme kaydi iki akis (egitim adayi ve held-out) icin ortaktir:
     # held-out bir satirin birebir/normalize kopyasi egitime gidemez.
@@ -698,11 +798,19 @@ def derive_clean_candidate(
         f"{SIMHASH_VERSION}-hamming{near_index.hamming_threshold}" if near_index is not None else ""
     )
     outputs = [item for item in (output, rejections, held_out) if item is not None]
+    shard_progress: dict[str, int] = {}
+    if import_manifest is not None:
+        assert store_root is not None
+        document_lines = manifest_candidate_lines(
+            import_manifest, store_root, max_document_bytes, limit_documents=limit_lines, progress=shard_progress,
+        )
+    else:
+        document_lines = _bounded_lines(input_path, max_document_bytes)
     try:
         with ExitStack() as stack:
             for item in outputs:
                 item.open(stack)
-            for ordinal, raw_line, oversized in _bounded_lines(input_path, max_document_bytes):
+            for ordinal, raw_line, oversized in document_lines:
                 if limit_lines is not None and ordinal > limit_lines:
                     break
                 total_lines += 1
@@ -724,6 +832,17 @@ def derive_clean_candidate(
                     continue
 
                 counts = count_pii_in_text(raw_line)
+                text, _ = _document_from_line(stripped)
+                if text != stripped:
+                    # JSON kaydi (TASK-049): satirda belge ici satir sonlari kacisli
+                    # (\\n) durur; iki satira bolunmus bir numara satirda gorunmez ama
+                    # metinde (ve TXT ihracatinda) gorunur. Metin de taranir, sayac
+                    # anahtar basina iki gorunumun buyugudur. Duz metin satirinda
+                    # metin satirin kendisidir: davranis degismez.
+                    text_counts = count_pii_in_text(text)
+                    counts = {
+                        key: max(int(counts.get(key, 0)), int(text_counts.get(key, 0))) for key in PII_KEYS
+                    }
                 has_pii = False
                 for key in PII_KEYS:
                     count = int(counts.get(key, 0))
@@ -744,7 +863,6 @@ def derive_clean_candidate(
 
                 line_bytes = raw_line.encode("utf-8")
                 line_digest = hashlib.sha256(line_bytes)
-                text, _ = _document_from_line(stripped)
                 if drop_list:
                     dropped = drop_list.get(line_digest.digest())
                     if dropped is not None:
@@ -905,7 +1023,37 @@ def derive_clean_candidate(
         interpreter_version=platform.python_version(),
         zlib_runtime_version=zlib.ZLIB_RUNTIME_VERSION,
         quality_judge=quality_judge,
+        machine_translation_target=mt_target,
+        input_kind=("import_manifest" if import_manifest is not None else None),
+        import_manifest=(
+            None if import_manifest is None else _import_manifest_summary(
+                import_manifest, store_root, shard_progress, limit_lines,
+            )
+        ),
     )
+
+
+def _import_manifest_summary(
+    manifest: dict[str, Any],
+    store_root: Path | None,
+    progress: dict[str, int],
+    limit_lines: int | None,
+) -> dict[str, Any]:
+    last = progress.get("last_source_ordinal")
+    return {
+        "schema": manifest["schema"],
+        "dataset": manifest.get("dataset"),
+        "revision": manifest.get("revision"),
+        "config": manifest.get("config"),
+        "line_format": CANDIDATE_LINE_FORMAT,
+        "store_root": str(store_root) if store_root is not None else None,
+        "documents_total": (manifest.get("totals") or {}).get("documents"),
+        "shards_total": len(manifest["shards"]),
+        "document_limit": limit_lines,
+        "documents_read": progress.get("documents", 0),
+        "last_source_ordinal": last,
+        "shards": manifest_shards_covering(manifest, last if limit_lines is not None else None),
+    }
 
 
 def resolve_output_path(
@@ -917,6 +1065,7 @@ def resolve_output_path(
     input_path: Path | None = None,
     quality_policy: str = QUALITY_POLICY_NONE,
     v3: bool = False,
+    suffix: str = ".txt",
 ) -> Path:
     if output_path:
         return output_path.resolve()
@@ -932,7 +1081,7 @@ def resolve_output_path(
         stem = f"{stem}_v2"
     if limit_lines is not None:
         stem = f"{stem}_first_{limit_lines}"
-    return output_dir / f"{stem}.txt"
+    return output_dir / f"{stem}{suffix}"
 
 
 def write_json_atomic(path: Path, value: Any) -> None:

@@ -179,3 +179,95 @@ def manifest_text_units(manifest: Mapping[str, Any], store_root: Path) -> Iterat
     """PII taramasi icin: her belge metni (UTF-8) + satir sonu."""
     for document in iter_manifest_documents(manifest, store_root, columns=("source_ordinal", "text")):
         yield document["text"].encode("utf-8") + b"\n"
+
+
+# --------------------------------------------------------------------------
+# Temiz aday satiri (TASK-049)
+# --------------------------------------------------------------------------
+
+CANDIDATE_LINE_FORMAT = "derlem.candidate-line.v1"
+"""Parcalardan turetilen adayin satir bicimi: belge basina tek satir, kompakt JSON,
+sirali anahtarlar ``{"text": <metin>, "url": <provenance.url>}``, UTF-8 kacissiz
+(``ensure_ascii=False``), LF ile biter.
+
+- ``url``: ``tr-web-v4`` adresi okur. Adres satirda durursa satir okuyucusu
+  (``clean_candidate._line_url``) ayni adresi gorur: parca okuyucusuyla satir
+  okuyucusu ayni karari verir ve aday kendi basina yeniden suzulebilir.
+- ``id`` (Common Crawl ``<urn:uuid:...>``) YOK: PII kapisi satirin tamamini tarar ve
+  uuid'nin rakam gruplari telefon/kart desenine uyuyor (FineWeb2-HQ'nun ilk 30.000
+  belgesinde 139 belge, %0,46 -- hepsi yanlis isabet). Kimlik secim listesinden
+  bulunur: sira numarasi -> parca satiri -> ``provenance.external_id``.
+- Belge icindeki paragraf sonlari JSON kacisiyla (``\\n``) korunur, metin degismez;
+  satir okuyuculari (``sampling._document_from_line``) ``text`` alanini aynen verir.
+- ``doc_id`` (secim listesi ve karar kaydi) bu satirin UTF-8 baytlarinin SHA256'sidir
+  -- satir okuyucusunun kimligiyle ayni; ortak belge kaydinin ``doc_id``'si (metnin
+  SHA'si) degildir. Held-out kurali da bu satirin baytlarina uygulanir: held-out
+  dosyasinin her satiri kuralla yeniden dogrulanabilir."""
+
+
+def candidate_line(document: Mapping[str, Any]) -> str:
+    provenance = document.get("provenance") or {}
+    if not isinstance(provenance, Mapping):
+        provenance = {}
+    return json.dumps(
+        {"text": document["text"], "url": provenance.get("url")},
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+
+
+def manifest_candidate_lines(
+    manifest: Mapping[str, Any],
+    store_root: Path,
+    max_line_bytes: int,
+    *,
+    limit_documents: int | None = None,
+    progress: dict[str, int] | None = None,
+) -> Iterator[tuple[int, str | None, bool]]:
+    """``sampling._bounded_lines`` sozlesmesi, aday satiriyla: (sira_no, satir | None, sinir_asimi).
+
+    Sinir, satir okuyucusundaki gibi satirin LF dahil bayt sayisina uygulanir
+    (``len(satir) + 1 > max_line_bytes``): ayni belgeler JSONL'e yazilip satir
+    satir okununca ayni belgeler sinir asimi sayilir. Sira numarasi belge
+    kaydinin ``source_ordinal``'idir (parca sirasinda kesintisiz artar). Her parca
+    okunmadan once boyut ve SHA256 ile dogrulanir (``iter_manifest_documents``).
+    ``progress`` verilirse ``documents`` ve ``shards_started`` sayaclari guncellenir.
+    """
+    if max_line_bytes <= 0:
+        raise ValueError("max_line_bytes must be positive")
+    if limit_documents is not None and limit_documents <= 0:
+        raise ValueError("limit_documents must be positive")
+    count = 0
+    for document in iter_manifest_documents(
+        manifest, store_root, columns=("source_ordinal", "text", "provenance")
+    ):
+        count += 1
+        ordinal = int(document["source_ordinal"])
+        if progress is not None:
+            progress["documents"] = count
+            progress["last_source_ordinal"] = ordinal
+        line = candidate_line(document)
+        if len(line.encode("utf-8")) + 1 > max_line_bytes:
+            yield ordinal, None, True
+        else:
+            yield ordinal, line, False
+        if limit_documents is not None and count >= limit_documents:
+            return
+
+
+def manifest_shards_covering(manifest: Mapping[str, Any], last_source_ordinal: int | None) -> list[dict[str, Any]]:
+    """Bir kosunun okudugu parcalar (indeksleriyle); ``last_source_ordinal`` None ise hepsi."""
+    covered = []
+    for index, shard in enumerate(manifest["shards"]):
+        if last_source_ordinal is not None and shard["first_source_ordinal"] > last_source_ordinal:
+            break
+        covered.append({
+            "index": index,
+            "sha256": shard["sha256"],
+            "byte_size": shard["byte_size"],
+            "row_count": shard["row_count"],
+            "first_source_ordinal": shard["first_source_ordinal"],
+            "last_source_ordinal": shard["last_source_ordinal"],
+        })
+    return covered

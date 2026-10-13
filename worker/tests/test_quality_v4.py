@@ -73,21 +73,39 @@ def _profile(text: str) -> int:
 
 # Olculen esikler (var/olcum-2026-10-13/task-046/RAPOR.md). Sinir testleri modulun
 # sabitlerini DEGIL bu degerleri kullanir: esik kayarsa hem sabitleme testi hem
-# sinir testi kirmizi olur (kontrol kosusu).
-_MEASURED_MT = mt.MachineTranslationThresholds(
-    min_words=75,
-    url_profile_permille=-4,
-    strong_profile_permille=20,
-    cyrillic_min=3,
-    cyrillic_max_share_per_100=5,
-    bu_comma_profile_permille=10,
-)
+# sinir testi kirmizi olur (kontrol kosusu). Iki hedef cifti (TASK-049): A = yanlis
+# atma tavani %5 (RAPOR §2.3), B = %7,5 (RAPOR §2.4, olc-mt.json frontier["7.5"]).
+# Sinir testleri modulun SECTIGI cifte (mt.MT_TARGET) gore sinar: kurucu B'yi
+# secip sabiti degistirince testler yesil kalir, ama bir ciftin degeri kayarsa
+# sabitleme testi kirmizidir.
+_MEASURED_MT_SETS = {
+    "A": mt.MachineTranslationThresholds(
+        min_words=75,
+        url_profile_permille=-4,
+        strong_profile_permille=20,
+        cyrillic_min=3,
+        cyrillic_max_share_per_100=5,
+        bu_comma_profile_permille=10,
+    ),
+    "B": mt.MachineTranslationThresholds(
+        min_words=75,
+        url_profile_permille=-4,
+        strong_profile_permille=14,
+        cyrillic_min=3,
+        cyrillic_max_share_per_100=5,
+        bu_comma_profile_permille=4,
+    ),
+}
+_MEASURED_MT = _MEASURED_MT_SETS[mt.MT_TARGET]
 _MEASURED_COM_STRONG = (("price", 2), ("cta", 2), ("spec", 2), ("sponsor", 1))
 _MEASURED_TITLE_REPEAT_MIN = 5
 _MEASURED_MIN_FAMILIES = 2
 
 
 def test_thresholds_are_the_measured_ones() -> None:
+    assert mt.THRESHOLD_SETS == _MEASURED_MT_SETS
+    assert mt.MT_TARGET in {"A", "B"}
+    assert mt.THRESHOLDS is mt.THRESHOLD_SETS[mt.MT_TARGET]
     assert mt.THRESHOLDS == _MEASURED_MT
     assert cp.THRESHOLDS == cp.CommercialThresholds(
         title_repeat_min=_MEASURED_TITLE_REPEAT_MIN,
@@ -277,6 +295,21 @@ def test_cyrillic_share_cap_separates_residue_from_a_russian_document() -> None:
     over = under + 20
     assert _mt(base + " " + "д" * under, _URL)
     assert not _mt(base + " " + "д" * over, _URL)
+
+
+def test_mt_target_pairs_differ_only_where_measured_and_enter_the_judge() -> None:
+    # 17 binde kopya profili: A'nin guclu esiginin (20) altinda, B'ninkinin (14) ustunde.
+    between = mt.machine_translation_stats(_prose(1000, calque=17))
+    assert not mt.is_machine_translation(between, mt.THRESHOLD_SETS["A"])
+    assert mt.is_machine_translation(between, mt.THRESHOLD_SETS["B"])
+    # "Bu," yolu: A 10 binde ister, B 4.
+    bu = mt.machine_translation_stats("Bu, kalem masa duvar. " + _prose(996, calque=6))
+    assert not mt.is_machine_translation(bu, mt.THRESHOLD_SETS["A"])
+    assert mt.is_machine_translation(bu, mt.THRESHOLD_SETS["B"])
+    # Secim sabiti kural kaynagindadir: yargic kimligi onu kapsar.
+    assert "machine_translation.py" in quality_v4.RULE_SOURCE_FILES
+    source = (Path(mt.__file__).read_bytes()).decode("utf-8")
+    assert source.count(f'MT_TARGET = "{mt.MT_TARGET}"') == 1
 
 
 def test_machine_translation_rule_is_not_topical() -> None:

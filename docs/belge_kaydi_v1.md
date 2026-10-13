@@ -184,6 +184,35 @@ python -m derlem_worker.selection from-text-copy --parent P --train v5.txt --hel
 - `from-text-copy`: var olan bir metin-kopya türevi ana kaynağın sıralı alt dizisidir; tek geçişte
   seçim listesine çevrilir. Karar anlık görüntüsü bu yolda yoktur (kararlar eski koşunun raporunda).
 
+### 6.1 Parçalı kaynaktan (TASK-049)
+
+Ana kaynak bir alım manifestiyse (`derlem.import-manifest.v1`; `--source-id` ile yapılandırılmış
+depo, `--input-path` ile `--store-root`), `clean_candidate` belgeleri parça sırasında okur ve her
+belgeyi **aday satırına** çevirir (`import_manifest.CANDIDATE_LINE_FORMAT` =
+`derlem.candidate-line.v1`): `{"text": …, "url": provenance.url}`, sıralı anahtar, kompakt JSON,
+UTF-8 kaçışsız, LF. Paragraf sonları JSON kaçışıyla korunur; satır okuyucuları `text`'i aynen
+geri verir. `url` satırdadır çünkü `tr-web-v4` onu okur — aynı belgeler bu biçimde JSONL'e
+yazılıp satır satır okununca seçim listesi, karar dosyası ve beklenen SHA'lar **bayt bayt
+aynıdır** (test: `test_clean_candidate_shards.py`; 200k dilim ölçümü kartta). Common Crawl
+kimliği satırda **yok**: PII kapısı satırın tamamını tarar ve uuid'nin rakam grupları
+telefon/kart desenine uyuyor (ilk 30.000 belgede %0,46 yanlış isabet); kimlik sıra
+numarasından bulunur.
+
+- Karar yolu satır okuyucusunun aynı döngüsüdür; sıra numarası belgenin `source_ordinal`'ı;
+  sınır aşımı satırın LF dahil baytına uygulanır (satır dosyasındaki gibi); `doc_id` aday
+  satırının SHA256'sıdır (ortak kaydın metin-SHA'sı değil); held-out kuralı aday satırına uygulanır.
+- PII: JSON kaydı satırlarında satırla birlikte **metin de** taranır (satırda `\n` kaçışlı;
+  iki satıra bölünmüş bir numara yalnız metinde görünür). Düz metin satırında metin = satır:
+  v1–v5 üretimleri değişmez (v5 ana nesnesinde metni satırdan farklı okunan satır: 0,
+  `var/olcum-2026-10-13/task-049/olcum-v5-json-satir.json`).
+- Seçim manifestinin `parent` bölümü `kind: import_manifest`, satır biçimi, depo kökü ve okunan
+  parçaların listesini (SHA, boyut, satır, sıra aralığı) taşır; `materialize` aynı parçaları
+  (her biri SHA256 ile doğrulanarak) okur, liste alım manifestiyle tutmazsa durur. Manifestte
+  `policies` (yargıç kimlikleri) ve `report.machine_translation_target` (A/B) durur.
+- `--decided-at` (saat dilimli ISO) ve `--run-id` birlikte verilirse karar dosyası yeniden
+  üretilebilir; `--limit-lines` seçim kipinde yalnız parçalı kaynakta (ölçüm dilimi) kabul edilir
+  ve manifestte `document_limit` olarak durur.
+
 ## 7. Ölçümler (2026-10-13; `var/olcum-2026-10-13/task-044/`)
 
 | Ölçüm | Sonuç |

@@ -194,15 +194,38 @@ class MachineTranslationThresholds:
     """URL'SIZ ikinci yol: "Bu," calkasi VE profil >= bu deger. None = kapali."""
 
 
-THRESHOLDS = MachineTranslationThresholds(
-    min_words=75,
-    url_profile_permille=-4,
-    strong_profile_permille=20,
-    cyrillic_min=3,
-    cyrillic_max_share_per_100=5,
-    bu_comma_profile_permille=10,
-)
-"""Secim tablosu RAPOR.md §2.3'te. Gecici hedefe gore secildi (kurucu onayi bekliyor)."""
+THRESHOLD_SETS: dict[str, MachineTranslationThresholds] = {
+    # A: `kalsin` yanlis atma tavani %5 (RAPOR.md §2.3 secimi; ana recall %79,6,
+    # hakem-MT %64, kontrol %73,1, `kal` %4,9, `v5kal` %1,0).
+    "A": MachineTranslationThresholds(
+        min_words=75,
+        url_profile_permille=-4,
+        strong_profile_permille=20,
+        cyrillic_min=3,
+        cyrillic_max_share_per_100=5,
+        bu_comma_profile_permille=10,
+    ),
+    # B: tavan %7,5 (RAPOR.md §2.4 cephesi, olc-mt.json `frontier["7.5"]`; ana
+    # recall %83,9, hakem-MT %64, kontrol %80,8, `kal` %6,6, `v5kal` %2,9).
+    "B": MachineTranslationThresholds(
+        min_words=75,
+        url_profile_permille=-4,
+        strong_profile_permille=14,
+        cyrillic_min=3,
+        cyrillic_max_share_per_100=5,
+        bu_comma_profile_permille=4,
+    ),
+}
+"""Kurucunun sececegi iki hedef cifti (TASK-046 / TASK-049). Olculen degerler; elle
+oynanmaz -- yeni bir cift yeni olcum ister."""
+
+MT_TARGET = "A"
+"""POLITIKA SABITI: hangi hedef cifti uygulanir ("A" ya da "B"). Tek degisiklik
+noktasi budur. Bu dosya `quality_v4.RULE_SOURCE_FILES` icinde oldugundan secim
+yargic kimligine (`tr-web-v4@<sha>`) girer: A ile B ayni kimligi tasiyamaz."""
+
+THRESHOLDS = THRESHOLD_SETS[MT_TARGET]
+"""Uygulanan esikler. Secim tablosu RAPOR.md §2.3 / §2.4 (kurucu A/B secimi bekliyor)."""
 
 
 def _profile_at_least(stats: MachineTranslationStats, permille: int) -> bool:
@@ -259,7 +282,9 @@ def is_machine_translation(
 __all__ = [
     "CALQUE_WORDS",
     "NATIVE_WORDS",
+    "MT_TARGET",
     "THRESHOLDS",
+    "THRESHOLD_SETS",
     "MachineTranslationStats",
     "MachineTranslationThresholds",
     "is_machine_translation",

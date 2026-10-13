@@ -129,7 +129,9 @@ def _fixture_documents() -> list[tuple[str, str | None, str]]:
     ]
 
 
-def _build_store(tmp_path: Path, documents, *, rows_per_shard: int = 5) -> tuple[Path, Path, list[dict]]:
+def _build_store(
+    tmp_path: Path, documents, *, rows_per_shard: int = 5, row_group_size: int | None = None,
+) -> tuple[Path, Path, list[dict]]:
     records = [
         make_document(
             text=text,
@@ -140,7 +142,8 @@ def _build_store(tmp_path: Path, documents, *, rows_per_shard: int = 5) -> tuple
         )
         for index, (text, url, _) in enumerate(documents, 1)
     ]
-    shards = write_document_shards(records, tmp_path / "shards", rows_per_shard=rows_per_shard)
+    groups = {} if row_group_size is None else {"row_group_size": row_group_size}
+    shards = write_document_shards(records, tmp_path / "shards", rows_per_shard=rows_per_shard, **groups)
     store = ContentAddressedStore(tmp_path / "store")
     for info in shards:
         publish_parquet(store, info)

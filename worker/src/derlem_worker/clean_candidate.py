@@ -20,23 +20,30 @@ import psycopg
 from psycopg.rows import dict_row
 
 from derlem_worker import machine_translation
+from derlem_worker.clean_candidate_signals import (
+    SignalPrecompute,
+    document_fingerprint_key,
+    document_pii_counts,
+    document_quality_reasons,
+    document_simhash_signature,
+)
+from derlem_worker.clean_candidate_signals import line_url as _line_url  # noqa: F401 - eski ad (import_manifest belgesi)
 from derlem_worker.config import load_config
 from derlem_worker.document_record import file_sha256
-from derlem_worker.fingerprints import FINGERPRINT_VERSION, document_fingerprint
+from derlem_worker.fingerprints import FINGERPRINT_VERSION
 from derlem_worker.import_manifest import (
     CANDIDATE_LINE_FORMAT,
     load_import_manifest,
     manifest_candidate_lines,
     manifest_shards_covering,
 )
-from derlem_worker.pii import PII_KEYS, count_pii_in_text
+from derlem_worker.pii import PII_KEYS
 from derlem_worker.quality_filters import (
     QUALITY_FILTER_STATUS_NOT_EVALUATED,
     QUALITY_POLICY_NONE,
     QUALITY_POLICY_TR_WEB_V4,
     SUPPORTED_QUALITY_POLICIES,
     quality_filter_status,
-    quality_rejection_reasons,
 )
 from derlem_worker.quality_v4 import judge_id as tr_web_v4_judge_id
 from derlem_worker.sampling import _bounded_lines, _document_from_line
@@ -53,7 +60,6 @@ from derlem_worker.similarity import (
     RELEASE_NEAR_DUP_BAND_COUNT,
     RELEASE_NEAR_DUP_THRESHOLD,
     SIMHASH_VERSION,
-    document_simhash,
 )
 
 
@@ -155,6 +161,11 @@ class CleanCandidateReport:
     # Satir dosyasinda ikisi de None.
     input_kind: str | None = None
     import_manifest: dict[str, Any] | None = None
+    # TASK-049 ek isi (paralel on hesap): belge-yerel sinyaller tablolardan geldiyse
+    # ozet (isci sayisi, tablo sayilari, yeniden kullanilan/hesaplanan/reddedilen,
+    # tablolarin toplu SHA'si, politika kimligi); tek surecli eski yolda None.
+    # Kararlari ve ciktilari degistirmez.
+    signal_precompute: dict[str, Any] | None = None
 
 
 def is_held_out(line_bytes: bytes, rule: str) -> bool:
@@ -339,10 +350,26 @@ def main() -> None:
         default="language",
         help="Decision type for drop-list entries whose reason is not a known one (selection-list mode)",
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="Import-manifest input only: compute the per-document signals (PII, quality rules, fingerprint, "
+        "SimHash, doc_id) in N processes; the order-dependent decisions stay in one pass. 1 = the serial path",
+    )
+    parser.add_argument(
+        "--signals-dir",
+        type=Path,
+        help="Import-manifest input only: keep the per-row-group signal tables here and reuse those whose "
+        "shard SHA and policy identity still match (cheap restart); default with --workers > 1: a temporary "
+        "directory removed at the end",
+    )
     args = parser.parse_args()
 
     if bool(args.source_id) == bool(args.input_path):
         parser.error("Exactly one of --source-id or --input-path is required")
+    if args.workers < 1:
+        parser.error("--workers must be at least 1")
     if args.limit_lines is not None and args.limit_lines <= 0:
         parser.error("--limit-lines must be positive")
     if args.held_out_path and args.held_out_rule == HELD_OUT_RULE_NONE:
@@ -378,6 +405,9 @@ def main() -> None:
     import_manifest_input = load_import_manifest(input_path) is not None
     if import_manifest_input and store_root is None:
         parser.error("--input-path is an import manifest; pass --store-root (its documents live in shards)")
+    if (args.workers > 1 or args.signals_dir is not None) and not import_manifest_input:
+        parser.error("--workers > 1 and --signals-dir need an import-manifest input (signals are per shard row group)")
+    signals_dir = args.signals_dir.resolve() if args.signals_dir is not None else None
     suffix = ".jsonl" if import_manifest_input else ".txt"
     output_path = resolve_output_path(
         args.output_dir, args.output_path, source, args.limit_lines,
@@ -411,6 +441,8 @@ def main() -> None:
             decided_at=decided_at,
             store_root=store_root,
             limit_lines=args.limit_lines,
+            workers=args.workers,
+            signals_dir=signals_dir,
         )
         print(json.dumps(manifest, ensure_ascii=False, indent=2))
         return
@@ -449,6 +481,8 @@ def main() -> None:
         drop_list_method=args.drop_list_method,
         drop_list_reason=args.drop_list_reason,
         store_root=store_root,
+        workers=args.workers,
+        signals_dir=signals_dir,
     )
     write_json_atomic(manifest_path, asdict(report))
     print(json.dumps({"output": str(output_path), "manifest": str(manifest_path), "report": asdict(report)}, ensure_ascii=False, indent=2))
@@ -482,6 +516,8 @@ def derive_selection_list(
     decided_at: datetime | None = None,
     store_root: Path | None = None,
     limit_lines: int | None = None,
+    workers: int = 1,
+    signals_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Metin-kopya kosusunun aynisi, metin yazmadan: secim listesi + karar anlik goruntusu + manifest.
 
@@ -527,6 +563,8 @@ def derive_selection_list(
             selection=recorder,
             store_root=store_root,
             limit_lines=limit_lines,
+            workers=workers,
+            signals_dir=signals_dir,
         )
         selection_info, decisions_info = recorder.close()
     except BaseException:
@@ -633,24 +671,6 @@ def load_source(database_url: str, storage_root: Path, source_id: str) -> dict[s
     return source
 
 
-def _line_url(line: str) -> str | None:
-    """Satir bir JSON kaydiysa adresi: ust duzey `url` ya da `provenance.url`
-    (ortak belge kaydi). Duz metin satirinda None. Yalniz tr-web-v4 okur."""
-    if not line.startswith("{"):
-        return None
-    try:
-        value = json.loads(line)
-    except json.JSONDecodeError:
-        return None
-    if not isinstance(value, dict):
-        return None
-    url = value.get("url")
-    if not isinstance(url, str):
-        provenance = value.get("provenance")
-        url = provenance.get("url") if isinstance(provenance, dict) else None
-    return url if isinstance(url, str) and url.strip() else None
-
-
 def default_held_out_path(output_path: Path) -> Path:
     return output_path.with_name(f"{output_path.stem}_heldout{output_path.suffix}")
 
@@ -701,6 +721,8 @@ def derive_clean_candidate(
     drop_list_reason: str = DROP_LIST_DEFAULT_REASON,
     selection: SelectionRecorder | None = None,
     store_root: Path | None = None,
+    workers: int = 1,
+    signals_dir: Path | None = None,
 ) -> CleanCandidateReport:
     """Metin-kopya turevi; ``selection`` verilirse metin yazilmaz (TASK-044).
 
@@ -711,7 +733,16 @@ def derive_clean_candidate(
     ``store_root`` altindaki parcalardan, parca sirasinda, aday satiri olarak gelir
     (``import_manifest.manifest_candidate_lines``); asagidaki dongu -- PII, kalite,
     tekrar, yakin kopya, held-out, sinir asimi -- satir dosyasiyla AYNI koddur.
+
+    Paralel on hesap (yalniz alim manifesti; ``workers`` > 1 ya da ``signals_dir``):
+    belge-yerel sinyaller (PII, kalite gerekceleri, parmak izi, SimHash, doc_id)
+    ``clean_candidate_signals`` ile parca satir grubu basina tablolarda hesaplanir;
+    bu dongu ayni sirada ilerler, sinyali yeniden hesaplamak yerine tablodan alir
+    (sira no / asama / doc_id dogrulanarak). Birebir kopya, yakin kopya, held-out,
+    atilacak-satir listesi ve sayaclar burada, sirali kalir: cikti bayt bayt aynidir.
     """
+    if workers < 1:
+        raise ValueError("workers must be at least 1")
     if quality_policy not in SUPPORTED_QUALITY_POLICIES:
         raise ValueError(f"Unsupported quality policy: {quality_policy}")
     if held_out_rule not in SUPPORTED_HELD_OUT_RULES:
@@ -728,6 +759,9 @@ def derive_clean_candidate(
     import_manifest = load_import_manifest(input_path)
     if import_manifest is not None and store_root is None:
         raise ValueError("input is a derlem.import-manifest.v1 object; pass store_root to read its shards")
+    use_signals = workers > 1 or signals_dir is not None
+    if use_signals and import_manifest is None:
+        raise ValueError("parallel pre-compute (workers > 1 / signals_dir) needs a derlem.import-manifest.v1 input")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if quality_rejections_path is not None:
         if quality_policy == QUALITY_POLICY_NONE and not v3:
@@ -806,14 +840,28 @@ def derive_clean_candidate(
         )
     else:
         document_lines = _bounded_lines(input_path, max_document_bytes)
+    signals: SignalPrecompute | None = None
+    signal_summary: dict[str, Any] | None = None
+    if use_signals:
+        assert import_manifest is not None and store_root is not None
+        signals = SignalPrecompute(
+            import_manifest, store_root, workers=workers, signals_dir=signals_dir, temp_parent=output_path.parent,
+            quality_policy=effective_quality_policy, near_dedup=near_index is not None,
+            max_line_bytes=max_document_bytes, limit_documents=limit_lines,
+        )
     try:
         with ExitStack() as stack:
             for item in outputs:
                 item.open(stack)
+            if signals is not None:
+                stack.enter_context(signals)
             for ordinal, raw_line, oversized in document_lines:
                 if limit_lines is not None and ordinal > limit_lines:
                     break
                 total_lines += 1
+                # Paralel on hesap: belge-yerel sinyal tablodan (sira no, asama, doc_id
+                # dogrulanir); yoksa (eski yol) asagida ayni fonksiyonlarla hesaplanir.
+                signal = signals.take(ordinal, raw_line, oversized) if signals is not None else None
                 if oversized:
                     removed_oversized_lines += 1
                     if selection is not None:
@@ -831,18 +879,14 @@ def derive_clean_candidate(
                         )
                     continue
 
-                counts = count_pii_in_text(raw_line)
-                text, _ = _document_from_line(stripped)
-                if text != stripped:
-                    # JSON kaydi (TASK-049): satirda belge ici satir sonlari kacisli
-                    # (\\n) durur; iki satira bolunmus bir numara satirda gorunmez ama
-                    # metinde (ve TXT ihracatinda) gorunur. Metin de taranir, sayac
-                    # anahtar basina iki gorunumun buyugudur. Duz metin satirinda
-                    # metin satirin kendisidir: davranis degismez.
-                    text_counts = count_pii_in_text(text)
-                    counts = {
-                        key: max(int(counts.get(key, 0)), int(text_counts.get(key, 0))) for key in PII_KEYS
-                    }
+                if signal is None:
+                    text, _ = _document_from_line(stripped)
+                    counts = document_pii_counts(raw_line, stripped, text)
+                else:
+                    # Metin yalniz atma raporunun onizlemesi icin gerekir; sinyaller tablodadir.
+                    text = _document_from_line(stripped)[0] if rejections is not None else ""
+                    assert signal.pii_counts is not None
+                    counts = signal.pii_counts
                 has_pii = False
                 for key in PII_KEYS:
                     count = int(counts.get(key, 0))
@@ -878,9 +922,11 @@ def derive_clean_candidate(
                                 line_bytes=line_bytes, text=text, details=dropped,
                             ))
                         continue
-                quality_reasons = quality_rejection_reasons(
-                    text, effective_quality_policy, url=(_line_url(stripped) if v4_policy else None),
-                )
+                if signal is None:
+                    quality_reasons = document_quality_reasons(text, stripped, effective_quality_policy, v4_policy)
+                else:
+                    assert signal.quality_reasons is not None
+                    quality_reasons = signal.quality_reasons
                 if quality_reasons:
                     removed_quality_lines += 1
                     if selection is not None and v4_policy:
@@ -901,12 +947,10 @@ def derive_clean_candidate(
                         ))
                     continue
 
-                fingerprint = document_fingerprint(text) if text else None
-                if fingerprint is None:
+                key = document_fingerprint_key(text) if signal is None else signal.fingerprint
+                if key is None:
                     kept_short_or_unfingerprinted_lines += 1
                 else:
-                    normalized_sha256, _ = fingerprint
-                    key = bytes.fromhex(normalized_sha256)
                     earlier = seen_fingerprints.get(key)
                     if earlier is not None:
                         removed_duplicate_lines += 1
@@ -925,7 +969,7 @@ def derive_clean_candidate(
                     indexed_fingerprints += 1
 
                 if near_index is not None:
-                    signature = document_simhash(text) if text else None
+                    signature = document_simhash_signature(text) if signal is None else signal.simhash
                     if signature is not None:
                         partner = near_index.find_partner(signature)
                         if partner is not None:
@@ -958,6 +1002,8 @@ def derive_clean_candidate(
                     if selection is not None:
                         selection.select(ordinal, line_digest.hexdigest(), "train")
 
+            if signals is not None:
+                signal_summary = signals.finish(complete=limit_lines is None)
             for item in outputs:
                 item.sync()
         for item in outputs:
@@ -1030,6 +1076,7 @@ def derive_clean_candidate(
                 import_manifest, store_root, shard_progress, limit_lines,
             )
         ),
+        signal_precompute=signal_summary,
     )
 
 

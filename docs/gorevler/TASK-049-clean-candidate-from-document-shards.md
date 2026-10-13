@@ -146,25 +146,101 @@ MT**: shards 0–2 are early-dump-heavy (TASK-046 full pass: MT 10.2 % docs / 15
 # 1. owner picks A or B: worker/src/derlem_worker/machine_translation.py -> MT_TARGET = "A" | "B"
 # 2. from the repo root (Git Bash):
 bash var/olcum-2026-10-13/task-049/tam_kosu.sh A      # or B; refuses if MT_TARGET differs
+bash var/olcum-2026-10-13/task-049/tam_kosu.sh A 12   # optional 2nd arg: workers (default 8)
 ```
 
-The script runs `clean_candidate --source-id ba80dc1c-… --output-path var/derived/fineweb2hq_tur_ba80dc1c_trweb4<X>.jsonl
+The script runs `clean_candidate --workers <N> --signals-dir var/derived/fineweb2hq_tur_ba80dc1c_trweb4<X>.signals
+--source-id ba80dc1c-… --output-path var/derived/fineweb2hq_tur_ba80dc1c_trweb4<X>.jsonl
 --quality-policy tr-web-v4 --held-out-rule afacan-held-out-v1 --near-dedup --selection-list
 --run-id task-049-fineweb2hq-trweb4<X> --decided-at <start, UTC>`, then `selection materialize`
-twice (write + hash only) and asserts the two outputs match. DB: SELECT only.
+twice (write + hash only) and asserts the two outputs match, then removes the signal tables.
+DB: SELECT only. Interrupted? Run the same command again: matching signal tables are reused.
 
 | | Estimate |
 |---|---|
-| Selection pass | 8,578,808 docs × 6.9–10 ms ≈ **17–24 h** single process (6.9 ms measured under 5-way load; 10 ms in a 3,000-doc probe). Quality rules ≈ 80 %, SimHash ≈ 10–35 % of the time (profile). Memory ≈ 1.5–2 GB (fingerprint dict + SimHash index) |
+| Selection pass | single process: 8,578,808 docs × 6.5–10 ms ≈ **15.5–24 h** (6.9 ms under 5-way load, 6.5 ms alone with the worker busy; 10 ms in a 3,000-doc probe). Quality rules ≈ 80 %, SimHash ≈ 10–35 % of the time (profile). Memory ≈ 1.5–2 GB (fingerprint dict + SimHash index). **With the parallel pre-compute: 8 workers ≈ 2.5–2.8 h, 12 ≈ 2.3–2.6 h** (see below) |
 | Materialize | ≈ 10–15 min each (13.6 s / 200 k) |
 | Candidate size (A) | corpus-wide drop ≈ 34.9 % bytes tr-web-v4 (TASK-046 sample, final code) + ≈ 2.2 % PII + ≈ 2.8 % oversized → **≈ 6.8–6.9 M documents, ≈ 15.2 GB text ≈ 15.7 GB JSONL**; held-out ≈ 2,700 docs, ≈ 7 MB |
 | Candidate size (B) | MT drops ≈ 1.3× A's (slice ratio) → **≈ 6.4–6.5 M documents, ≈ 13.6 GB JSONL** |
 | Selection + decisions files | ≈ 300 MB + ≈ 50–150 MB |
 | Disk | ≥ 50 GB free (candidate + ingest copy on Windows + store object); 152 GB free now |
 
-A parallel pre-compute of the per-document pure work (PII, rules, fingerprint, SimHash) with the
-order-dependent decisions kept in one process would cut the selection pass to ~3–4 h on 8 cores;
-not done (moratorium; serial is the path the equivalence is proven on).
+The parallel pre-compute of the per-document work (PII, rules, fingerprint, SimHash) with the
+order-dependent decisions kept in one pass is done — next subsection.
+
+### Parallel pre-compute (addendum, 2026-10-13/14)
+
+**Derlem session (Claude, opus).** Measurements: `var/olcum-2026-10-13/task-049/paralel/`
+(`olc_paralel.py`, `kos_paralel.sh`, `olcum-*.json`, `kontrol_paralel.py` →
+`kontrol-kosulari-paralel.json`). Nothing written to the database, `var/storage`, services or git;
+full run NOT started.
+
+| File | Change |
+|---|---|
+| `clean_candidate_signals.py` (new) | **Shared per-document functions** — `document_pii_counts` (line + text union), `document_quality_reasons` (url via `line_url`, moved here; `clean_candidate._line_url` stays as an alias), `document_fingerprint_key`, `document_simhash_signature`: the serial loop calls the same functions the workers call. **Signal table** `derlem.clean-candidate-signals.v1`, one per shard Parquet row group (10,000 docs; 910 for the full import, 21 for the 200 k slice), `s<shard>-g<group>.parquet`: `source_ordinal`, `stage` (oversized / blank / pii / quality / pass — the loop's short-circuits: no quality after PII, no fingerprint after a reason), `doc_id` (candidate-line SHA256), PII counts, quality reasons, normalized fingerprint, SimHash. **Identity** in the Parquet metadata: shard index + SHA + size, row group, rows, effective quality policy, judge id (→ MT target), near-dedup, max line bytes, SHA of the 13 signal-determining source files (LF), interpreter, zlib; a table whose identity differs is **rejected and recomputed**, the worker reads its parameters from the identity (a table cannot hold another policy's signals). Pinned pyarrow + fixed writer settings → deterministic bytes. `SignalPrecompute`: plans the tables, reuses matching ones, computes the rest in a `spawn` `ProcessPoolExecutor` (worker function at module level; the module imports no DB/config/`__main__` — tested), hands signals over in ordinal order; the pre-compute **overlaps** the decision pass (the loop waits for table k while the pool works on k+1…). Per document the loop **verifies ordinal, oversized/blank flag and doc_id** against the shard bytes it reads itself (shard SHA-verified as before) → `SignalTableError`, nothing written |
+| `clean_candidate.py` | `--workers N` (default 1 = the serial path, no tables) and `--signals-dir` (keep + reuse tables; default with N > 1: a temp dir beside the output, removed at the end); import-manifest input only (refused for line files); the loop takes PII counts / reasons / fingerprint / SimHash from the table instead of recomputing; exact duplicate ("first seen stays"), near-duplicate buckets, held-out, drop list, counters and outputs stay in the single ordered pass. Report: `signal_precompute` (workers, tables total/reused/computed/rejected, `tables_sha256`, policy identity; `null` on the serial path). Text-copy mode supports it too |
+| tests | new `test_clean_candidate_parallel.py` (18); `test_clean_candidate_shards.py`: `_build_store(row_group_size=…)` |
+| `tam_kosu.sh` | 2nd argument = workers (default 8), `--signals-dir <out>.signals`, tables removed after the two materializes match; MT_TARGET check unchanged |
+
+**200 k slice** (same slice, options, run id and decided-at as above; MT target A; run one after
+another while the worker ran `index_document_fingerprints` on FineWeb2-HQ and another unrelated
+Python process was busy — machine at ~40 % CPU before the runs; Ryzen 9 5900HX, 8 cores / 16
+threads):
+
+| Run | Time | s / 100 k | Speed-up | selection | decisions | candidate | held-out | Peak memory |
+|---|---:|---:|---:|---|---|---|---|---|
+| `--workers 1` (serial path, refactored) | 1,297 s | 649 | 1.0× | `5b118ab0…5d3b7e` ✔ | `2f9fe922…584441` ✔ | `b72fcbe2…dfdac1` 174,980 ✔ | `68c91b1c…c87daf` 62 ✔ | 0.44 GB |
+| `--workers 4` | 358 s | 179 | 3.6× | ✔ | ✔ | ✔ | ✔ | parent 0.48 GB, workers 0.23–0.27 GB |
+| `--workers 8` | 238 s | 119 | 5.5× | ✔ | ✔ | ✔ | ✔ | parent 0.48 GB, workers 0.23–0.27 GB |
+| `--workers 12` | 222 s | 111 | 5.9× | ✔ | ✔ | ✔ | ✔ | parent 0.48 GB, workers 0.20–0.27 GB |
+| `--workers 8`, tables reused (restart) | **20 s** | 10 | 64× | ✔ | ✔ | ✔ | ✔ | 0.50 GB |
+
+✔ = byte-identical to the TASK-049 reference (`olcum-shard-a1.json`); decision counts, oversized
+list, quality-reason and PII counters and policy ids equal too. The 21 signal tables are
+**byte-identical across 4, 8 and 12 workers** (`tables_sha256` `5a5935c6…a9d620`, 13.8 MB =
+0.66 MB / table). Scaling flattens above 8 workers: 8 physical cores, shared with the worker. The
+slice has only 21 tables, so its 8/12-worker times include a half-empty last wave.
+
+**Full-run estimate (selection pass)** from the steady-state table rate (tables done / s: 4 workers
+0.063, 8 workers 0.10, 12 workers 0.11; ~63 / 80 / 110 s per 10 k-doc table) × 910 tables, and the
+naive 200 k scaling as the upper end:
+
+| Workers | Selection pass | + 2 materializes | Memory |
+|---|---|---|---|
+| 1 (serial) | ≈ 15.5 h | + 0.3–0.5 h | 1.5–2 GB |
+| 4 | ≈ 4.0–4.3 h | + 0.3–0.5 h | + 4 × 0.27 GB |
+| **8 (default)** | **≈ 2.5–2.8 h** | **+ 0.3–0.5 h → ≈ 3–3.3 h** | + 8 × 0.27 GB |
+| 12 | ≈ 2.3–2.6 h | + 0.3–0.5 h | + 12 × 0.27 GB |
+
+The decision pass alone (all tables present) is 10 s / 100 k → ≈ 15 min for the full import: the
+floor with infinite workers and the cost of a restart after a crash. Signal tables ≈ 0.6 GB. Worker
+memory < 0.3 GB each (limit was 1 GB). Free RAM was ≈ 5 GB of 32 GB during the runs: 8 workers +
+the 1.5–2 GB parent fit; 12 is tighter.
+
+**Tests:** `DERLEM_SKIP_DB_TESTS=1 pytest worker/tests`: **624 passed, 37 skipped** (606 + 18).
+`test_clean_candidate_parallel.py`: `--workers 8` = `--workers 1` = `--workers 1 --signals-dir`
+byte-for-byte (selection, decisions, expected SHAs, report counters; fixture with 8 tables, duplicate
+pairs across table boundaries); text copy + rejection report with 4 workers = serial; document
+limit; LF oversized boundary in the workers; tables deterministic across worker counts and reruns;
+reuse + restart (one table deleted → only it is computed); changed shard → its 2 tables rejected,
+6 reused, output = fresh run; policy change (near-dedup off, tr-web-v3, max bytes, code SHA,
+judge id) → all 8 rejected; tampered table with a valid identity (doc_id, ordinal, oversized
+stage) → `SignalTableError`, no output; line input refused; signal module imports no
+DB/config/worker entry point; CLI `--workers 3 --signals-dir` = serial CLI, guards.
+
+**Control runs** (`kontrol_paralel.py`, package copied to scratch, 2 test files):
+untouched green (32 tests); **17 mutations → 17 red** (identity check off — stale table used;
+tables never reused; loop skips the doc_id / ordinal / oversized-flag check; worker scores quality
+without the URL; worker counts the oversized limit without LF; code SHA / judge id missing from the
+identity; temp table dir not removed; signal module imports `psycopg`; loop ignores the table's PII
+counts / reasons / fingerprint / SimHash; `workers > 1` silently falls back to the serial path;
+shared PII union off — both paths red); **`MT_TARGET = "B"` alone → green**; restored green. The
+TASK-049 control script (`../kontrol.py`) was updated for the PII union's new place
+(`clean_candidate_signals.py`) and re-run: still 112 tests, **15/15 red**, B green, restored green.
+
+**Open:** workers run at normal priority (the office team's API shares the machine — 8 is the
+default for that reason); Ctrl+C mid-run was not exercised (tables are written atomically, so
+finished ones survive for the restart); two runs must not share a `--signals-dir` at the same time.
 
 ### Registration (prepared, NOT run — database write)
 

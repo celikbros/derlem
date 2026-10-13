@@ -27,6 +27,7 @@ import { EvidenceHash } from "@/components/evidence-hash";
 import { messageFrom, requestJSON } from "@/lib/client-api";
 import { piiStatusText } from "@/lib/pii";
 import { isSectionLabel, readableParagraphs } from "@/lib/readable-document";
+import { rejectRateLabel, sampleReviewGate } from "@/lib/review-gate";
 import type { BackgroundJob, Document, DocumentQualitySummary, DocumentReview, DocumentReviewClaim, DocumentReviewHistoryItem, DocumentSampleGeneration, PIIScan, Review, ReverseDocumentReviewResult, Source, User } from "@/lib/types";
 
 const purposeLabels: Record<string, string> = {
@@ -318,6 +319,7 @@ export function SourceInspector({
     && source.document_sampling_status === "sampled"
     && source.sampled_document_count > 0
     && source.reviewed_document_count === 0;
+  const reviewGate = sampleReviewGate(source);
   const gateChecks = [
     { label: "Dosya alındı", passed: Boolean(source.object_sha256) },
     { label: "Haklar temiz", passed: source.rights_status === "cleared" },
@@ -326,13 +328,9 @@ export function SourceInspector({
     { label: "Exact tekrar yok", passed: source.duplicate_status === "unique" },
     { label: "Normalize tekrar yok", passed: source.normalized_dedup_status === "unique" },
     { label: "Belge örnekleri hazır", passed: source.document_sampling_status === "sampled" },
-    {
-      label: "Örnekler onaylandı",
-      passed: source.sampled_document_count > 0
-        && source.reviewed_document_count === source.sampled_document_count
-        && source.approved_document_count === source.sampled_document_count
-        && source.flagged_document_count === 0,
-    },
+    reviewGate.thresholdMode
+      ? { label: rejectRateLabel(reviewGate), passed: reviewGate.passed }
+      : { label: "Örnekler onaylandı", passed: reviewGate.passed },
   ];
   const approvalReady = gateChecks.every((gate) => gate.passed) && source.approval_status !== "approved_source";
   const latestScan = scans[0];
@@ -923,7 +921,10 @@ export function SourceInspector({
         {source.normalized_duplicate_source_count > 0 && <Detail label="Tekrar kaynakları" value={source.normalized_duplicate_source_count.toLocaleString("tr-TR")} />}
         <Detail label="Belge örnekleme" value={`${source.document_sampling_status} / ${source.sampled_document_count}`} />
         <Detail label="Örnek nesli" value={`${source.document_sample_generation} / ${source.document_sampling_method}`} />
-        <Detail label="Örnek inceleme" value={`${source.approved_document_count} onay · ${source.flagged_document_count} işaretli`} />
+        <Detail
+          label="Örnek inceleme"
+          value={`${source.approved_document_count} onay · ${source.flagged_document_count} işaretli${reviewGate.thresholdMode ? ` · ${rejectRateLabel(reviewGate)}` : ""}`}
+        />
         {source.declared_sha256 && <Detail label="Beyan SHA256" value={source.declared_sha256} mono />}
         {source.declared_byte_size !== undefined && <Detail label="Beyan boyutu" value={formatBytes(source.declared_byte_size)} />}
         {source.declared_line_count !== undefined && <Detail label="Beyan satırı" value={source.declared_line_count.toLocaleString("tr-TR")} />}

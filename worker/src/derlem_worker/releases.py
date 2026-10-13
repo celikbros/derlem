@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 import hashlib
 import json
@@ -86,6 +86,9 @@ class ExportResult:
     source_record_counts: dict[str, int]
     record_type_counts: dict[str, int]
     token_estimate: TokenEstimate
+    # TASK-048: insan incelemesinin atilacak listesiyle yazilmayan kayitlar
+    # (yalniz esikli pretrain kaynaklarinda dolu).
+    source_excluded_counts: dict[str, int] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -270,13 +273,27 @@ def validate_release_contract_evidence(
             ),
         }
 
+    # TASK-048: esikli pretrain kaynaginda reddedilen/isaretli ornek de kanittir
+    # (incelenmistir); o belgeler atilacak listeye girer. Esiksiz kaynakta kural
+    # degismedi: her ornek onayli olmali.
+    threshold_sources = {
+        str(source.get("source_id") or "")
+        for source in source_list
+        if source.get("current_content_purpose") == "pretrain"
+        and source.get("pretrain_review_reject_threshold") is not None
+    }
     covered_by_source = {source_id: 0 for source_id in expected_by_source}
     for review in review_list:
         source_id = str(review.get("source_id") or "")
         expected = expected_by_source.get(source_id)
         actual_campaign = review.get("review_campaign_id")
         actual_campaign = str(actual_campaign) if actual_campaign is not None else None
-        if expected is None or not review.get("review_id") or review.get("decision") != "approved":
+        allowed_decisions = (
+            {"approved", "rejected", "sensitive_review"}
+            if source_id in threshold_sources
+            else {"approved"}
+        )
+        if expected is None or not review.get("review_id") or review.get("decision") not in allowed_decisions:
             raise ReleaseGateError(
                 "Release review evidence is incomplete",
                 {
@@ -466,6 +483,7 @@ def build_release_manifest(
     gate_results: dict[str, object],
     frozen_at: str,
     contract_snapshot: dict[str, object],
+    human_review: dict[str, object] | None = None,
 ) -> bytes:
     sorted_sources = sorted(sources, key=lambda source: str(source["source_id"]))
     manifest = {
@@ -481,6 +499,9 @@ def build_release_manifest(
         "gate_results": gate_results,
         "sources": sorted_sources,
     }
+    # TASK-048: yalniz esikli pretrain kaynagi varsa; yoksa manifest bayt bayt ayni.
+    if human_review is not None:
+        manifest["human_review"] = human_review
     return (
         json.dumps(manifest, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         + "\n"
@@ -718,6 +739,7 @@ def build_release_export(
     record_count = 0
     input_bytes_processed = 0
     source_record_counts: dict[str, int] = {}
+    source_excluded_counts: dict[str, int] = {}
     record_type_counts: dict[str, int] = {}
     semantic_statistics = _SemanticStatistics()
     sorted_sources = sorted(sources, key=lambda source: str(source["source_id"]))
@@ -727,9 +749,13 @@ def build_release_export(
             source_id = str(source["source_id"])
             source_sha256 = str(source["source_sha256"])
             source_records = 0
+            # TASK-048: dondurulmus insan incelemesi atilacak listesi (doc_id kumesi).
+            excluded_doc_ids = source.get("excluded_doc_ids")
+            excluded_records = [0]
             if source.get("document_shards") is not None:
                 for encoded, text in _document_shard_export_records(
-                    release, source, export_format, max_document_bytes
+                    release, source, export_format, max_document_bytes,
+                    excluded_doc_ids=excluded_doc_ids, excluded_records=excluded_records,
                 ):
                     input_bytes_processed += len(text.encode("utf-8")) + 1
                     semantic_statistics.add((text,))
@@ -789,6 +815,15 @@ def build_release_export(
                             }
                         },
                     ) from error
+
+                if excluded_doc_ids:
+                    excluded_text, _ = _document_from_line(stripped)
+                    if (
+                        excluded_text
+                        and hashlib.sha256(excluded_text.encode("utf-8")).hexdigest() in excluded_doc_ids
+                    ):
+                        excluded_records[0] += 1
+                        continue
 
                 if canonical is not None:
                     if export_format != "jsonl":
@@ -891,6 +926,8 @@ def build_release_export(
                         }
                     )
             source_record_counts[source_id] = source_records
+            if excluded_doc_ids is not None:
+                source_excluded_counts[source_id] = excluded_records[0]
             if progress_callback is not None:
                 token_estimate = semantic_statistics.estimate()
                 progress_callback(
@@ -914,6 +951,7 @@ def build_release_export(
         source_record_counts=source_record_counts,
         record_type_counts=record_type_counts,
         token_estimate=semantic_statistics.estimate(),
+        source_excluded_counts=source_excluded_counts,
     )
 
 
@@ -922,6 +960,9 @@ def _document_shard_export_records(
     source: dict[str, object],
     export_format: str,
     max_document_bytes: int,
+    *,
+    excluded_doc_ids: frozenset[str] | set[str] | None = None,
+    excluded_records: list[int] | None = None,
 ) -> Iterator[tuple[bytes, str]]:
     """derlem.document.v1 parcalarindan ihracat kayitlari (sira numarasi sirasinda).
 
@@ -963,6 +1004,10 @@ def _document_shard_export_records(
                     },
                 )
             last_ordinal = ordinal
+            if excluded_doc_ids and document_sha256 in excluded_doc_ids:
+                if excluded_records is not None:
+                    excluded_records[0] += 1
+                continue
             if len(text.encode("utf-8")) > max_document_bytes:
                 raise ReleaseGateError(
                     f"Document at ordinal {ordinal} exceeds the export limit",
@@ -1016,16 +1061,23 @@ def build_export_manifest(
     manifest_sources = []
     for source in sorted(sources, key=lambda item: str(item["source_id"])):
         source_id = str(source["source_id"])
-        manifest_sources.append(
-            {
-                "source_id": source_id,
-                "source_sha256": str(source["source_sha256"]),
-                "record_count": result.source_record_counts.get(source_id, 0),
-                "language": str(source["language"]),
-                "domain": str(source["domain"]),
-                "license": str(source["license"]),
-            }
-        )
+        manifest_source: dict[str, object] = {
+            "source_id": source_id,
+            "source_sha256": str(source["source_sha256"]),
+            "record_count": result.source_record_counts.get(source_id, 0),
+            "language": str(source["language"]),
+            "domain": str(source["domain"]),
+            "license": str(source["license"]),
+        }
+        # TASK-048: yalniz atilacak listesi olan kaynakta (eklemeli alan).
+        if source_id in result.source_excluded_counts:
+            manifest_source["human_review_excluded_record_count"] = (
+                result.source_excluded_counts[source_id]
+            )
+            manifest_source["human_review_decisions_sha256"] = str(
+                source.get("human_review_decisions_sha256") or ""
+            )
+        manifest_sources.append(manifest_source)
     manifest = {
         "schema_version": "derlem.export-manifest.v2",
         "release": {

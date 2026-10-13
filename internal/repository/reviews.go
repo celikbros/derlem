@@ -42,7 +42,9 @@ func (r *Sources) Review(
 	if input.Decision == "approved" {
 		reasons := approvalGateReasons(source)
 		if len(reasons) > 0 {
-			return domain.Source{}, domain.Review{}, &GateError{Reasons: reasons}
+			return domain.Source{}, domain.Review{}, &GateError{
+				Reasons: reasons, Detail: reviewRejectRateDetail(source, reasons),
+			}
 		}
 	}
 
@@ -185,11 +187,8 @@ func approvalGateReasons(source domain.Source) []string {
 	}
 	if source.DocumentSamplingStatus != "sampled" {
 		reasons = append(reasons, "documents_not_sampled")
-	} else if source.SampledDocumentCount <= 0 ||
-		source.ReviewedDocumentCount != source.SampledDocumentCount ||
-		source.ApprovedDocumentCount != source.SampledDocumentCount ||
-		source.FlaggedDocumentCount > 0 {
-		reasons = append(reasons, "document_sample_review_incomplete")
+	} else {
+		reasons = append(reasons, documentSampleReviewReasons(source)...)
 	}
 	if source.ApprovalStatus == "approved_source" || source.ApprovalStatus == "release_candidate" {
 		reasons = append(reasons, "already_approved")

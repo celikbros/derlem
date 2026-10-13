@@ -52,6 +52,8 @@ export type Source = {
   reviewed_document_count: number;
   approved_document_count: number;
   flagged_document_count: number;
+  // TASK-048: pretrain örnek incelemesinde izin verilen ret yüzdesi; null = sıfır tolerans.
+  pretrain_review_reject_threshold?: number | null;
   detected_encoding?: string;
   pii_status: string;
   duplicate_status: "not_checked" | "unique" | "duplicate";

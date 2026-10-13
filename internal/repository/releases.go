@@ -151,7 +151,13 @@ func (r *Releases) Create(ctx context.Context, input domain.CreateReleaseInput, 
 						  AND review.document_version = document.current_version
 						  AND review.object_sha256 = document.current_object_sha256
 						  AND review.review_campaign_id = campaign.id
-						  AND review.decision = 'approved'
+						  AND (
+							review.decision = 'approved'
+							OR pretrain_review_threshold_active(
+								source.content_purpose,
+								source.pretrain_review_reject_threshold
+							)
+						  )
 						  AND NOT EXISTS (
 							SELECT 1
 							FROM document_review_reversals AS reversal
@@ -179,7 +185,13 @@ func (r *Releases) Create(ctx context.Context, input domain.CreateReleaseInput, 
 							  AND review.document_version = document.current_version
 							  AND review.object_sha256 = document.current_object_sha256
 							  AND review.review_campaign_id IS NULL
-							  AND review.decision = 'approved'
+							  AND (
+								review.decision = 'approved'
+								OR pretrain_review_threshold_active(
+									source.content_purpose,
+									source.pretrain_review_reject_threshold
+								)
+							  )
 							  AND NOT EXISTS (
 								SELECT 1
 								FROM document_review_reversals AS reversal
@@ -535,10 +547,14 @@ func (r *Releases) QueueFreeze(ctx context.Context, id, actorID string) (string,
 			source.duplicate_status <> 'unique' OR
 			source.normalized_dedup_status <> 'unique' OR
 			source.document_sampling_status <> 'sampled' OR
-			source.sampled_document_count <= 0 OR
-			source.reviewed_document_count <> source.sampled_document_count OR
-			source.approved_document_count <> source.sampled_document_count OR
-			source.flagged_document_count > 0
+			NOT source_document_review_gate_passes(
+				source.content_purpose,
+				source.pretrain_review_reject_threshold,
+				source.sampled_document_count,
+				source.reviewed_document_count,
+				source.approved_document_count,
+				source.flagged_document_count
+			)
 		)
 		FROM release_sources AS release_source
 		JOIN sources AS source ON source.id = release_source.source_id

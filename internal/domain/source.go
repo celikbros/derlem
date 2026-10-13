@@ -70,6 +70,11 @@ type Source struct {
 	CreatedBy                      string    `json:"created_by"`
 	CreatedAt                      time.Time `json:"created_at"`
 	UpdatedAt                      time.Time `json:"updated_at"`
+
+	// PretrainReviewRejectThreshold: TASK-048. Pretrain kaynakta izin verilen
+	// (ret + sensitive_review) / örnek yüzdesi (0-100, iki ondalık). nil = eşik
+	// yok = sıfır tolerans. İlk inceleme izinden sonra değişmez (000030).
+	PretrainReviewRejectThreshold *float64 `json:"pretrain_review_reject_threshold"`
 }
 
 type CreateSourceInput struct {

@@ -19,8 +19,43 @@ from derlem_worker.releases import (
     exact_decontamination,
     validate_release_contract_evidence,
 )
+from derlem_worker.human_review import (
+    DROP_VERDICTS,
+    build_human_review_drop_list,
+    load_excluded_doc_ids,
+    review_gate_passes,
+    summarize_release_human_review,
+    threshold_active,
+    write_human_review_decisions,
+)
 from derlem_worker.similarity import approximate_decontamination, release_near_duplicates
 from derlem_worker.jobs.queue import Job
+
+# TASK-048: insan incelemesi karar dosyasi (derlem.decision.v1, Parquet).
+HUMAN_REVIEW_DECISIONS_MEDIA_TYPE = "application/vnd.apache.parquet"
+
+
+def _mixture_quality_rows(rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    """Kalite karisimi yalniz surume giren ornekleri sayar (TASK-048).
+
+    Esikli pretrain kaynaginda reddedilen/isaretli ornek atilacak listeye girer;
+    kalite karisimina girmez. Esiksiz kaynakta bu kararlar zaten kapidan gecmez,
+    dolayisiyla eski davranista liste degismez.
+    """
+    return [row for row in rows if row.get("decision") not in DROP_VERDICTS]
+
+
+def _drop_identity(rows: list[dict[str, object]]) -> list[tuple[str, str, str, str]]:
+    return sorted(
+        (
+            str(row.get("source_id") or ""),
+            str(row.get("document_id") or ""),
+            str(row.get("decision") or ""),
+            str(row.get("reviewer_id") or ""),
+        )
+        for row in rows
+        if row.get("decision") in DROP_VERDICTS
+    )
 
 
 def _verify_stored_object(
@@ -260,6 +295,8 @@ class ReleaseJobsMixin:
         requested_by: str,
         snapshot_root: Path,
     ) -> str:
+        # derlem.decision.v1: decided_at = kosunun baslangic zamani (TASK-048).
+        run_started_at = datetime.now(timezone.utc)
 
         with psycopg.connect(self.config.database_url, row_factory=dict_row) as connection:
             release = connection.execute(
@@ -288,6 +325,8 @@ class ReleaseJobsMixin:
                     source.production_run_id::text AS current_production_run_id,
                     source.derived_from_source_id::text AS current_derived_from_source_id,
                     source.approval_status, source.rights_status AS current_rights_status,
+                    source.content_purpose AS current_content_purpose,
+                    source.pretrain_review_reject_threshold,
                     source.license_evidence_ref IS NOT NULL AS has_license_evidence,
                     contract_spec_artifact_sha256(
                         convert_to(source.license_evidence_ref, 'UTF8')
@@ -434,6 +473,7 @@ class ReleaseJobsMixin:
             [dict(review) for review in quality_rows],
         )
         release_paths: list[tuple[str, Path]] = []
+        source_snapshot_paths: dict[str, Path] = {}
         for source in source_rows:
             pinned_byte_size = source["byte_size"]
             object_byte_size = source["object_byte_size"]
@@ -469,6 +509,7 @@ class ReleaseJobsMixin:
                 )
             )
             _refuse_import_manifest_source(release_paths[-1][1], str(source["source_id"]))
+            source_snapshot_paths[str(source["source_id"])] = release_paths[-1][1]
             if source["data_origin"] in {"model", "hybrid"}:
                 if (
                     source["production_run_manifest_storage_key"] is None
@@ -514,10 +555,59 @@ class ReleaseJobsMixin:
                 )
             )
 
+        # TASK-048: esikli pretrain kaynaginin atilacak listesi -> karar dosyasi.
+        human_review_blocks: dict[str, dict[str, object]] = {}
+        human_review_objects: list[object] = []
+        for source in source_rows:
+            source_id = str(source["source_id"])
+            if release["content_purpose"] != "pretrain" or not threshold_active(
+                source.get("current_content_purpose"),
+                source.get("pretrain_review_reject_threshold"),
+            ):
+                continue
+            drop_list = build_human_review_drop_list(
+                source_id=source_id,
+                source_path=source_snapshot_paths[source_id],
+                review_rows=[
+                    dict(review) for review in quality_rows if str(review["source_id"]) == source_id
+                ],
+                content_purpose=source.get("current_content_purpose"),
+                threshold=source.get("pretrain_review_reject_threshold"),
+                sampled_document_count=int(source["sampled_document_count"]),
+                flagged_document_count=int(source["flagged_document_count"]),
+                max_document_bytes=self.config.max_document_bytes,
+            )
+            decisions_info = write_human_review_decisions(
+                drop_list,
+                snapshot_root / f"human-review-{source_id}.decisions.parquet",
+                run_id=release_id,
+                decided_at=run_started_at,
+            )
+            stored_decisions = self.store.ingest_raw_file(Path(decisions_info.path))
+            if (
+                stored_decisions.sha256 != decisions_info.sha256
+                or stored_decisions.byte_size != decisions_info.byte_size
+            ):
+                raise RuntimeError("Human review decision file changed while publishing")
+            human_review_objects.append(stored_decisions)
+            human_review_blocks[source_id] = drop_list.manifest_block(
+                {
+                    "schema_version": "derlem.decision.v1",
+                    "sha256": decisions_info.sha256,
+                    "byte_size": decisions_info.byte_size,
+                    "row_count": decisions_info.row_count,
+                }
+            )
+        release_human_review = summarize_release_human_review(human_review_blocks)
+
         manifest_sources = [self._manifest_source(source) for source in source_rows]
+        for manifest_source in manifest_sources:
+            block = human_review_blocks.get(str(manifest_source["source_id"]))
+            if block is not None:
+                manifest_source["human_review"] = block
         mixture_report = build_mixture_report(
             manifest_sources,
-            [dict(review) for review in quality_rows],
+            _mixture_quality_rows([dict(review) for review in quality_rows]),
         )
         with psycopg.connect(self.config.database_url) as progress_connection:
             near_duplicates = release_near_duplicates(
@@ -587,7 +677,18 @@ class ReleaseJobsMixin:
             "pii_gate": {"status": "passed"},
             "exact_duplicate_gate": {"status": "passed"},
             "normalized_dedup_gate": {"status": "passed"},
-            "document_review_gate": {"status": "passed"},
+            "document_review_gate": (
+                {"status": "passed"}
+                if release_human_review is None
+                else {
+                    "status": "passed",
+                    "mode": "pretrain_review_threshold",
+                    "rate_pct": release_human_review["rate_pct"],
+                    "threshold_pct": release_human_review["threshold_pct"],
+                    "excluded_doc_id_count": release_human_review["excluded_doc_id_count"],
+                    "excluded_line_count": release_human_review["excluded_line_count"],
+                }
+            ),
             "contract_snapshot": contract_gate,
             "near_duplicate_report": near_duplicate_report,
             "decontamination": decontamination_result,
@@ -609,6 +710,7 @@ class ReleaseJobsMixin:
                     release["implementation_bundle_sha256"]
                 ),
             },
+            human_review=release_human_review,
         )
         stored_manifest = self.store.ingest_bytes(manifest_bytes)
 
@@ -704,10 +806,14 @@ class ReleaseJobsMixin:
                         source.duplicate_status <> 'unique' OR
                         source.normalized_dedup_status <> 'unique' OR
                         source.document_sampling_status <> 'sampled' OR
-                        source.sampled_document_count <= 0 OR
-                        source.reviewed_document_count <> source.sampled_document_count OR
-                        source.approved_document_count <> source.sampled_document_count OR
-                        source.flagged_document_count > 0
+                        NOT source_document_review_gate_passes(
+                            source.content_purpose,
+                            source.pretrain_review_reject_threshold,
+                            source.sampled_document_count,
+                            source.reviewed_document_count,
+                            source.approved_document_count,
+                            source.flagged_document_count
+                        )
                     ) AS invalid_count
                     FROM release_sources AS release_source
                     JOIN sources AS source ON source.id = release_source.source_id
@@ -740,9 +846,21 @@ class ReleaseJobsMixin:
                     [dict(source) for source in source_rows],
                     locked_quality_rows,
                 )
+                if _drop_identity(locked_quality_rows) != _drop_identity(
+                    [dict(review) for review in quality_rows]
+                ):
+                    raise ReleaseGateError(
+                        "Human review drop list changed before freeze commit",
+                        {
+                            "document_review_gate": {
+                                "status": "blocked",
+                                "reason": "human_review_changed",
+                            }
+                        },
+                    )
                 locked_quality_report = build_mixture_report(
                     manifest_sources,
-                    locked_quality_rows,
+                    _mixture_quality_rows(locked_quality_rows),
                 )["quality"]
                 if locked_quality_report != mixture_report["quality"]:
                     raise ReleaseGateError(
@@ -763,6 +881,20 @@ class ReleaseJobsMixin:
                     """,
                     (stored_manifest.sha256, stored_manifest.storage_key, stored_manifest.byte_size),
                 )
+                for stored_decisions in human_review_objects:
+                    connection.execute(
+                        """
+                        INSERT INTO storage_objects(sha256, storage_key, byte_size, media_type)
+                        VALUES (%s, %s, %s, %s)
+                        ON CONFLICT (sha256) DO NOTHING
+                        """,
+                        (
+                            stored_decisions.sha256,
+                            stored_decisions.storage_key,
+                            stored_decisions.byte_size,
+                            HUMAN_REVIEW_DECISIONS_MEDIA_TYPE,
+                        ),
+                    )
                 updated = connection.execute(
                     """
                     UPDATE releases
@@ -915,9 +1047,21 @@ class ReleaseJobsMixin:
             )
             connection.commit()
 
+        # TASK-048: dondurulmus manifestteki insan incelemesi atilacak listesi.
+        exclusions = (
+            self._release_human_review_exclusions(release_id, snapshot_root)
+            if release["content_purpose"] == "pretrain"
+            else {}
+        )
+
         export_sources: list[dict[str, object]] = []
         for source in source_rows:
             item = dict(source)
+            exclusion = exclusions.get(str(source["source_id"]))
+            if exclusion is not None:
+                excluded_doc_ids, block = exclusion
+                item["excluded_doc_ids"] = excluded_doc_ids
+                item["human_review_decisions_sha256"] = str(block["decisions"]["sha256"])  # type: ignore[index]
             if (
                 source["byte_size"] is None
                 or source["object_byte_size"] is None
@@ -944,6 +1088,7 @@ class ReleaseJobsMixin:
                 int(source["byte_size"]),
                 snapshot_root,
             )
+            _refuse_import_manifest_source(item["path"], str(source["source_id"]))
             export_sources.append(item)
 
         temp_descriptor, temp_name = tempfile.mkstemp(
@@ -989,6 +1134,22 @@ class ReleaseJobsMixin:
                     max_document_bytes=self.config.max_document_bytes,
                     progress_callback=update_progress,
                 )
+            for source_id, (_, block) in exclusions.items():
+                expected = int(block["excluded_line_count"])  # type: ignore[arg-type]
+                actual = result.source_excluded_counts.get(source_id)
+                if actual != expected:
+                    raise ReleaseGateError(
+                        "Human review drop list did not match the exported source",
+                        {
+                            "export": {
+                                "status": "blocked",
+                                "reason": "human_review_exclusion_mismatch",
+                                "source_id": source_id,
+                                "expected_excluded_records": expected,
+                                "excluded_records": actual,
+                            }
+                        },
+                    )
             stored_export = self.store.ingest_file(temp_path)
             if stored_export.sha256 != result.sha256 or stored_export.byte_size != result.byte_size:
                 raise RuntimeError("Export checksum changed while publishing")
@@ -1159,7 +1320,9 @@ class ReleaseJobsMixin:
                 document.current_version AS document_version,
                 document.sample_generation,
                 document.current_object_sha256 AS object_sha256,
+                document.source_ordinal,
                 current_review.review_id,
+                current_review.reviewer_id,
                 current_review.decision,
                 current_review.review_campaign_id,
                 current_review.rubric_version,
@@ -1177,6 +1340,7 @@ class ReleaseJobsMixin:
              AND snapshot.source_id = release_source.source_id
             LEFT JOIN LATERAL (
                 SELECT review.id::text AS review_id,
+                    review.reviewer_id::text AS reviewer_id,
                     review.decision,
                     review.review_campaign_id::text AS review_campaign_id,
                     review.rubric_version,
@@ -1260,11 +1424,104 @@ class ReleaseJobsMixin:
             and source["duplicate_status"] == "unique"
             and source["normalized_dedup_status"] == "unique"
             and source["document_sampling_status"] == "sampled"
-            and int(source["sampled_document_count"]) > 0
-            and int(source["reviewed_document_count"]) == int(source["sampled_document_count"])
-            and int(source["approved_document_count"]) == int(source["sampled_document_count"])
-            and int(source["flagged_document_count"]) == 0
+            # TASK-048: esiksiz kaynakta eski kural (hepsi onayli, isaret 0);
+            # esikli pretrain kaynakta oran <= esik (human_review.review_gate_passes).
+            and review_gate_passes(
+                source.get("current_content_purpose"),
+                source.get("pretrain_review_reject_threshold"),
+                int(source["sampled_document_count"]),
+                int(source["reviewed_document_count"]),
+                int(source["approved_document_count"]),
+                int(source["flagged_document_count"]),
+            )
         )
+
+    def _release_human_review_exclusions(
+        self,
+        release_id: str,
+        snapshot_root: Path,
+    ) -> dict[str, tuple[frozenset[str], dict[str, object]]]:
+        """Dondurulmus manifestten kaynak basina atilacak doc_id kumesi (TASK-048).
+
+        Manifest ve karar dosyasi icerik adresli depodan SHA dogrulanarak okunur;
+        karar dosyasindaki kimlik listesinin SHA'si manifestle tutmazsa ihracat durur.
+        """
+        with psycopg.connect(self.config.database_url, row_factory=dict_row) as connection:
+            manifest_object = connection.execute(
+                """
+                SELECT object.sha256, object.storage_key, object.byte_size
+                FROM releases AS release
+                JOIN storage_objects AS object ON object.sha256 = release.manifest_object_sha256
+                WHERE release.id = %s AND release.status = 'frozen'
+                """,
+                (release_id,),
+            ).fetchone()
+            if manifest_object is None:
+                raise ReleaseGateError(
+                    "Frozen release manifest is unavailable",
+                    {"export": {"status": "blocked", "reason": "release_manifest_unavailable"}},
+                )
+            manifest_path = _snapshot_verified_object(
+                self._release_object_path(
+                    str(manifest_object["storage_key"]), str(manifest_object["sha256"])
+                ),
+                str(manifest_object["sha256"]),
+                int(manifest_object["byte_size"]),
+                snapshot_root,
+            )
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            blocks = {
+                str(source["source_id"]): source["human_review"]
+                for source in manifest.get("sources", [])
+                if isinstance(source, dict) and source.get("human_review") is not None
+            }
+            exclusions: dict[str, tuple[frozenset[str], dict[str, object]]] = {}
+            for source_id, block in sorted(blocks.items()):
+                decisions = block["decisions"]
+                decisions_object = connection.execute(
+                    """
+                    SELECT sha256, storage_key, byte_size
+                    FROM storage_objects
+                    WHERE sha256 = %s
+                    """,
+                    (str(decisions["sha256"]),),
+                ).fetchone()
+                if decisions_object is None or int(decisions_object["byte_size"]) != int(
+                    decisions["byte_size"]
+                ):
+                    raise ReleaseGateError(
+                        "Human review decision file is unavailable",
+                        {
+                            "export": {
+                                "status": "blocked",
+                                "reason": "human_review_decisions_unavailable",
+                                "source_id": source_id,
+                            }
+                        },
+                    )
+                decisions_path = _snapshot_verified_object(
+                    self._release_object_path(
+                        str(decisions_object["storage_key"]), str(decisions_object["sha256"])
+                    ),
+                    str(decisions_object["sha256"]),
+                    int(decisions_object["byte_size"]),
+                    snapshot_root,
+                )
+                try:
+                    excluded = load_excluded_doc_ids(decisions_path, block)
+                except ValueError as error:
+                    raise ReleaseGateError(
+                        "Human review decision file does not match the release manifest",
+                        {
+                            "export": {
+                                "status": "blocked",
+                                "reason": "human_review_decisions_mismatch",
+                                "source_id": source_id,
+                            }
+                        },
+                    ) from error
+                exclusions[source_id] = (excluded, block)
+        return exclusions
 
     @staticmethod
     def _manifest_source(source: dict[str, object]) -> dict[str, object]:

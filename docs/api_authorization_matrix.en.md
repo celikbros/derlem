@@ -34,6 +34,7 @@ there without an explicit, non-empty role list.
 | PII scans, sampled documents, quality, review history | `admin`, `data_manager`, `editor`, `moderator`, `expert_reviewer` | Raw/quarantined text uses the same boundary |
 | Source creation and upload | `admin`, `data_manager` | Write operations are audited |
 | Server-local file ingest | `admin` only | Path is restricted to `IMPORT_ROOT` and checked independently by API and worker |
+| Pretrain review threshold (`PUT /api/v1/sources/{id}/pretrain-review-threshold`, TASK-048) | `admin` only | Pretrain sources only; refused by the API and a DB trigger once the first review trace exists; audited |
 | Source metadata update | `admin`, `data_manager`, `editor` | Optimistic version check required |
 | Contribution submit/list/withdraw | `admin`, `contributor` | Deliberately closed to reviewer roles: reviewing one's own contribution is structurally prevented |
 | Contribution pool and bundling | `admin`, `data_manager` | Bundles pass through the normal ingest gates; contributor identity never enters the bundle file |

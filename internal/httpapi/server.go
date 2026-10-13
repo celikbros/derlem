@@ -67,7 +67,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /health/ready", s.ready)
 	mux.HandleFunc("POST /api/v1/auth/login", s.login)
 	mux.Handle("GET /api/v1/me", s.authenticate(http.HandlerFunc(s.me)))
-	for _, route := range protectedRoutes(s) {
+	// reviewThresholdRoutes (TASK-048) ayrı dosyada; aynı rol politikası.
+	for _, route := range append(protectedRoutes(s), reviewThresholdRoutes(s)...) {
 		if len(route.roles) == 0 {
 			panic("protected API route has no role policy: " + route.pattern)
 		}

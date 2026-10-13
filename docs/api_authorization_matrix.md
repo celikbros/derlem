@@ -30,6 +30,7 @@ Yeni bir veri endpoint'i açık rol listesi olmadan kaydedilemez.
 | PII scan, belge örnekleri, kalite ve review geçmişi | `admin`, `data_manager`, `editor`, `moderator`, `expert_reviewer` | Ham/karantina metin aynı sınır içinde |
 | Kaynak oluşturma ve upload | `admin`, `data_manager` | Yazma işlemi audit edilir |
 | Sunucu yerel dosya ingest'i | Yalnız `admin` | Yol `IMPORT_ROOT` ile sınırlıdır; API ve worker ayrı ayrı doğrular |
+| Pretrain inceleme eşiği (`PUT /api/v1/sources/{id}/pretrain-review-threshold`, TASK-048) | Yalnız `admin` | Yalnız pretrain kaynakta; ilk inceleme izinden sonra API ve DB tetikleyicisi reddeder; audit edilir |
 | Kaynak metadata güncelleme | `admin`, `data_manager`, `editor` | Optimistic version kontrolü zorunlu |
 | Belge içerik güncelleme | `admin`, `editor` | Yeni immutable nesne sürümü oluşturur |
 | Kaynak/belge/benzerlik kararı | `admin`, `moderator`, `expert_reviewer` | Self-review ve kör review kuralları ayrıca uygulanır; belge kararı reviewer'a ait, süresi dolmamış claim gerektirir |

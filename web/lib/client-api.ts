@@ -24,6 +24,7 @@ const gateReasonLabels: Record<string, string> = {
   normalized_dedup_not_clear: "normalize dedup temiz degil",
   documents_not_sampled: "belge ornekleri hazirlanmadi",
   document_sample_review_incomplete: "belge ornek incelemesi tamamlanmadi",
+  review_reject_rate_above_threshold: "ornek ret orani esigi asiyor",
   already_approved: "kaynak zaten onaylı",
 };
 

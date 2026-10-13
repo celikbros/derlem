@@ -17,8 +17,15 @@ var (
 
 type GateError struct {
 	Reasons []string
+	// Detail: makine kodunun yanındaki ölçüm (ör. TASK-048 ret oranı ve eşik).
+	// Boşsa Error() metni eskisiyle aynıdır.
+	Detail string
 }
 
 func (e *GateError) Error() string {
-	return "review gate blocked: " + strings.Join(e.Reasons, ", ")
+	message := "review gate blocked: " + strings.Join(e.Reasons, ", ")
+	if e.Detail != "" {
+		message += " (" + e.Detail + ")"
+	}
+	return message
 }

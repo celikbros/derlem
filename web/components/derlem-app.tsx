@@ -37,6 +37,7 @@ import { SourceInspector } from "@/components/source-inspector";
 import { UsersPanel } from "@/components/users-panel";
 import { messageFrom, requestJSON } from "@/lib/client-api";
 import { piiStatusText } from "@/lib/pii";
+import { rejectRateLabel, sampleReviewGate } from "@/lib/review-gate";
 import { ROLE_INFO, roleInfoByRole, roleSummaryByLabel as accountHints } from "@/lib/roles";
 import type { Source, User } from "@/lib/types";
 import { APP_BUILD, APP_VERSION, versionLabel } from "@/lib/version";
@@ -778,6 +779,14 @@ function nextStepFor(source: Source) {
   if (source.duplicate_status !== "unique") return { key: "exact_dedup", label: "Exact dedup", tone: "danger" };
   if (source.normalized_dedup_status !== "unique") return { key: "normalized_dedup", label: "Normalize dedup", tone: "danger" };
   if (source.document_sampling_status !== "sampled") return { key: "sampling", label: "Örnekleme", tone: "warning" };
+  // TASK-048: eşikli pretrain kaynakta "200/200" yerine ret oranı / eşik.
+  const reviewGate = sampleReviewGate(source);
+  if (reviewGate.thresholdMode) {
+    if (!reviewGate.complete) return { key: "sample_review", label: rejectRateLabel(reviewGate), tone: "warning" };
+    if (!reviewGate.passed) return { key: "flagged_sample", label: rejectRateLabel(reviewGate), tone: "danger" };
+    if (source.approval_status !== "approved_source") return { key: "source_approval", label: "Kaynak onayı", tone: "ready" };
+    return { key: "approved", label: `Onaylı · ${rejectRateLabel(reviewGate)}`, tone: "ready" };
+  }
   if (source.flagged_document_count > 0) return { key: "flagged_sample", label: "İşaretli örnek", tone: "danger" };
   if (
     source.sampled_document_count === 0

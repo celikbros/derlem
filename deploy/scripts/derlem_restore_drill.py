@@ -5,6 +5,9 @@ geri yükler, tablo sayımlarını yedek manifestiyle karşılaştırır ve yede
 aynasındaki HER nesnenin SHA256'sını yeniden hesaplayıp dosya adıyla
 doğrular. Ayrıca geri yüklenen katalogdaki her storage_objects kaydının ve
 frozen release manifest nesnesinin yedekte bulunduğunu kanıtlar.
+deploy/purged_objects.jsonl'deki nesneler (TASK-043, kurucu onaylı kasıtlı
+silme) bu yedek silmeden önce alınmışsa sorun sayılmaz; listede olmayan her
+eksik nesne yine BAŞARISIZ döndürür.
 
 Kullanım:
     python deploy/scripts/derlem_restore_drill.py --backup-root D:/DERLEM-BACKUP
@@ -129,17 +132,62 @@ def load_known_lost(path: Path) -> set[str]:
     return known
 
 
+def load_purged(path: Path) -> dict[str, datetime]:
+    """deploy/purged_objects.jsonl: kurucu onayiyla KASITLI silinmis nesneler (TASK-043).
+
+    known_lost'tan farki: bu bir kayip kabulu degil, bir silme kaydidir;
+    her satir purge_sources aracinin yazdigi bir nesnedir (sha256, purged_at,
+    onaylayan, gerekce). Listede olmayan eksik nesne yine BASARISIZ dondurur.
+    Bozuk bir satir tatbikati durdurur: zayiflamis bir liste sessizce
+    yutulmamalidir. Dosya yoksa sozluk bostur, davranis kati kalir.
+    """
+    if not path.exists():
+        return {}
+    purged: dict[str, datetime] = {}
+    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            record = json.loads(line)
+            digest = str(record["sha256"])
+            purged_at = datetime.fromisoformat(str(record["purged_at"]).replace("Z", "+00:00"))
+        except (ValueError, KeyError, TypeError) as error:
+            raise SystemExit(f"{path}:{number}: bozuk silme kaydi: {error}") from error
+        if len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
+            raise SystemExit(f"{path}:{number}: gecersiz sha256: {digest!r}")
+        if purged_at.tzinfo is None:
+            purged_at = purged_at.replace(tzinfo=UTC)
+        previous = purged.get(digest)
+        purged[digest] = purged_at if previous is None else min(previous, purged_at)
+    return purged
+
+
 def verify_catalog_chain(
     drill_url: str,
     backup_objects: Path,
     known_lost: set[str] | None = None,
-) -> tuple[int, int, list[str]]:
+    purged: dict[str, datetime] | None = None,
+    backup_started_at: datetime | None = None,
+) -> tuple[int, int, int, list[str]]:
     import psycopg
 
     known_lost = known_lost or set()
+    purged = purged or {}
     problems: list[str] = []
     referenced = 0
     known_lost_hits = 0
+    purged_hits = 0
+
+    def deliberately_purged(digest: str) -> bool | None:
+        """True: kasitli silinmis ve bu yedek silmeden once alinmis (sorun degil).
+        False: listede ama yedek silmeden SONRA alinmis ve katalog nesneyi hala
+        aniyor -> nesne yeniden kaydedilmis ya da silme yarim kalmis (sorun).
+        None: listede degil."""
+        purged_at = purged.get(digest)
+        if purged_at is None:
+            return None
+        return backup_started_at is None or backup_started_at < purged_at
+
     with psycopg.connect(drill_url) as connection, connection.cursor() as cursor:
         cursor.execute("SELECT sha256 FROM storage_objects")
         hashes = [row[0] for row in cursor.fetchall()]
@@ -151,18 +199,28 @@ def verify_catalog_chain(
         candidate = backup_objects / "sha256" / digest[:2] / digest[2:4] / digest
         if candidate.exists():
             continue
+        verdict = deliberately_purged(digest)
+        if verdict is True:
+            purged_hits += 1
+            continue
+        if verdict is False:
+            problems.append(f"kasitli silinmis nesne silmeden sonraki katalogda hala var ama yedekte yok: {digest}")
+            continue
         if digest in known_lost:
             known_lost_hits += 1
             continue
         problems.append(f"katalog nesnesi yedekte yok: {digest}")
     # Frozen release manifestleri denetim artefaktidir: bunlar known-lost
-    # listesiyle AFFEDILMEZ, eksikse her zaman sorun sayilir.
+    # listesiyle AFFEDILMEZ, eksikse her zaman sorun sayilir. Tek istisna
+    # release'in kendisinin kurucu onayli bir silme planiyla silinmis olmasidir
+    # (purged_objects.jsonl; silmeden once alinmis bir yedekte release hala gorunur).
     for name, version, digest in releases:
         digest = str(digest).strip()
         candidate = backup_objects / "sha256" / digest[:2] / digest[2:4] / digest
-        if not candidate.exists():
-            problems.append(f"frozen manifest nesnesi yedekte yok: {name}-{version} {digest}")
-    return referenced, known_lost_hits, problems
+        if candidate.exists() or deliberately_purged(digest) is True:
+            continue
+        problems.append(f"frozen manifest nesnesi yedekte yok: {name}-{version} {digest}")
+    return referenced, known_lost_hits, purged_hits, problems
 
 
 def main() -> None:
@@ -211,8 +269,12 @@ def main() -> None:
         checked_objects, object_problems = verify_objects(backup_root / "objects")
         problems += object_problems
         known_lost = load_known_lost(repo_root / "deploy" / "known_lost_objects.txt")
-        referenced, known_lost_hits, chain_problems = verify_catalog_chain(
-            drill_url, backup_root / "objects", known_lost
+        purged = load_purged(repo_root / "deploy" / "purged_objects.jsonl")
+        backup_started_at = (
+            datetime.fromisoformat(str(manifest["started_at"])) if manifest.get("started_at") else None
+        )
+        referenced, known_lost_hits, purged_hits, chain_problems = verify_catalog_chain(
+            drill_url, backup_root / "objects", known_lost, purged, backup_started_at
         )
         problems += chain_problems
     finally:
@@ -229,6 +291,8 @@ def main() -> None:
         "catalog_objects_checked": referenced,
         "known_lost_objects_declared": len(known_lost),
         "known_lost_objects_hit": known_lost_hits,
+        "purged_objects_declared": len(purged),
+        "purged_objects_hit": purged_hits,
         "problems": problems,
         "result": "PASS" if not problems else "FAIL",
     }

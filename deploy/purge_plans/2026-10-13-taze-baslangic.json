@@ -1,0 +1,74 @@
+{
+  "schema_version": "derlem.purge-plan.v1",
+  "plan_id": "2026-10-13-taze-baslangic",
+  "approved_by": "kurucu, 2026-10-13",
+  "reason": "TASK-043 taze baslangic: kurucu 2026-10-13 'her copu yok et, taze ve dogru baslangic' dedi ve veritabani temizligine acikca evet verdi. Yerine yenisi gelmis temiz adaylar ve held-out'lari, Haziran-Temmuz deneme (smoke) kaynaklari ve deneme release'leri bagli satirlariyla silinir; nesne dosyalari karantinaya tasinir.",
+  "sources": [
+    {
+      "id": "f63352dd-fdd1-4e4b-a8d2-b167b3c856cf",
+      "name": "gardash_faz2_tr_dedup_20260621_clean_candidate_20260625",
+      "manifest_path": "var/derived/gardash_faz2_tr_dedup_20260621_06ac330e_clean_candidate.txt.manifest.json"
+    },
+    {
+      "id": "0820b63b-2650-4c4e-b10b-2cbb2692a08d",
+      "name": "gardash_faz2_tr_dedup_20260621_clean_candidate_v3_20260919",
+      "manifest_path": "var/derived/gardash_faz2_tr_dedup_20260621_06ac330e_clean_candidate_v3.txt.manifest.json"
+    },
+    {
+      "id": "47c5748c-7f4f-4a9c-a8d3-2d4ec67f88cd",
+      "name": "gardash_faz2_tr_dedup_20260621_clean_candidate_v4_20260919",
+      "manifest_path": "var/derived/gardash_faz2_tr_dedup_20260621_06ac330e_clean_candidate_v4.txt.manifest.json"
+    },
+    {
+      "id": "2dde3641-6080-4bd6-8fc9-3b80b557915e",
+      "name": "gardash_faz2_tr_dedup_20260621_clean_candidate_v5_20260921",
+      "manifest_path": "var/derived/gardash_faz2_tr_dedup_20260621_06ac330e_clean_candidate_v5.txt.manifest.json"
+    },
+    {
+      "id": "a043125e-578f-470e-853a-cbfd3ae0e61e",
+      "name": "gardash_faz2_tr_dedup_20260621_heldout_v1_20260919",
+      "manifest_path": "var/derived/gardash_faz2_tr_dedup_20260621_06ac330e_clean_candidate_v3.txt.manifest.json"
+    },
+    {
+      "id": "596ae2fa-3b1b-4733-9ed7-b314518aed9e",
+      "name": "gardash_faz2_tr_dedup_20260621_heldout_v2_20260919",
+      "manifest_path": "var/derived/gardash_faz2_tr_dedup_20260621_06ac330e_clean_candidate_v4_heldout.txt.manifest.json"
+    },
+    {
+      "id": "2d715e5b-9a55-4952-9d0d-10898a21079c",
+      "name": "gardash_faz2_tr_dedup_20260621_heldout_v3_20260921",
+      "manifest_path": "var/derived/gardash_faz2_tr_dedup_20260621_06ac330e_clean_candidate_v5.txt.manifest.json"
+    },
+    {"id": "20a0cacd-d8ae-4758-91a5-d19f920c7db0", "name": "Browser Upload Smoke 1782286434978"},
+    {"id": "aecaeabf-a834-4c45-98e7-4d303dc9fa6f", "name": "Bulk Review Smoke 1782584401697"},
+    {"id": "3de2e25f-c41c-4dd2-9efb-9a582eadd39f", "name": "Risk Sampling Smoke 1782590203208"},
+    {"id": "940a09d2-32c8-4454-b684-0d713cf8e924", "name": "Resample Generation Smoke 1782627328740"},
+    {"id": "5f7ee433-a603-4058-88a3-b5c64eb8d0d8", "name": "Extraction Smoke 1783825777"},
+    {"id": "84338e1a-b3d5-412f-9925-e4520652f085", "name": "Distill Echo Smoke 1783839659"},
+    {"id": "15640ebe-5511-4753-9e61-fa8d82fa322b", "name": "UI Distill 1783839868218"},
+    {"id": "c76983c0-1c49-4dae-8529-183663cafbf2", "name": "UI Distill2 1783840002718"},
+    {"id": "009e355a-aace-4283-9a62-f7768055d13d", "name": "UI Distill3 1783840094938"}
+  ],
+  "releases": [
+    {"id": "8df5ecdf-3f7a-4d7b-8ed9-e72c80875138", "name": "Derlem Instruction Seed", "version": "2026.06.24-rc1", "status": "frozen"},
+    {"id": "12558405-c0f3-43dc-aeb1-3f3921133156", "name": "Derlem Instruction Seed", "version": "2026.06.25-normalized-dedup", "status": "frozen"},
+    {"id": "f442baba-43dc-4da8-a201-d57b34ed0012", "name": "Canonical Export Smoke", "version": "canonical-smoke-1782713406", "status": "frozen"},
+    {"id": "4d73c922-4c45-490f-a58b-5c8be891c68e", "name": "Mixture Report Smoke", "version": "mixture-smoke-1782753518", "status": "frozen"},
+    {"id": "3059d79e-2cd7-452d-b9d6-9f0dd9a741b3", "name": "Near Dedup Smoke", "version": "near-dedup-smoke-20260629", "status": "frozen"},
+    {"id": "ba84f30c-6fc6-4ac0-a9c6-f16629c6c721", "name": "Quality Mixture Smoke", "version": "quality-mixture-smoke-20260630", "status": "frozen"},
+    {"id": "c81b91a2-6c15-4760-b917-a734384c2634", "name": "Quality Mixture V2 Smoke", "version": "quality-mixture-v2-smoke-20260630", "status": "frozen"}
+  ],
+  "keep_sources": [
+    {"id": "2f1bec0a-cdcf-4995-9d81-c0e48d1961a9", "name": "Derlem Ornek Katki Verisi"},
+    {"id": "06ac330e-350f-45f0-b596-3dd4aa1dbc57", "name": "gardash_faz2_tr_dedup_20260621"},
+    {"id": "0a178606-e4ee-4ffb-a316-0613ee966307", "name": "faz2_ham_trt_20260918"},
+    {"id": "4c7fdf1c-2432-4109-9994-6e7c081a6808", "name": "faz2_ham_tdk_20260918"},
+    {"id": "34a87ca1-5ad4-4d17-bda5-d81689367c81", "name": "faz2_ham_academic_20260918"},
+    {"id": "ebbe53d8-68fa-4d78-99d0-f9df5a46569b", "name": "faz2_ham_ttk_20260918"},
+    {"id": "10232abb-4d26-4a00-856d-05c9a20603f2", "name": "faz2_ham_tr_corpus_20260918"},
+    {"id": "e6f3b29b-d2e6-4f89-bdee-cd1e3c52703e", "name": "faz2_ham_wiki_oscar_20260919"},
+    {"id": "fa772e47-9647-411a-913e-6eaa6a184919", "name": "gardas_motor_karar_v1_eval_20260919"},
+    {"id": "4b0ab363-f4ec-4a65-8fea-6ec8273f9582", "name": "gardas_karar_v2_tam_eval_20261003"},
+    {"id": "109fefff-686f-49b8-99bb-6138e057e4f6", "name": "gardas_karar_v2_gelistirme_eval_20261003"}
+  ]
+}

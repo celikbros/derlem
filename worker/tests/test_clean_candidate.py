@@ -685,32 +685,3 @@ def test_existing_text_copy_is_expressed_as_a_selection_list_over_its_parent(tmp
         selection_from_text_copy(source, not_subsequence, held_out_path=None, output_dir=tmp_path / "ters",
                                  name="ters", max_document_bytes=8192)
 
-
-SLICE_ENV = "DERLEM_SLICE_100K"
-
-
-def test_selection_list_equals_text_copy_on_the_100k_slice(tmp_path: Path) -> None:
-    """Gercek veri: 100k dilim (var/olcum-2026-09-17/dilim-100k_v3.txt), v5 ayarlariyla.
-
-    Depoda olmayan veri ister; yol DERLEM_SLICE_100K ile acikca verilmezse atlanir
-    (atlama sebebi cikti satirinda gorunur). Olcum betigi bunu ayrica kosar.
-    """
-    slice_path = os.environ.get(SLICE_ENV, "").strip()
-    if not slice_path:
-        pytest.skip(f"{SLICE_ENV} not set: 100k slice equality is measured by the TASK-044 script")
-    drop_list = Path(os.environ.get("DERLEM_V5_DROP_LIST", "var/olcum-2026-09-21/v5/v5-atilacak-liste.jsonl"))
-    options = dict(
-        source=None, max_document_bytes=262144, quality_policy=_TR_WEB_V3, held_out_rule=HELD_OUT_RULE_AFACAN_V1,
-        near_dedup=True, drop_list_path=drop_list,
-        drop_list_method="s2-scope-2026-09-21+fasttext-lid176-ftz-min200-p0.5-window2000",
-        drop_list_reason="scope_or_language",
-    )
-    text_copy = tmp_path / "copy" / "dilim.txt"
-    text_copy.parent.mkdir()
-    report = derive_clean_candidate(Path(slice_path), text_copy, **options)
-    (tmp_path / "list").mkdir()
-    manifest = derive_selection_list(Path(slice_path), tmp_path / "list" / "dilim.txt", **options)
-    out = tmp_path / "out.txt"
-    materialize(Path(manifest["manifest_path"]), output_path=out)
-    assert hashlib.sha256(out.read_bytes()).hexdigest() == report.output_sha256
-    assert out.read_bytes() == text_copy.read_bytes()

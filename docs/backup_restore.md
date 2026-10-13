@@ -128,6 +128,74 @@ Kurallar:
 
 Rapora iki alan eklendi: `known_lost_objects_declared` ve `known_lost_objects_hit`.
 
+## Kasıtlı silme kuralı (TASK-043, kurucu kararı 2026-10-13)
+
+Depodan ve veritabanından bir şey **kasıtlı** olarak yalnız şu yolla silinir:
+
+```powershell
+# 1) her zaman önce dry-run (varsayılan; READ ONLY transaction, ROLLBACK)
+.\.venv\Scripts\python.exe -m derlem_worker.purge_sources --plan deploy\purge_plans\<plan>.json
+# 2) API ve worker durdurulmuşken, onaylı plan için
+.\.venv\Scripts\python.exe -m derlem_worker.purge_sources --plan deploy\purge_plans\<plan>.json `
+  --execute --quarantine-dir var\purge-quarantine\<tarih>
+```
+
+**Ne silinebilir**
+
+- Yalnız plan dosyasında **kimliği ve adıyla** listelenmiş kaynaklar ve release'ler, ve
+  onlara bağlı satırlar (belgeler, sürümler, incelemeler, örnek nesilleri, PII taramaları,
+  parmak izleri, soy girdileri, benzerlik satırları, işler, release kaynakları/export'ları).
+  Bir kimlik bulunamazsa ya da adı tutmazsa hiçbir şey silinmez.
+- **Frozen release'in referans verdiği nesne yalnız o release de plandaysa** silinir;
+  frozen bir release de ancak planda durumu açıkça `frozen` yazılmışsa silinir.
+- Nesne (storage_objects satırı + dosya) yalnız **silinmeyen hiçbir satır** ona referans
+  vermiyorsa silinir: FK kolonları, işlerin/kaynakların/release'lerin JSON'u ve kaynak
+  soy metni taranır. **Paylaşılan nesne asla silinmez** (örnek: `20ec9446…` hem
+  `Derlem Ornek Katki Verisi`'nin hem `Browser Upload Smoke`'un nesnesidir; smoke
+  silinir, nesne kalır).
+
+**Ne asla silinmez**
+
+- **Ham kaynaklar (`faz2_ham_*`) ve ana korpus (`gardash_faz2_tr_dedup_20260621`).**
+  Planın `keep_sources` listesinde durur; araç kimliklerini ve nesnelerini doğrular. Ham
+  kaynak bir türevin soy girdisi olduğu için onu plana yazmak zaten "plan dışı referans"
+  olarak işi durdurur.
+- `audit_events`, `row_change_events`, kullanıcılar ve roller, sözleşme/politika/profil
+  sürümleri. Silmenin kendisi bir `audit_events` satırıdır (action `sources_purged`,
+  `details.actor` = plandaki onaylayan) ve silinen her satır `row_change_events`'e
+  `DELETE` olarak düşer.
+
+**Nasıl korunur**
+
+- Tek transaction. FK CASCADE'e güvenilmez: her tablo açık bir `DELETE … WHERE <plan kümesi>`
+  ile silinir; plan dışından silinecek bir satıra referans veren tek bir satır varsa
+  (CASCADE/SET NULL olsa bile) iş durur. FK kısıtları açık kalır ve son hakemdir.
+- Append-only/frozen koruma tetikleyicileri yalnız bu transaction içinde, yalnız silinecek
+  satırı olan tablolarda ve adlarıyla kapatılır; commit'ten önce açılır ve açıldıkları
+  doğrulanır. `document_fingerprints(source_sha256)` için gereken indeks transaction içinde
+  kurulup düşürülür (şema değişmez).
+- Dosyalar **silinmez, taşınır**: `<karantina>/sha256/aa/bb/<sha>` (aynı sürücü,
+  `os.replace`; commit başarısız olursa geri konur). Karantinanın kalıcı silinmesi ayrı bir
+  kurucu kararıdır.
+- Silme günlüğü [`deploy/purged_objects.jsonl`](../deploy/purged_objects.jsonl): satır başına
+  `sha256, byte_size, source_ids, release_ids, reason, approved_by, purged_at,
+  manifest_sha256` (+ `plan_id, plan_sha256, quarantined`); yalnız eklenir, sıra SHA'ya göre.
+
+**Tatbikat ile ilişkisi.** Zincir kontrolü `purged_objects.jsonl`'deki bir nesneyi, yedek
+**silmeden önce** alınmışsa sorun saymaz (`purged_objects_hit`). Listede olmayan eksik nesne,
+ve silmeden **sonra** alınmış bir yedeğin kataloğunda hâlâ görünen silinmiş nesne yine
+**FAIL**'dir. `known_lost_objects.txt` bir kayıp kabulüdür, bu ise bir silme kaydıdır;
+ikisi karıştırılmaz. Yedek aynası artımlıdır ve hiçbir şeyi silmez: silinen nesneler
+aynada kalır (aynayı budamak ayrı bir karardır).
+
+**Bedel: yeniden üretim.** Silinen temiz adaylar ana korpustan (`9826d58e…`) ve
+`var/derived/*.manifest.json` üretim manifestlerinden yeniden üretilebilir; `manifest_sha256`
+günlükte durur. Bu manifestler `var/derived` altında olduğu için **yedeğe girmez** — tek
+tarif onlardır, korunmalıdır. v4 ve held-out v2 ana korpustan değil v3 çıktısından türedi
+(önce v3 yeniden üretilir). Yalnız v5 manifesti yorumlayıcı ve zlib sürümünü kaydeder
+(3.13.15 / zlib 1.3.1); v1–v4 ilke olarak yeniden üretilebilir ama başka bir yorumlayıcıda
+bayt bayt garanti değildir. Manifestlerde süre kaydı yok; yeniden üretim süresi ölçülmedi.
+
 ## Gerçek felakette geri dönüş
 
 1. Yeni makinede PostgreSQL + repo kurulumunu yapın ([local_development.md](local_development.md)).

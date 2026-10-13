@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **IMPLEMENTED — eşik değeri bekleniyor** (in working tree, not committed; migration 000030 written, not applied) — 2026-10-13 |
+| Status | **IMPLEMENTED — threshold decided: 10 %** (owner, 2026-10-13: "yüzde 10 iyi ise bence de ok"); committed 3743403 + b5f0ba1; migration 000030 applies on the next API start (owner: "tamam"); the value is written per source with `PUT /api/v1/sources/{id}/pretrain-review-threshold` before that source's first review |
 | Kind | fix (release gate) |
 | Moratorium | allowed — the gate as written makes any web corpus unfreezable |
 | Estimate | 1 day |
@@ -40,14 +40,15 @@ review sessions would end at a closed gate.
 
 ## Acceptance criteria
 
-- [ ] Threshold set by the owner and written before any pretrain review starts.
+- [x] Threshold set by the owner (**10 %**, 2026-10-13); written per source before its first
+      review (first target: the FineWeb2-HQ `tur_Latn` import, TASK-032).
 - [ ] Freeze of a source with k ≤ threshold rejections succeeds and excludes exactly those k
       documents; manifest shows rate, threshold, reviewer.
 - [x] Instruction/contribution behaviour byte-for-byte unchanged (existing tests green).
 
 ## Owner actions
 
-- **Set the threshold** (proposal 10 %). Without it the next candidate cannot be reviewed.
+- ~~Set the threshold~~ — done 2026-10-13: **10 %**. Start the API once so migration 000030 applies.
 
 ## Report
 

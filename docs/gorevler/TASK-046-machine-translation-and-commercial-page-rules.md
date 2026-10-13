@@ -54,9 +54,17 @@ methods agree.
 ## Acceptance criteria
 
 - [ ] On the labelled FineWeb2-HQ rows: machine-translation recall ≥ 80 % at ≤ 5 % false drops
-      among `kalsin` rows (targets to be confirmed by the owner before tuning).
+      among `kalsin` rows — **false-drop cap met (4.9 %), recall not on the unbiased sets**: 83 %
+      on the eyeball set (URL-biased upper bound), 64 % on jury-labelled MT, 73 % on the held-out
+      control set. Loosening the cap to 7.5 % gives 81 % control recall, 10 % gives 85 %. Owner
+      decides which pair to accept (targets were provisional).
 - [x] Commercial rule measured the same way on both corpora. (2026-10-13: HQ 15.4 % / v5 34.3 % recall, 0 false drops on either corpus.)
-- [ ] Judge rerun on 200 documents after the rules: junk share before/after with intervals.
+- [x] Judge rerun on 200 documents after the rules (2026-10-13, 2 sonnet readers, rubric
+      `juri-siki-v1`): junk share **47.0 % [40.2–53.9] before → 39.0 % [31.9–46.7] after v4** on
+      the 164 kept documents (same 200, not independent); by characters 60.6 % → 33.8 %. The 34
+      documents v4 newly drops are junk by the jury 29/34 = 85.3 % [69.9–93.6] (MT 27/32,
+      commercial 4/4). Jury-called MT: 46 before, 25 left after. By dump year, junk after v4:
+      ≤2019 27.0 %, 2020–21 44.4 %, ≥2022 51.9 %.
 
 ## Owner actions
 
@@ -64,9 +72,19 @@ methods agree.
 
 ## Report
 
-**Status: IMPLEMENTED** (2026-10-13) — code, tests, labelled measurement and the full-import
-pass are done; the targets are still provisional, the judge rerun and the owner anchor are
-owed. Full measurement: [var/olcum-2026-10-13/task-046/RAPOR.md](../../var/olcum-2026-10-13/task-046/RAPOR.md);
+**2026-10-13, judge rerun (Fable + 2 sonnet readers, 100 rows each, rubric `juri-siki-v1`,
+answer key withheld):** `var/olcum-2026-10-13/task-046/juri-kor-200/hukumler-sonnet.jsonl`,
+scored with `puanla.py` → `hukumler-sonnet.puan.json`. Before: 94/200 junk = 47.0 % [40.2–53.9]
+(consistent with TASK-047's independent sample, 46.5 %). After `tr-web-v4` (164 kept): 64/164 =
+39.0 % [31.9–46.7]; by characters 60.6 % → 33.8 % because MT documents are long. New-rule drops:
+29/34 junk (85.3 %); the 5 false drops are the localized corporate/agency pages the rule's URL
+signature catches. MT remaining in the kept set: 25 documents (the Turkish-domain translated news
+without a URL signature — the known recall gap). Commercial rule: 4/4 drops junk, but it catches
+only a sliver of the prose-style promotional pages.
+
+**Status: IMPLEMENTED + MEASURED** (2026-10-13) — code, tests, labelled measurement, full-import
+pass and the judge rerun are done; the owner decides the recall/false-drop pair and reads the
+20-row anchor. Full measurement: [var/olcum-2026-10-13/task-046/RAPOR.md](../../var/olcum-2026-10-13/task-046/RAPOR.md);
 policy note: [docs/tr_web_v4_kalite_politikasi.md](../tr_web_v4_kalite_politikasi.md).
 
 ### What shipped

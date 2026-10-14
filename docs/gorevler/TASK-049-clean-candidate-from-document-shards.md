@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **FULL RUN DONE (B) — registration pending** — 2026-10-14 13:27: owner picked **B**; full run over 8,578,808 documents produced the candidate `a502b9dd…` (6,602,551 documents, 15,244,828,410 B) and held-out `e498e6fb…` (2,652); two materializations identical; registration waits for the services to be up (API was down after the night) |
+| Status | **DONE — candidate registered, gates running** — 2026-10-14: owner picked **B**; full run over 8,578,808 documents produced the candidate `a502b9dd…` (6,602,551 documents, 15,244,828,410 B) and held-out `e498e6fb…` (2,652); two materializations identical; registered as `b255c3d8…` (pretrain) and `ffde0f72…` (holdout), ingest + gates queued 14:0x |
 | Kind | feature (derivation path) |
 | Moratorium | owner approval given 2026-10-13 (delivery path for the first real candidate) |
 | Estimate | 2 day(s) |
@@ -58,9 +58,12 @@ after `tr-web-v4`; the rules exist, the path from shards to a candidate does not
 - [x] Materialized candidate text object + held-out object, SHAs recorded; a second materialize
       gives the same SHAs. *(200 k slice)*
 - [x] 200 k slice measured (time per 100 k docs, drop rates); full-run estimate written.
-- [ ] Registration command prepared; after the owner runs it the candidate shows on the source
-      list with gates running. *(prepared; dry run passed on the full B outputs 2026-10-14; waits
-      for the API and worker to be up)*
+- [x] Registered 2026-10-14 (Fable, through the API after the owner started the services):
+      candidate `fineweb2_hq_tur_latn_clean_candidate_trweb4B_20261014` =
+      **`b255c3d8-9e3e-48db-8f0b-3f9bfe1ece06`** (pretrain, `derived_clean_corpus`, derived from
+      `ba80dc1c…`, 10 % threshold written before ingest, ingest job `72010776…`); held-out
+      `fineweb2_hq_tur_latn_heldout_trweb4B_20261014` = **`ffde0f72-97d7-48a9-829e-eed9a77557d1`**
+      (holdout, ingest job `97fb4371…`). Gates run through the normal path from here.
 
 ## Owner actions
 

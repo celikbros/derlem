@@ -1,0 +1,29 @@
+{
+  "schema_version": "derlem.purge-plan.v1",
+  "plan_id": "2026-10-14-karantina-aday",
+  "approved_by": "kurucu, 2026-10-14 (TASK-050 owner action: purge --execute for the quarantined candidate)",
+  "reason": "TASK-050: FineWeb2-HQ tr-web-v4 (B) adayi b255c3d8 normalize tekrar kapisinda karantinaya alindi (1.149 belge ilgisiz Faz-2 kaynaklarinda da var). Yerine kaynaklar arasi kopyalari cikarilmis aday (fineweb2_hq_tur_latn_clean_candidate_trweb4B_xdedup_20261014, selection subtract) kaydedilir; eski aday bagli satirlariyla silinir, nesnesi karantinaya tasinir. Held-out ffde0f72 kalir.",
+  "sources": [
+    {
+      "id": "b255c3d8-9e3e-48db-8f0b-3f9bfe1ece06",
+      "name": "fineweb2_hq_tur_latn_clean_candidate_trweb4B_20261014",
+      "manifest_path": "var/derived/fineweb2hq_tur_ba80dc1c_trweb4B.selection.manifest.json"
+    }
+  ],
+  "releases": [],
+  "keep_sources": [
+    {"id": "2f1bec0a-cdcf-4995-9d81-c0e48d1961a9", "name": "Derlem Ornek Katki Verisi"},
+    {"id": "06ac330e-350f-45f0-b596-3dd4aa1dbc57", "name": "gardash_faz2_tr_dedup_20260621"},
+    {"id": "0a178606-e4ee-4ffb-a316-0613ee966307", "name": "faz2_ham_trt_20260918"},
+    {"id": "4c7fdf1c-2432-4109-9994-6e7c081a6808", "name": "faz2_ham_tdk_20260918"},
+    {"id": "34a87ca1-5ad4-4d17-bda5-d81689367c81", "name": "faz2_ham_academic_20260918"},
+    {"id": "ebbe53d8-68fa-4d78-99d0-f9df5a46569b", "name": "faz2_ham_ttk_20260918"},
+    {"id": "10232abb-4d26-4a00-856d-05c9a20603f2", "name": "faz2_ham_tr_corpus_20260918"},
+    {"id": "e6f3b29b-d2e6-4f89-bdee-cd1e3c52703e", "name": "faz2_ham_wiki_oscar_20260919"},
+    {"id": "fa772e47-9647-411a-913e-6eaa6a184919", "name": "gardas_motor_karar_v1_eval_20260919"},
+    {"id": "4b0ab363-f4ec-4a65-8fea-6ec8273f9582", "name": "gardas_karar_v2_tam_eval_20261003"},
+    {"id": "109fefff-686f-49b8-99bb-6138e057e4f6", "name": "gardas_karar_v2_gelistirme_eval_20261003"},
+    {"id": "ba80dc1c-b961-409d-a11f-60db7dcb7018", "name": "FineWeb2-HQ tur_Latn"},
+    {"id": "ffde0f72-97d7-48a9-829e-eed9a77557d1", "name": "fineweb2_hq_tur_latn_heldout_trweb4B_20261014"}
+  ]
+}

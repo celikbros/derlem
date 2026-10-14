@@ -50,6 +50,7 @@ from derlem_worker.sampling import _bounded_lines, _document_from_line
 from derlem_worker.selection import (
     HashOnlyOutput,
     SelectionRecorder,
+    load_subtraction_drops,
     new_run_id,
     run_started_at,
     write_selection_manifest,
@@ -166,6 +167,14 @@ class CleanCandidateReport:
     # tablolarin toplu SHA'si, politika kimligi); tek surecli eski yolda None.
     # Kararlari ve ciktilari degistirmez.
     signal_precompute: dict[str, Any] | None = None
+    # TASK-050 (2026-10-14): tekrar ve yakin kopya kararlarindan SONRA uygulanan
+    # cikarma listesi (derlem.decision.v1; source_ordinal = aday satir numarasi).
+    # Dusen belge tekrar kayitlarinda kalir, yalniz secime girmez: sonuc
+    # ``selection subtract`` ile bayt bayt aynidir. Yoksa None / 0.
+    post_dedup_drop_path: str | None = None
+    post_dedup_drop_sha256: str | None = None
+    post_dedup_drop_entries: int = 0
+    removed_post_dedup_drop_lines: int = 0
 
 
 def is_held_out(line_bytes: bytes, rule: str) -> bool:
@@ -364,6 +373,13 @@ def main() -> None:
         "shard SHA and policy identity still match (cheap restart); default with --workers > 1: a temporary "
         "directory removed at the end",
     )
+    parser.add_argument(
+        "--post-dedup-drop",
+        type=Path,
+        help="derlem.decision.v1 parquet of reject rows applied AFTER the duplicate/near-duplicate decisions "
+        "(source_ordinal = candidate line number; the dropped documents stay in the dedup state). Same result "
+        "as 'python -m derlem_worker.selection subtract' (TASK-050)",
+    )
     args = parser.parse_args()
 
     if bool(args.source_id) == bool(args.input_path):
@@ -443,6 +459,7 @@ def main() -> None:
             limit_lines=args.limit_lines,
             workers=args.workers,
             signals_dir=signals_dir,
+            post_dedup_drop_path=args.post_dedup_drop,
         )
         print(json.dumps(manifest, ensure_ascii=False, indent=2))
         return
@@ -483,6 +500,7 @@ def main() -> None:
         store_root=store_root,
         workers=args.workers,
         signals_dir=signals_dir,
+        post_dedup_drop_path=args.post_dedup_drop,
     )
     write_json_atomic(manifest_path, asdict(report))
     print(json.dumps({"output": str(output_path), "manifest": str(manifest_path), "report": asdict(report)}, ensure_ascii=False, indent=2))
@@ -518,6 +536,7 @@ def derive_selection_list(
     limit_lines: int | None = None,
     workers: int = 1,
     signals_dir: Path | None = None,
+    post_dedup_drop_path: Path | None = None,
 ) -> dict[str, Any]:
     """Metin-kopya kosusunun aynisi, metin yazmadan: secim listesi + karar anlik goruntusu + manifest.
 
@@ -565,6 +584,7 @@ def derive_selection_list(
             limit_lines=limit_lines,
             workers=workers,
             signals_dir=signals_dir,
+            post_dedup_drop_path=post_dedup_drop_path,
         )
         selection_info, decisions_info = recorder.close()
     except BaseException:
@@ -723,6 +743,7 @@ def derive_clean_candidate(
     store_root: Path | None = None,
     workers: int = 1,
     signals_dir: Path | None = None,
+    post_dedup_drop_path: Path | None = None,
 ) -> CleanCandidateReport:
     """Metin-kopya turevi; ``selection`` verilirse metin yazilmaz (TASK-044).
 
@@ -804,6 +825,15 @@ def derive_clean_candidate(
     if drop_list_path is not None:
         drop_list_path = drop_list_path.resolve(strict=True)
         drop_list, drop_list_sha256, drop_list_entries = load_drop_list(drop_list_path)
+    # TASK-050: tekrar kararlarindan sonra uygulanan cikarma listesi (doc_id -> (aday satir no, karar)).
+    post_drop: dict[str, tuple[int, dict[str, Any]]] = {}
+    post_drop_sha256: str | None = None
+    post_drop_used = 0
+    train_bound_lines = 0
+    if post_dedup_drop_path is not None:
+        post_dedup_drop_path = post_dedup_drop_path.resolve(strict=True)
+        loaded, post_drop_sha256, _ = load_subtraction_drops(post_dedup_drop_path)
+        post_drop = {row["doc_id"]: (line_ordinal, row) for line_ordinal, row in loaded.items()}
     pii_findings = {key: 0 for key in PII_KEYS}
     pii_line_counts = {key: 0 for key in PII_KEYS}
     total_lines = 0
@@ -988,6 +1018,33 @@ def derive_clean_candidate(
                         near_index.add(signature, ordinal)
 
                 encoded = line_bytes + b"\n"
+                if post_drop:
+                    to_held_out = held_out is not None and _is_held_out_hex(line_digest.hexdigest())
+                    if not to_held_out:
+                        train_bound_lines += 1
+                    entry = post_drop.get(line_digest.hexdigest())
+                    if entry is not None:
+                        line_ordinal, row = entry
+                        if to_held_out:
+                            raise ValueError(
+                                f"post-dedup drop doc_id {row['doc_id']} falls into the held-out partition "
+                                f"(ordinal {ordinal}); only train documents can be dropped"
+                            )
+                        if line_ordinal != train_bound_lines:
+                            raise ValueError(
+                                f"post-dedup drop doc_id {row['doc_id']} names candidate line {line_ordinal}, "
+                                f"the document is candidate line {train_bound_lines}"
+                            )
+                        post_drop_used += 1
+                        if selection is not None:
+                            selection.record({**row, "source_ordinal": ordinal})
+                        if rejections is not None:
+                            rejections.write(_rejection_record(
+                                ordinal=ordinal, reasons=(str(row["reason"] or row["decision_type"]),), full=True,
+                                line_bytes=line_bytes, text=text,
+                                details={"judge": row["judge"], "run_id": row["run_id"], "candidate_line": line_ordinal},
+                            ))
+                        continue
                 if held_out is not None and _is_held_out_hex(line_digest.hexdigest()):
                     held_out.write(encoded)
                     held_out_lines += 1
@@ -1002,6 +1059,11 @@ def derive_clean_candidate(
                     if selection is not None:
                         selection.select(ordinal, line_digest.hexdigest(), "train")
 
+            if post_drop and post_drop_used != len(post_drop):
+                raise ValueError(
+                    f"post-dedup drop list: {len(post_drop) - post_drop_used} of {len(post_drop)} entries match no "
+                    "train document (doc_id/candidate line not found)"
+                )
             if signals is not None:
                 signal_summary = signals.finish(complete=limit_lines is None)
             for item in outputs:
@@ -1077,6 +1139,10 @@ def derive_clean_candidate(
             )
         ),
         signal_precompute=signal_summary,
+        post_dedup_drop_path=(str(post_dedup_drop_path) if post_dedup_drop_path is not None else None),
+        post_dedup_drop_sha256=post_drop_sha256,
+        post_dedup_drop_entries=len(post_drop),
+        removed_post_dedup_drop_lines=post_drop_used,
     )
 
 

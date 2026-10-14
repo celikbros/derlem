@@ -10,6 +10,12 @@ Komutlar:
     python -m derlem_worker.clean_candidate ... --selection-list   (secim listesi kosusu)
     python -m derlem_worker.selection materialize --manifest M [--parent P] [--store-root S] [--output O] [--held-out-output H]
     python -m derlem_worker.selection from-text-copy --parent P --train T [--held-out H] --output-dir D --name N
+    python -m derlem_worker.selection subtract --manifest M --drop D --out PREFIX [--parent P] [--store-root S]
+
+``subtract`` (TASK-050) secimin ``train`` bolmesinden bir cikarma listesindeki belgeleri
+cikarir (ornegin baska kaynaklarda da bulunan normalize kopyalar); held-out aynen kalir,
+kararlara dusen satirlar eklenir, yeni manifestin ``parent``i aynidir. Sonuc
+``clean_candidate --post-dedup-drop`` ile yeniden turetmenin bayt bayt aynisidir.
 
 ``from-text-copy`` mevcut bir metin-kopya turevini (v1-v5) ana kaynak uzerinde secim
 listesi olarak ifade eder: turev, ana kaynagin sirali alt dizisidir.
@@ -33,6 +39,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import tempfile
 from typing import Any, BinaryIO, Iterator
 import uuid
@@ -45,6 +52,7 @@ from derlem_worker.document_record import (
     ParquetFileInfo,
     ParquetRowWriter,
     file_sha256,
+    read_decisions,
     read_selection,
     validate_decision,
 )
@@ -55,6 +63,9 @@ SELECTION_MANIFEST_VERSION = "derlem.selection-manifest.v1"
 MATERIALIZE_METHOD = "parent-lines-by-ordinal-sha256-verified-v1"
 MATERIALIZE_METHOD_SHARDS = "import-manifest-candidate-lines-by-ordinal-sha256-verified-v1"
 PARENT_KIND_IMPORT_MANIFEST = "import_manifest"
+# TASK-050: secimden belge cikarma (yeniden turetmeden); clean_candidate'in
+# --post-dedup-drop yoluyla bayt bayt ayni sonuc.
+SUBTRACT_METHOD = "selection-subtract-v1"
 # Atilacak-satir listesindeki kayit gerekcesi -> karar turu. Listede olmayan
 # gerekce kosunun --drop-list-decision-type degerini alir.
 DROP_LIST_REASON_DECISION_TYPES = {
@@ -151,6 +162,11 @@ class SelectionRecorder:
             "decided_at": self.decided_at,
         })
         self.decision_counts[f"{decision_type}:{verdict}"] += 1
+
+    def record(self, row: dict[str, Any]) -> None:
+        """Hazir bir karar satirini (or. cikarma listesinden, kendi run_id'siyle) aynen yazar."""
+        self._decisions.add(row)
+        self.decision_counts[f"{row['decision_type']}:{row['verdict']}"] += 1
 
     def oversized(self, ordinal: int) -> None:
         # Sinir asan satirin metni okunmaz, doc_id'si yoktur: karar kaydina
@@ -345,6 +361,66 @@ def _parent_lines(manifest: dict[str, Any], parent: Path, store_root: Path | Non
     return manifest_candidate_lines(limited, root.resolve(strict=True), max_document_bytes)
 
 
+def _load_manifest(manifest_path: Path) -> dict[str, Any]:
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if manifest.get("schema_version") != SELECTION_MANIFEST_VERSION:
+        raise SelectionError("not a selection manifest")
+    return manifest
+
+
+def _manifest_file(manifest_path: Path, value: str) -> Path:
+    path = Path(value)
+    if not path.is_absolute():
+        path = (manifest_path.parent / path).resolve()
+    return path
+
+
+def _resolve_parent(manifest: dict[str, Any], parent_path: Path | None, verify_parent: bool) -> Path:
+    parent = Path(parent_path or manifest["parent"]["path"]).resolve(strict=True)
+    if parent.stat().st_size != manifest["parent"]["byte_size"]:
+        raise SelectionError("parent byte size differs from the manifest")
+    if verify_parent:
+        digest, _ = file_sha256(parent)
+        if digest != manifest["parent"]["sha256"]:
+            raise SelectionError("parent sha256 differs from the manifest")
+    return parent
+
+
+def _stream_selected(
+    manifest: dict[str, Any],
+    parent: Path,
+    store_root: Path | None,
+    selection_path: Path,
+    outputs: dict[str, "_VerifiedOutput"],
+) -> None:
+    """Secilen satirlari ana kaynaktan sirayla bolmelerine yazar (materialize'in cekirdegi)."""
+    max_document_bytes = int(manifest["max_document_bytes"])
+    selected = read_selection(selection_path)
+    current = next(selected, None)
+    last = 0
+    for ordinal, raw_line, oversized in _parent_lines(manifest, parent, store_root, max_document_bytes):
+        if current is None:
+            break
+        want = int(current["source_ordinal"])
+        if want <= last:
+            raise SelectionError("selection ordinals must increase")
+        if ordinal < want:
+            continue
+        if oversized or raw_line is None:
+            raise SelectionError(f"selected ordinal {want} is oversized in the parent")
+        line_bytes = raw_line.encode("utf-8")
+        if hashlib.sha256(line_bytes).hexdigest() != current["doc_id"]:
+            raise SelectionError(f"parent line {want} does not match its doc_id")
+        partition = current["partition"]
+        if partition not in outputs:
+            raise SelectionError(f"unknown partition {partition!r}")
+        outputs[partition].write(line_bytes + b"\n")
+        last = want
+        current = next(selected, None)
+    if current is not None:
+        raise SelectionError(f"selected ordinal {current['source_ordinal']} is beyond the end of the parent")
+
+
 def materialize(
     manifest_path: Path,
     *,
@@ -363,23 +439,12 @@ def materialize(
     gelir (``store_root`` verilmezse manifestteki depo koku); her parca okunmadan
     once SHA256 ile dogrulanir.
     """
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if manifest.get("schema_version") != SELECTION_MANIFEST_VERSION:
-        raise SelectionError("not a selection manifest")
-    parent = Path(parent_path or manifest["parent"]["path"]).resolve(strict=True)
-    if parent.stat().st_size != manifest["parent"]["byte_size"]:
-        raise SelectionError("parent byte size differs from the manifest")
-    if verify_parent:
-        digest, _ = file_sha256(parent)
-        if digest != manifest["parent"]["sha256"]:
-            raise SelectionError("parent sha256 differs from the manifest")
-    selection_path = Path(manifest["selection"]["path"])
-    if not selection_path.is_absolute():
-        selection_path = (manifest_path.parent / selection_path).resolve()
+    manifest = _load_manifest(manifest_path)
+    parent = _resolve_parent(manifest, parent_path, verify_parent)
+    selection_path = _manifest_file(manifest_path, manifest["selection"]["path"])
     selection_digest, _ = file_sha256(selection_path)
     if selection_digest != manifest["selection"]["sha256"]:
         raise SelectionError("selection list sha256 differs from the manifest")
-    max_document_bytes = int(manifest["max_document_bytes"])
     expected = manifest["expected_materialization"]
 
     outputs = {
@@ -387,30 +452,7 @@ def materialize(
         "held_out": _VerifiedOutput(held_out_output_path),
     }
     try:
-        selected = read_selection(selection_path)
-        current = next(selected, None)
-        last = 0
-        for ordinal, raw_line, oversized in _parent_lines(manifest, parent, store_root, max_document_bytes):
-            if current is None:
-                break
-            want = int(current["source_ordinal"])
-            if want <= last:
-                raise SelectionError("selection ordinals must increase")
-            if ordinal < want:
-                continue
-            if oversized or raw_line is None:
-                raise SelectionError(f"selected ordinal {want} is oversized in the parent")
-            line_bytes = raw_line.encode("utf-8")
-            if hashlib.sha256(line_bytes).hexdigest() != current["doc_id"]:
-                raise SelectionError(f"parent line {want} does not match its doc_id")
-            partition = current["partition"]
-            if partition not in outputs:
-                raise SelectionError(f"unknown partition {partition!r}")
-            outputs[partition].write(line_bytes + b"\n")
-            last = want
-            current = next(selected, None)
-        if current is not None:
-            raise SelectionError(f"selected ordinal {current['source_ordinal']} is beyond the end of the parent")
+        _stream_selected(manifest, parent, store_root, selection_path, outputs)
         results = {}
         for partition, output in outputs.items():
             results[partition] = output.finish(expected.get(partition), partition)
@@ -428,6 +470,258 @@ def materialize(
             "held_out": str(held_out_output_path) if held_out_output_path else None,
         },
     }
+
+
+# --------------------------------------------------------------------------
+# Subtract (TASK-050): secimden belge cikarma, yeniden turetmeden
+# --------------------------------------------------------------------------
+
+
+def load_subtraction_drops(path: Path) -> tuple[dict[int, dict[str, Any]], str, int]:
+    """Cikarma listesi: derlem.decision.v1 Parquet, her satir bir ``reject`` karari.
+
+    ``source_ordinal`` = adayin (secimin ``train`` bolmesinin) 1'den baslayan SATIR
+    numarasi -- aday kaynagin ``document_fingerprints.source_ordinal``'i; ``doc_id`` =
+    o satirin baytlarinin SHA256'si. Ayni satir numarasi ya da ayni doc_id iki kez
+    gecerse liste belirsizdir: reddedilir. Donus: (satir no -> karar satiri, sha256, boyut).
+    """
+    path = path.resolve(strict=True)
+    digest, byte_size = file_sha256(path)
+    drops: dict[int, dict[str, Any]] = {}
+    seen_doc_ids: set[str] = set()
+    for row in read_decisions(path):
+        validate_decision(row)
+        if row["verdict"] != "reject":
+            raise SelectionError(f"drop row for doc_id {row['doc_id']} is not a reject: {row['verdict']!r}")
+        line_ordinal = row.get("source_ordinal")
+        if not isinstance(line_ordinal, int) or isinstance(line_ordinal, bool) or line_ordinal < 1:
+            raise SelectionError(f"drop row for doc_id {row['doc_id']} has no candidate line number")
+        if line_ordinal in drops:
+            raise SelectionError(f"ambiguous drop list: candidate line {line_ordinal} is listed twice")
+        if row["doc_id"] in seen_doc_ids:
+            raise SelectionError(f"ambiguous drop list: doc_id {row['doc_id']} is listed twice")
+        seen_doc_ids.add(row["doc_id"])
+        drops[line_ordinal] = row
+    if not drops:
+        raise SelectionError("drop list is empty")
+    return drops, digest, byte_size
+
+
+_REFERENCE_RE = re.compile(r"(?:normalized_duplicate_of|near_duplicate_of)=(\d+)")
+
+
+def subtract(
+    manifest_path: Path,
+    drop_path: Path,
+    out_prefix: Path,
+    *,
+    parent_path: Path | None = None,
+    store_root: Path | None = None,
+    verify_parent: bool = False,
+) -> dict[str, Any]:
+    """Secim listesinden cikarma listesindeki ``train`` belgelerini cikarir.
+
+    Yeni secim = eski secim eksi dusenler (held-out bolmesi aynen); yeni kararlar =
+    eski kararlar + dusen satirlar, ebeveyn sira numarasi yerine konmus ve kendi
+    sira numaralarinin yerine (sirali) yerlestirilmis; yeni manifestin ``parent``i
+    aynidir, ``subtraction`` bolumu girdi secim/karar/cikarma SHA'larini ve sayiyi
+    yazar. Beklenen metin (``expected_materialization``) yeni secimden ana kaynak
+    uzerinden hash-only uretilir; held-out beklentisi eskisiyle ayni olmali.
+
+    Bu, ``clean_candidate --post-dedup-drop`` ile yeniden turetmenin bayt bayt
+    aynisidir: dusen belge tekrar/yakin-kopya kayitlarinda kalir (sonraki kopyalari
+    yine onun kopyasi sayilir), yalniz secime girmez.
+
+    Reddedilenler (hicbir sey yazilmaz): satir numarasi -> secim satiri eslemesi
+    tutmuyor (doc_id farkli, train bolmesinin disinda), dusen doc_id secimde birden
+    cok kez geciyor ya da held-out bolmesinde, ebeveyn sira numarasinda zaten karar
+    satiri var, girdi dosyalari manifestle tutmuyor, cikti dosyalari mevcut.
+    """
+    manifest_path = manifest_path.resolve(strict=True)
+    manifest = _load_manifest(manifest_path)
+    if manifest.get("decisions") is None:
+        raise SelectionError("subtract needs a manifest with a decision snapshot")
+    out_prefix = out_prefix.resolve()
+    targets = {
+        "selection": out_prefix.with_name(out_prefix.name + ".selection.parquet"),
+        "decisions": out_prefix.with_name(out_prefix.name + ".decisions.parquet"),
+        "manifest": out_prefix.with_name(out_prefix.name + ".selection.manifest.json"),
+    }
+    selection_path = _manifest_file(manifest_path, manifest["selection"]["path"])
+    decisions_path = _manifest_file(manifest_path, manifest["decisions"]["path"])
+    inputs = {selection_path, decisions_path, manifest_path, drop_path.resolve()}
+    for target in targets.values():
+        if target in inputs:
+            raise SelectionError(f"output would overwrite an input: {target}")
+        if target.exists():
+            raise SelectionError(f"refusing to overwrite existing file: {target}")
+    for label, path in (("selection", selection_path), ("decisions", decisions_path)):
+        digest, _ = file_sha256(path)
+        if digest != manifest[label]["sha256"]:
+            raise SelectionError(f"{label} sha256 differs from the manifest")
+    manifest_digest, _ = file_sha256(manifest_path)
+    drops, drop_digest, drop_size = load_subtraction_drops(drop_path)
+    drop_doc_ids = {row["doc_id"] for row in drops.values()}
+    parent = _resolve_parent(manifest, parent_path, verify_parent)
+
+    written: list[Path] = []
+    try:
+        # 1. Secim: train satir numarasi -> ebeveyn sira numarasi, doc_id ile dogrulanir.
+        problems: list[str] = []
+        occurrences: Counter = Counter()
+        mapped: dict[int, int] = {}
+        partitions: Counter = Counter()
+        train_lines = 0
+        writer = ParquetRowWriter(targets["selection"], SELECTION_SCHEMA, row_group_size=100_000)
+        try:
+            for row in read_selection(selection_path):
+                partition = row["partition"]
+                if row["doc_id"] in drop_doc_ids:
+                    occurrences[row["doc_id"]] += 1
+                    if partition != "train":
+                        problems.append(
+                            f"drop doc_id {row['doc_id']} is in the {partition} partition (parent ordinal "
+                            f"{row['source_ordinal']}); only train documents can be subtracted"
+                        )
+                if partition == "train":
+                    train_lines += 1
+                    drop = drops.get(train_lines)
+                    if drop is not None:
+                        if drop["doc_id"] == row["doc_id"]:
+                            mapped[train_lines] = int(row["source_ordinal"])
+                            continue
+                        problems.append(
+                            f"drop for candidate line {train_lines} names doc_id {drop['doc_id']}, "
+                            f"the selection's train line {train_lines} is {row['doc_id']}"
+                        )
+                writer.add(row)
+                partitions[partition] += 1
+            for doc_id, count in sorted(occurrences.items()):
+                if count > 1:
+                    problems.append(f"ambiguous: drop doc_id {doc_id} occurs {count} times in the selection")
+            for line_ordinal in sorted(drops):
+                if line_ordinal > train_lines:
+                    problems.append(
+                        f"drop candidate line {line_ordinal} is beyond the train partition ({train_lines} lines)"
+                    )
+            if problems:
+                raise SelectionError("subtraction refused: " + "; ".join(problems[:20]))
+            if train_lines != manifest["selection"]["partitions"].get("train"):
+                raise SelectionError("train partition size differs from the manifest")
+            selection_info = writer.close()
+        except BaseException:
+            writer.abort()
+            raise
+        written.append(targets["selection"])
+
+        # 2. Kararlar: eski satirlar + dusenler, ebeveyn sira numarasinin yerine.
+        pending = sorted(
+            ((parent_ordinal, {**drops[line_ordinal], "source_ordinal": parent_ordinal})
+             for line_ordinal, parent_ordinal in mapped.items()),
+            key=lambda item: item[0],
+        )
+        dropped_parent = {parent_ordinal for parent_ordinal, _ in pending}
+        references: Counter = Counter()
+        decision_counts: Counter = Counter()
+        writer = ParquetRowWriter(
+            targets["decisions"], DECISION_SCHEMA, row_group_size=100_000, validator=validate_decision
+        )
+        try:
+            index = 0
+            last = 0
+            for row in read_decisions(decisions_path):
+                ordinal = row.get("source_ordinal")
+                if ordinal is None:
+                    raise SelectionError("a decision row has no source_ordinal; the merge position is undefined")
+                if ordinal < last:
+                    raise SelectionError("decision rows are not in ordinal order; the merge position is undefined")
+                last = ordinal
+                while index < len(pending) and pending[index][0] < ordinal:
+                    writer.add(pending[index][1])
+                    decision_counts[f"{pending[index][1]['decision_type']}:reject"] += 1
+                    index += 1
+                if ordinal in dropped_parent:
+                    raise SelectionError(
+                        f"parent ordinal {ordinal} already has a decision row; it is not a plain train selection"
+                    )
+                for match in _REFERENCE_RE.finditer(row.get("reason") or ""):
+                    if int(match.group(1)) in dropped_parent:
+                        references[f"{row['decision_type']}:{row['verdict']}"] += 1
+                writer.add(row)
+                decision_counts[f"{row['decision_type']}:{row['verdict']}"] += 1
+            for _, row in pending[index:]:
+                writer.add(row)
+                decision_counts[f"{row['decision_type']}:reject"] += 1
+            decisions_info = writer.close()
+        except BaseException:
+            writer.abort()
+            raise
+        written.append(targets["decisions"])
+
+        # 3. Beklenen metin: yeni secimden ana kaynak uzerinden (yalniz hash).
+        outputs = {"train": _VerifiedOutput(None), "held_out": _VerifiedOutput(None)}
+        _stream_selected(manifest, parent, store_root, targets["selection"], outputs)
+        old_expected = manifest["expected_materialization"]
+        expected = {key: outputs[key].finish(None, key) for key in old_expected}
+        if "held_out" in old_expected and expected["held_out"] != old_expected["held_out"]:
+            raise SelectionError("held-out materialization changed; subtraction must leave it untouched")
+        if expected["train"]["lines"] != old_expected["train"]["lines"] - len(drops):
+            raise SelectionError("train line count is not the old count minus the drops")
+
+        drop_rows = list(drops.values())
+        new_manifest = dict(manifest)
+        new_manifest["selection"] = {
+            **manifest["selection"],
+            "path": selection_info.path,
+            "sha256": selection_info.sha256,
+            "byte_size": selection_info.byte_size,
+            "rows": selection_info.row_count,
+            "partitions": dict(sorted(partitions.items())),
+        }
+        new_manifest["decisions"] = {
+            **manifest["decisions"],
+            "path": decisions_info.path,
+            "sha256": decisions_info.sha256,
+            "byte_size": decisions_info.byte_size,
+            "rows": decisions_info.row_count,
+            "counts": dict(sorted(decision_counts.items())),
+            "covers": manifest["decisions"].get("covers", "")
+            + "; plus the subtraction rows (see subtraction; their own run_id/decided_at)",
+        }
+        new_manifest["expected_materialization"] = expected
+        new_manifest["subtraction"] = {
+            "method": SUBTRACT_METHOD,
+            "input_manifest": {"path": str(manifest_path), "sha256": manifest_digest},
+            "input_selection": {
+                "sha256": manifest["selection"]["sha256"], "rows": manifest["selection"]["rows"],
+            },
+            "input_decisions": {
+                "sha256": manifest["decisions"]["sha256"], "rows": manifest["decisions"]["rows"],
+            },
+            "input_expected_materialization": old_expected,
+            "drop": {
+                "path": str(drop_path.resolve()),
+                "sha256": drop_digest,
+                "byte_size": drop_size,
+                "rows": len(drops),
+                "decision_types": dict(sorted(Counter(row["decision_type"] for row in drop_rows).items())),
+                "judges": sorted({row["judge"] for row in drop_rows}),
+                "run_ids": sorted({row["run_id"] for row in drop_rows}),
+                "source_ordinal": "candidate line number (train partition, 1-based), mapped to the parent ordinal",
+            },
+            "dropped": len(drops),
+            "dropped_parent_ordinals": [parent_ordinal for parent_ordinal, _ in pending],
+            "rejections_referencing_dropped": dict(sorted(references.items())),
+        }
+        new_manifest.pop("manifest_path", None)
+        _write_json_atomic(targets["manifest"], new_manifest)
+        written.append(targets["manifest"])
+    except BaseException:
+        for path in written:
+            path.unlink(missing_ok=True)
+        raise
+    new_manifest["manifest_path"] = str(targets["manifest"])
+    return new_manifest
 
 
 # --------------------------------------------------------------------------
@@ -560,6 +854,21 @@ def main() -> None:
         help="Object store root for an import-manifest parent (default: the store_root in the manifest)",
     )
 
+    s = commands.add_parser(
+        "subtract",
+        help="Remove train documents listed in a drop decisions file from a selection (no re-derivation)",
+    )
+    s.add_argument("--manifest", type=Path, required=True, help="Input selection manifest")
+    s.add_argument(
+        "--drop", type=Path, required=True,
+        help="derlem.decision.v1 parquet of reject rows; source_ordinal = candidate (train) line number",
+    )
+    s.add_argument("--out", type=Path, required=True, help="Output prefix: <out>.selection.parquet/.decisions.parquet/"
+                   ".selection.manifest.json")
+    s.add_argument("--parent", type=Path, help="Parent object path (default: manifest parent.path)")
+    s.add_argument("--store-root", type=Path, help="Object store root for an import-manifest parent")
+    s.add_argument("--verify-parent", action="store_true", help="Also hash the whole parent and compare")
+
     f = commands.add_parser("from-text-copy", help="Express an existing text-copy derivative as a selection list")
     f.add_argument("--parent", type=Path, required=True)
     f.add_argument("--train", type=Path, required=True)
@@ -578,6 +887,15 @@ def main() -> None:
             held_out_output_path=args.held_out_output,
             verify_parent=args.verify_parent,
             store_root=args.store_root,
+        )
+    elif args.command == "subtract":
+        result = subtract(
+            args.manifest,
+            args.drop,
+            args.out,
+            parent_path=args.parent,
+            store_root=args.store_root,
+            verify_parent=args.verify_parent,
         )
     else:
         source_report = None

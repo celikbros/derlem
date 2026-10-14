@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **IMPLEMENTED — 200 k slice measured; full run waits for the owner's MT pair (A/B), registration waits for the full run** — 2026-10-13 |
+| Status | **FULL RUN DONE (B) — registration pending** — 2026-10-14 13:27: owner picked **B**; full run over 8,578,808 documents produced the candidate `a502b9dd…` (6,602,551 documents, 15,244,828,410 B) and held-out `e498e6fb…` (2,652); two materializations identical; registration waits for the services to be up (API was down after the night) |
 | Kind | feature (derivation path) |
 | Moratorium | owner approval given 2026-10-13 (delivery path for the first real candidate) |
 | Estimate | 2 day(s) |
@@ -59,7 +59,8 @@ after `tr-web-v4`; the rules exist, the path from shards to a candidate does not
       gives the same SHAs. *(200 k slice)*
 - [x] 200 k slice measured (time per 100 k docs, drop rates); full-run estimate written.
 - [ ] Registration command prepared; after the owner runs it the candidate shows on the source
-      list with gates running. *(prepared and dry-run on the slice; owner runs it after the full run)*
+      list with gates running. *(prepared; dry run passed on the full B outputs 2026-10-14; waits
+      for the API and worker to be up)*
 
 ## Owner actions
 
@@ -140,7 +141,35 @@ break — caught by the union), 225 only in the line (URL). The slice is **not r
 MT**: shards 0–2 are early-dump-heavy (TASK-046 full pass: MT 10.2 % docs / 15.8 % bytes in shards
 0–2 vs 17.2 % / 30.6 % corpus-wide) — near-duplicates are also under-counted in any slice.
 
-### Full run: command and estimate (NOT started)
+### Full run (B) — done 2026-10-14
+
+Owner: "1. B" (2026-10-14). `MT_TARGET = "B"` committed (d73daa0), judge `tr-web-v4@4559662a171d`.
+Launched 2026-10-14 00:23 as a detached process (`tam_kosu.sh B 8`); the machine stopped around
+02:49 with 804/910 signal tables done; relaunched 12:44 with the same command — 804 tables reused,
+106 computed (0 rejected), selection pass finished 13:10, materialize 13:10–13:18, hash-only
+second materialize 13:18–13:26, signal tables deleted. Run id `task-049-fineweb2hq-trweb4B`,
+`decided_at` 2026-10-14T09:44:58Z (second launch). Log: `var/olcum-2026-10-13/task-049/tam-kosu-B.sargi.log`.
+
+| | Documents | Share |
+|---|---:|---:|
+| Input (import manifest `d28fe0d1…`) | 8,578,808 | |
+| **Candidate kept** | **6,602,551** | **77.0 %** |
+| quality_rule — machine_translation | 1,766,036 | 20.6 % |
+| quality_rule — commercial_page | 197,177 | 2.3 % |
+| quality_rule — v3 reasons (wiki markup 41,272; navigation 17,845; keyword stuffing 8,125; encoding 2,465; spam clusters 2,495; hashtag 17) | 72,219 | 0.8 % |
+| pii (e-mail 44,373; phone 33,486; card 10,573; IBAN 261; TCKN 118) | 86,602 | 1.0 % |
+| near_duplicate (SimHash ≤ 3) / duplicate / oversized | 1,585 / 22 / 891 | |
+| held_out (`afacan-held-out-v1`) | 2,652 | |
+
+Outputs in `var/derived/`: `fineweb2hq_tur_ba80dc1c_trweb4B.jsonl` **`a502b9dd0fa9364ce3aa4e23b5332637e0e9356dc70d7bbd16c5fd6090d8f378`**
+(15,244,828,410 B, 6,602,551 lines, `derlem.candidate-line.v1`), `…_heldout.jsonl`
+**`e498e6fbf0232b39808410546b380427e4fb35cbb0f29d0fabb1542cbe2ab0ef`** (6,081,502 B, 2,652 lines),
+`…selection.parquet` `b2edd5b0…` (6,605,203 rows), `…decisions.parquet` `5ae5aae2…` (2,126,293 rows),
+`…selection.manifest.json` (expected_materialization = the two SHAs above; signal tables sha
+`2ba61941…`, 557,662,937 B). Both materializations gave the same SHAs. `kayit.py B --kuru` passed
+(names `fineweb2_hq_tur_latn_clean_candidate_trweb4B_20261014` / `…_heldout_trweb4B_20261014`).
+
+### Full run: command and estimate (as planned before the run)
 
 ```bash
 # 1. owner picks A or B: worker/src/derlem_worker/machine_translation.py -> MT_TARGET = "A" | "B"

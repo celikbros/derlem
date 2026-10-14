@@ -1,5 +1,12 @@
 # Faz-2 ham kaynak arşivi (`var/raw-derlem`)
 
+> **2026-10-14 — silindi (kurucu kararı).** Kurucu: "dediğin dışındakiler gereksiz yer kaplıyor
+> diye anladım. Eğer öyle ise durmalarına gerek yok. Sil." `var/raw-derlem/ham-derlem/`
+> (yedi ham dosya + `celik_gold`, ~38 GB tekil) silindi; bu arşiv bu verinin **tek kopyasıydı**,
+> geri dönüşü yok. Kayıtlı Faz-2 kaynakları (ana korpus + altı ham kaynak) aynı gün
+> `deploy/purge_plans/2026-10-14-karantina-aday.json` ile silinmek üzere planlandı. Kalan:
+> `celik_ai-kod/` (kazıyıcı kodu, 1,5 MB) ve `KURTARMA_README.md`. Aşağısı tarihçedir.
+
 **Tarih:** 2026-09-17
 **Durum:** arşiv alındı ve doğrulandı; kaynak kaydı (Derlem `sources`) sırada
 **Kaynak:** Gardaş model rafı mektubu

@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **DONE — old candidate purge pending (owner)** — 2026-10-14: 1,149 cross-source duplicates subtracted without re-deriving; new candidate `97f300a9…` (6,601,402 documents) registered as `07a2b7e0-853b-4ce2-8a8c-653c1f31d921`; gates: PII clear, exact unique, **normalized dedup unique (0 external)**, `auto_checked`, 200-sample draw running; quarantined `b255c3d8…` to be purged by the owner |
+| Status | **DONE — old candidate purge pending (owner)** — 2026-10-14: 1,149 cross-source duplicates subtracted without re-deriving; new candidate `97f300a9…` (6,601,402 documents) registered as `07a2b7e0-853b-4ce2-8a8c-653c1f31d921`; gates: PII clear, exact unique, **normalized dedup unique (0 external)**, `sampled_for_review` (200 drawn 2026-10-15 02:37: 111 risk-stratified + 89 random; review pending, 10 % threshold); old candidate and the Faz-2 sources purged by the owner 2026-10-14 23:43 (42.28 GB) |
 | Kind | fix (derivation step) |
 | Moratorium | allowed — the first real candidate is blocked at the dedup gate |
 | Estimate | 1 day |

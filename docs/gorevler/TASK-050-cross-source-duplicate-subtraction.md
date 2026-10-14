@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **REVIEW — registration and purge prepared, not run** — 2026-10-14: 1,149 cross-source duplicates subtracted without re-deriving; new candidate `97f300a9…` (6,601,402 documents, 15,243,666,531 B), two materializations identical, equal to the old file minus the 1,149 lines; self-check 0 hits against 11,995,448 fingerprints of 11 unrelated sources; `kayit_xdedup.py --kuru` passed; purge dry run clean (1 source, 6,602,558 rows, 1 object 15.24 GB). Owner/Fable: `--calistir`, then purge `--execute` |
+| Status | **DONE — old candidate purge pending (owner)** — 2026-10-14: 1,149 cross-source duplicates subtracted without re-deriving; new candidate `97f300a9…` (6,601,402 documents) registered as `07a2b7e0-853b-4ce2-8a8c-653c1f31d921`; gates: PII clear, exact unique, **normalized dedup unique (0 external)**, `auto_checked`, 200-sample draw running; quarantined `b255c3d8…` to be purged by the owner |
 | Kind | fix (derivation step) |
 | Moratorium | allowed — the first real candidate is blocked at the dedup gate |
 | Estimate | 1 day |
@@ -61,7 +61,8 @@ the run). The selection list makes a cheaper, exact path possible: subtract.
       materializations identical, line-by-line equal to the old file minus the drops.
       *(n = 1,149 → 6,601,402, `97f300a9…`)*
 - [x] Self-check: 0 normalized overlaps with unrelated sources.
-- [ ] Registration and purge-plan dry run ready; after registration the dedup gate returns `unique`.
+- [x] Registration and purge-plan dry run ready; after registration the dedup gate returns `unique`.
+      *(2026-10-14: registered `07a2b7e0…` via the API, threshold 10 % before ingest; fingerprint job 23:05 → `unique`, duplicate_count 0; the job was interrupted once by a service stop at 21:25 and re-ran from the start.)*
       *(ready: `kayit_xdedup.py --kuru` passed, purge dry run clean; the gate result comes after
       `--calistir`)*
 
